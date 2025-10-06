@@ -1,0 +1,42 @@
+{
+  "name": "fitness-root",
+  "private": true,
+  "workspaces": [
+    "functions",
+    "packages/*"
+  ],
+  "scripts": {
+    "start": "BROWSER=safari react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "pnpm": {
+    "overrides": {
+      "react-native": "0.75.4",
+      "react-native-web": "0.19.12"
+    }
+  },
+  "devDependencies": {
+    "@expo/cli": "^0.17.13",
+    "metro-runtime": "0.83.1",
+    "react-scripts": "^5.0.1"
+  },
+  "dependencies": {
+    "@fitness/shared": "file:packages/shared",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

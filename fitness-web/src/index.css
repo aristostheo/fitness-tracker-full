@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* html {
+  @apply bg-white text-gray-900;
+}
+
+html.dark {
+  @apply bg-gray-900 text-white;
+} */
+
+/* Solid base (no glass) */
+/* html, body, #root { height: 100%; }
+:root { color-scheme: light dark; }
+
+body {
+  @apply bg-gray-50 text-gray-900 dark:bg-[#0b0f17] dark:text-gray-100;
+} */
+
+/* SOLID cards (no translucent white) */
+/* .card {
+  @apply rounded-2xl border shadow-soft
+         bg-white border-gray-200
+         dark:bg-[#111827] dark:border-white/10 dark:shadow-card;
+} */
+
+/* Inputs/buttons with clear contrast */
+/* .input, .select {
+  @apply w-full rounded-xl px-3 py-2
+         bg-white text-gray-900 placeholder:text-gray-400 border border-gray-300
+         focus:outline-none focus:ring-2 focus:ring-brand-500/60 focus:border-transparent
+         dark:bg-[#0f1522] dark:text-gray-100 dark:placeholder:text-gray-400 dark:border-white/10;
+}
+
+.button {
+  @apply inline-flex items-center justify-center rounded-xl px-4 py-2 font-medium
+         bg-brand-500 text-white hover:bg-brand-600 active:scale-[0.99] transition shadow-soft;
+}
+
+.button-ghost {
+  @apply inline-flex items-center justify-center rounded-xl px-3 py-2
+         bg-gray-100 text-gray-900 hover:bg-gray-200
+         dark:bg-[#0f1522] dark:text-gray-100 dark:hover:bg-[#121a2a];
+}
+.button-ghost:hover {
+  @apply bg-gray-700 text-white;
+} */
+
+/* 🔹 Delete button variant */
+/* .button-ghost.delete {
+  @apply border-red-500 text-red-500;
+}
+
+.button-ghost.delete:hover {
+  @apply bg-red-600 text-white;
+}
+.h1 { @apply text-3xl font-bold tracking-tight; }
+.h2 { @apply text-xl font-semibold; } */
+
+/* Scrollbar */
+/* * { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.25) transparent; }
+*::-webkit-scrollbar { height: 8px; width: 8px; }
+*::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 9999px; }
+
+:root { --toast-bg: #ffffff; --toast-fg: #111827; }
+html.dark { --toast-bg: #111827; --toast-fg: #f9fafb; } */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+:root {
+  color-scheme: light dark;
+}
+
+/* Solid base */
+body {
+  @apply bg-gray-50 text-gray-900 dark:bg-[#0b0f17] dark:text-gray-100;
+}
+
+/* Primitives */
+.card {
+  @apply rounded-2xl border shadow-sm bg-white border-gray-200 dark:bg-[#111827] dark:border-white/10;
+}
+.input {
+  @apply w-full rounded-xl px-3 py-2 bg-white text-gray-900 placeholder:text-gray-400 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500/60 focus:border-transparent dark:bg-[#0f1522] dark:text-gray-100 dark:placeholder:text-gray-400 dark:border-white/10;
+}
+.select {
+  @apply input;
+}
+.textarea {
+  @apply input min-h-[90px];
+}
+.button {
+  @apply inline-flex items-center justify-center rounded-xl px-4 py-2 font-medium bg-brand-500 text-white hover:bg-brand-600 active:scale-[0.99] transition;
+}
+.button-ghost {
+  @apply inline-flex items-center justify-center rounded-xl px-3 py-2 bg-gray-100 text-gray-900 hover:bg-gray-200 dark:bg-[#0f1522] dark:text-gray-100 dark:hover:bg-[#121a2a];
+}
+.button-ghost.delete {
+  @apply border border-red-500 text-red-500 bg-transparent;
+}
+.button-ghost.delete:hover {
+  @apply bg-red-600 text-white;
+}
+.badge {
+  @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs border border-white/10 bg-white/50 text-gray-700 dark:bg-white/10 dark:text-gray-200;
+}
+
+/* Headings */
+.h1 {
+  @apply text-3xl font-bold tracking-tight text-gray-900 dark:text-white;
+}
+.h2 {
+  @apply text-xl font-semibold text-gray-900 dark:text-white;
+}
+.subtle {
+  @apply text-sm text-gray-500 dark:text-gray-400;
+}
+
+/* Scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+*::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 9999px;
+}

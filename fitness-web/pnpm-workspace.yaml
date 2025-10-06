@@ -1,0 +1,4 @@
+packages:
+  - "mobile"
+  - "packages/*"
+  - "functions" # if you have firebase functions
