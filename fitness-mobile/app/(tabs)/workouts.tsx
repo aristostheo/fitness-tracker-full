@@ -1,19 +1,20 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+// app/(tabs)/workouts.tsx
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ScrollView,
   View,
   Text,
-  TextInput,
   Pressable,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "@/content/AuthContext";
+import { useTheme } from "@/content/ThemeProvider";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 
-import Card from "../../components/Card";
-import { useAuth } from "@/content/AuthContext";
+import Card from "@/components/Card";
 import {
   addWorkout,
   deleteWorkout,
@@ -34,32 +35,31 @@ import {
 } from "@/services/presets";
 import { kgToLb, lbToKg } from "@/utils/units";
 import { fmt, startOfMonth, startOfWeek, endOfToday } from "@/utils/date";
-import { useTheme } from "@/content/ThemeProvider";
 
-/* ────────────────────────────────────────────────────────────────────────── */
-/* Types & helpers                                                            */
-/* ────────────────────────────────────────────────────────────────────────── */
+import { withAlpha } from "@/components/workouts/utils/withAlpha";
+import { Field } from "@/components/workouts/ui/Field";
+import { Metric } from "@/components/workouts/ui/Metric";
+import { EmptyState } from "@/components/workouts/ui/EmptyState";
+import { IconButton } from "@/components/workouts/ui/IconButton";
+import { GradientButton } from "@/components/workouts/ui/GradientButton";
+import { SoftButton } from "@/components/workouts/ui/SoftButton";
+import { Badge } from "@/components/workouts/ui/Badge";
+
+import Hero from "@/components/workouts/Hero";
+import Filters from "@/components/workouts/Filters";
+import AddWorkoutForm from "@/components/workouts/AddWorkoutForm";
+import GroupedWorkouts from "@/components/workouts/GroupedWorkouts";
+import ExerciseSearchSheet from "@/components/workouts/ExerciseSearchSheet";
+
+/* ────────────────────────────────────────────────────────────── */
+/* Types & helpers                                                */
+/* ────────────────────────────────────────────────────────────── */
 
 type PresetKey = "all" | "week" | "7" | "month" | "30";
 
-function withAlpha(hex: string, a = 0.18) {
-  const m = hex?.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
-  if (!m) return hex;
-  const r = parseInt(m[1], 16);
-  const g = parseInt(m[2], 16);
-  const b = parseInt(m[3], 16);
-  return `rgba(${r}, ${g}, ${b}, ${a})`;
-}
-
-const clamp01 = (x: number) => Math.max(0, Math.min(1, Number(x) || 0));
-
-/* ────────────────────────────────────────────────────────────────────────── */
-/* Minimal exercise catalog (profile-filtered suggestions)                     */
-/* ────────────────────────────────────────────────────────────────────────── */
-
 type Ex = {
   name: string;
-  tags: string[]; // e.g., ["barbell","legs","compound"]
+  tags: string[];
   needs?: (
     | "barbell"
     | "dumbbells"
@@ -69,7 +69,7 @@ type Ex = {
     | "pullupbar"
     | "bands"
   )[];
-  avoidIfInjuries?: string[]; // substrings: "shoulder","knee","lowback"
+  avoidIfInjuries?: string[];
   place?: ("home" | "gym")[];
 };
 
@@ -142,27 +142,10 @@ const EXERCISES: Ex[] = [
   },
 ];
 
-/* ────────────────────────────────────────────────────────────────────────── */
-/* Screen                                                                      */
-/* ────────────────────────────────────────────────────────────────────────── */
-
 export default function WorkoutsScreen() {
   const { colors, isDark } = useTheme();
   const { user } = useAuth();
   const uid = user?.uid ?? "__demo__";
-
-  /* Themed chip style */
-  const chip = useMemo(
-    () =>
-      ({
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 999,
-        paddingVertical: 8,
-        paddingHorizontal: 14,
-      } as const),
-    [colors.border]
-  );
 
   /* Profile + units */
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -182,15 +165,8 @@ export default function WorkoutsScreen() {
     };
   }, [user?.uid]);
 
-  /* ── derived "profile context" we’ll use everywhere ─────────────── */
+  /* Derived "profile context" */
   const goal = (profile?.goal as "maintain" | "lose" | "gain") ?? "maintain";
-  const activity =
-    (profile?.activityLevel as
-      | "sedentary"
-      | "light"
-      | "moderate"
-      | "active"
-      | "athlete") ?? "moderate";
   const trainingDays = Number((profile as any)?.trainingDaysPerWeek ?? 3);
   const equipmentOwned = (profile?.equipment ?? []) as string[];
   const place = (profile?.workoutPlace as "home" | "gym") ?? "home";
@@ -214,11 +190,10 @@ export default function WorkoutsScreen() {
     });
   }, [equipmentOwned, injuries, place]);
 
-  /* Suggest a few exercises tailored by goal/equipment */
+  /* Suggested */
   const suggested = useMemo(() => {
     const pick = (tag: string) =>
       profileFriendlyExercises.find((e) => e.tags.includes(tag));
-
     const wantPush = ["gain", "maintain"].includes(goal);
     const list = [
       pick("legs") ?? pick("compound"),
@@ -226,8 +201,6 @@ export default function WorkoutsScreen() {
       pick("hinge") ?? pick("back"),
       pick("pull"),
     ].filter(Boolean) as Ex[];
-
-    // dedupe & limit
     return Array.from(new Map(list.map((e) => [e.name, e])).values()).slice(
       0,
       4
@@ -278,18 +251,17 @@ export default function WorkoutsScreen() {
 
   /* Workouts stream */
   const [workouts, setWorkouts] = useState<Workout[]>([]);
-  useEffect(() => {
-    const unsub = subscribeWorkouts(uid, setWorkouts, { from, to });
-    return unsub;
-  }, [uid, from, to]);
+  useEffect(
+    () => subscribeWorkouts(uid, setWorkouts, { from, to }),
+    [uid, from, to]
+  );
 
   /* Workout presets (filtered by profile) */
   const [presets, setPresets] = useState<WorkoutPreset[]>([]);
   const [newPreset, setNewPreset] = useState("");
   useEffect(() => {
     if (!user?.uid) return;
-    const unsub = subscribeWorkoutPresets(user.uid, setPresets);
-    return unsub;
+    return subscribeWorkoutPresets(user.uid, setPresets);
   }, [user?.uid]);
 
   const safePresets = useMemo(() => {
@@ -300,14 +272,16 @@ export default function WorkoutsScreen() {
     return presets.filter((p) => names.has(p.name.toLowerCase()));
   }, [presets, profileFriendlyExercises]);
 
-  /* Add form */
+  /* Add form state */
   const todayISO = useMemo(() => fmt(new Date()), []);
   const [date, setDate] = useState(todayISO);
   const [exercise, setExercise] = useState("");
   const [sets, setSets] = useState("");
   const [reps, setReps] = useState("");
-  const [weight, setWeight] = useState(""); // in current unit
+  const [weight, setWeight] = useState("");
   const [notes, setNotes] = useState("");
+
+  const [searchOpen, setSearchOpen] = useState(false);
 
   // Goal-aware default scheme (autofill when exercise chosen)
   function suggestScheme(g: "maintain" | "lose" | "gain") {
@@ -320,20 +294,17 @@ export default function WorkoutsScreen() {
         return { sets: 3, reps: 8 };
     }
   }
-
   useEffect(() => {
     if (!exercise.trim()) return;
     const scheme = suggestScheme(goal);
     if (!sets) setSets(String(scheme.sets));
     if (!reps) setReps(String(scheme.reps));
-  }, [exercise, goal]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [exercise, goal]); // logic unchanged
 
-  // Pull most recent record for the selected exercise (for overload hint)
+  // Most recent record for overload hint
   const lastRecord = useMemo(() => {
     const name = exercise.trim().toLowerCase();
     if (!name) return null;
-
-    // pick most recent by createdAt if present else by date desc
     let latest: Workout | null = null;
     for (const w of workouts) {
       if ((w.exercise || "").toLowerCase() !== name) continue;
@@ -366,7 +337,7 @@ export default function WorkoutsScreen() {
     return { next: val, prev };
   }, [lastRecord, sets, reps, isLB]);
 
-  // Injury hint for chosen exercise
+  // Injury hint
   const conflictWarning = useMemo(() => {
     if (!exercise.trim() || !injuries?.length) return null;
     const ex = EXERCISES.find(
@@ -408,9 +379,8 @@ export default function WorkoutsScreen() {
       reps: Number(reps || 0),
       weight: Number(isFinite(weightKg as number) ? weightKg : 0),
       notes: (notes || "").trim(),
-      createdAt: Date.now(), // optimistic
+      createdAt: Date.now(),
     };
-
     const tempId = `temp-${Date.now()}`;
     setWorkouts((prev) => [{ id: tempId, ...entry }, ...prev]);
     try {
@@ -435,7 +405,7 @@ export default function WorkoutsScreen() {
     }
   }
 
-  /* Inline edit */
+  /* Inline edit state & handlers */
   const [editId, setEditId] = useState<string | null>(null);
   const [edit, setEdit] = useState({
     date: "",
@@ -470,7 +440,6 @@ export default function WorkoutsScreen() {
       unit === "lb"
         ? lbToKg(Number(edit.weight || 0))
         : Number(edit.weight || 0);
-
     const patch = {
       date: edit.date,
       exercise: edit.exercise.trim(),
@@ -479,7 +448,6 @@ export default function WorkoutsScreen() {
       weight: Number(isFinite(weightKg as number) ? weightKg : 0),
       notes: (edit.notes || "").trim(),
     };
-
     const prev = workouts;
     setWorkouts((curr) =>
       curr.map((w) => (w.id === editId ? { ...w, ...patch } : w))
@@ -508,7 +476,7 @@ export default function WorkoutsScreen() {
     }
   }
 
-  /* Group by date (newest → oldest) */
+  /* Grouped list data */
   const grouped = useMemo(() => {
     const byDate: Record<string, Workout[]> = {};
     for (const w of workouts) (byDate[w.date] ??= []).push(w);
@@ -522,26 +490,25 @@ export default function WorkoutsScreen() {
     }));
   }, [workouts]);
 
-  /* Quick metrics + daily target sets based on training frequency */
+  /* Quick metrics + targets */
   const totals = useMemo(() => {
-    let setsSum = 0;
-    let volumeKg = 0;
+    let setsSum = 0,
+      volumeKg = 0;
     for (const w of workouts) {
-      const s = Number(w.sets || 0);
-      const r = Number(w.reps || 0);
-      const wt = Number(w.weight || 0);
+      const s = Number(w.sets || 0),
+        r = Number(w.reps || 0),
+        wt = Number(w.weight || 0);
       setsSum += s;
       volumeKg += s * r * wt;
     }
-    const volume =
-      unit === "lb" ? Math.round(kgToLb(volumeKg)) : Math.round(volumeKg);
+    const volume = isLB ? Math.round(kgToLb(volumeKg)) : Math.round(volumeKg);
     return {
       workouts: workouts.length,
       sets: setsSum,
       volume,
       volumeUnit: unit,
     };
-  }, [workouts, unit]);
+  }, [workouts, isLB, unit]);
 
   const dailySetTarget = useMemo(() => {
     if (goal === "gain")
@@ -560,884 +527,133 @@ export default function WorkoutsScreen() {
 
   const nothingToShow = grouped.length === 0;
 
-  /* ────────────────────────────────────────────────────────────────── */
+  const cancelEdit = () => {
+    if (!editId) return;
+    const w = workouts.find((x) => x.id === editId);
+    if (w) {
+      // restore exactly what startEdit set originally
+      setEdit({
+        date: w.date || todayISO,
+        exercise: w.exercise || "",
+        sets: String(w.sets ?? ""),
+        reps: String(w.reps ?? ""),
+        weight:
+          unit === "lb"
+            ? String(Math.round(kgToLb(w.weight || 0) * 100) / 100)
+            : String(w.weight ?? ""),
+        notes: w.notes || "",
+      });
+    }
+    setEditId(null); // leave edit mode
+  };
+
+  /* ────────────────────────── render ────────────────────────── */
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 28 }}
-      keyboardShouldPersistTaps="handled"
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={0} // tweak if you have a custom header
     >
-      {/* HERO */}
-      <LinearGradient
-        colors={
-          isDark
-            ? (["#0D1221", "#0D1221", withAlpha(colors.primary, 0.22)] as const)
-            : (["#F6FAFF", "#EEF4FF", withAlpha(colors.primary, 0.18)] as const)
-        }
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{
-          borderRadius: 20,
-          borderWidth: 1,
-          borderColor: colors.border,
-          overflow: "hidden",
-        }}
+      <ScrollView
+        style={{ flex: 1, backgroundColor: colors.background }}
+        contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 28 }}
+        keyboardShouldPersistTaps="handled"
       >
-        <BlurView
-          intensity={isDark ? 20 : 10}
-          tint={isDark ? "dark" : "light"}
-          style={{ padding: 14 }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center" as const,
-              justifyContent: "space-between" as const,
-              marginBottom: 10,
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center" as const,
-                gap: 10,
-              }}
-            >
-              <View
-                style={{
-                  padding: 8,
-                  borderRadius: 12,
-                  backgroundColor: withAlpha(colors.primary, 0.15),
-                  borderWidth: 1,
-                  borderColor: withAlpha(colors.primary, 0.35),
-                }}
-              >
-                <Ionicons
-                  name="barbell-outline"
-                  size={18}
-                  color={colors.primary}
-                />
-              </View>
-              <View>
-                <Text style={{ color: colors.muted, fontSize: 12 }}>
-                  Dashboard
-                </Text>
-                <Text
-                  style={{
-                    color: colors.text,
-                    fontSize: 22,
-                    fontWeight: "800",
-                  }}
-                >
-                  Workouts
-                </Text>
-              </View>
-            </View>
-
-            {/* Persisted unit toggle */}
-            <Pressable
-              onPress={() =>
-                user &&
-                updateProfile(user.uid, {
-                  weightUnit: unit === "kg" ? "lb" : "kg",
-                })
-              }
-              hitSlop={8}
-              style={({ pressed }) => [
-                {
-                  paddingVertical: 8,
-                  paddingHorizontal: 12,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  backgroundColor: pressed
-                    ? withAlpha(colors.primary, 0.1)
-                    : "transparent",
-                },
-              ]}
-            >
-              <Text style={{ color: colors.text, fontWeight: "700" }}>
-                Unit: {unit.toUpperCase()}
-              </Text>
-            </Pressable>
-          </View>
-
-          {/* quick metrics */}
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <Metric value={totals.workouts} label="Workouts" />
-            <Metric value={totals.sets} label="Sets" />
-            <Metric
-              value={totals.volume}
-              label={`Volume (${totals.volumeUnit})`}
-            />
-          </View>
-
-          {/* target sets/day */}
-          <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-            <Metric
-              value={dailySetTarget}
-              label={
-                todaySets >= dailySetTarget ? "Target ✅" : "Target sets/day"
-              }
-            />
-            <Metric value={todaySets} label="Sets today" />
-          </View>
-        </BlurView>
-      </LinearGradient>
-
-      {/* FILTERS */}
-      <Card style={{ gap: 12 }}>
-        <Text
-          style={{ fontWeight: "800", color: colors.text, letterSpacing: 0.2 }}
-        >
-          Filter
-        </Text>
-
-        {/* Segmented presets */}
-        <View
-          style={{
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderRadius: 999,
-            padding: 4,
-            flexDirection: "row",
-            gap: 6,
-            backgroundColor: colors.card,
-          }}
-        >
-          {(
-            [
-              ["all", "infinite-outline", "All time"],
-              ["week", "calendar-outline", "This week"],
-              ["7", "time-outline", "Last 7"],
-              ["month", "calendar-number-outline", "This month"],
-              ["30", "hourglass-outline", "Last 30"],
-            ] as Array<[PresetKey, keyof typeof Ionicons.glyphMap, string]>
-          ).map(([p, icon, label]) => {
-            const active = preset === p;
-            return (
-              <Pressable
-                key={p}
-                onPress={() => setPreset(p)}
-                hitSlop={6}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center" as const,
-                  gap: 6,
-                  paddingVertical: 8,
-                  paddingHorizontal: 12,
-                  borderRadius: 999,
-                  backgroundColor: active
-                    ? withAlpha(colors.primary, 0.18)
-                    : "transparent",
-                  borderWidth: active ? 1 : 0,
-                  borderColor: active
-                    ? withAlpha(colors.primary, 0.35)
-                    : "transparent",
-                }}
-              >
-                <Ionicons
-                  name={icon}
-                  size={14}
-                  color={active ? colors.primary : colors.muted}
-                />
-                <Text
-                  style={{
-                    color: active ? colors.primary : colors.text,
-                    fontWeight: active ? "800" : "600",
-                    fontSize: 13,
-                  }}
-                >
-                  {label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {/* Manual range */}
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          <Field
-            icon="calendar-outline"
-            placeholder="From YYYY-MM-DD"
-            value={from}
-            onChangeText={setFrom}
-            autoCapitalize="none"
-          />
-          <Field
-            icon="calendar-clear-outline"
-            placeholder="To YYYY-MM-DD"
-            value={to}
-            onChangeText={setTo}
-            autoCapitalize="none"
-          />
-        </View>
-      </Card>
-
-      {/* ADD WORKOUT */}
-      <Card style={{ gap: 10 }}>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center" as const,
-            justifyContent: "space-between" as const,
-          }}
-        >
-          <Text style={{ fontWeight: "800", color: colors.text, fontSize: 16 }}>
-            Add workout
-          </Text>
-
-          {/* quick clear form */}
-          <Pressable
-            onPress={() => {
-              setExercise("");
-              setSets("");
-              setReps("");
-              setWeight("");
-              setNotes("");
-              setDate(todayISO);
-            }}
-            hitSlop={8}
-            style={({ pressed }) => [
-              {
-                paddingVertical: 6,
-                paddingHorizontal: 10,
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: pressed
-                  ? withAlpha(colors.primary, 0.08)
-                  : "transparent",
-              },
-            ]}
-          >
-            <Text style={{ color: colors.muted, fontWeight: "600" }}>
-              Clear
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* Suggested for you (profile-aware) */}
-        {!!suggested.length && (
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {suggested.map((s) => (
-              <Pressable
-                key={s.name}
-                style={[
-                  chip,
-                  {
-                    backgroundColor: withAlpha(colors.primary, 0.12),
-                    borderColor: withAlpha(colors.primary, 0.3),
-                  },
-                ]}
-                onPress={() => setExercise(s.name)}
-              >
-                <Text style={{ color: colors.text }}>{s.name}</Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
-
-        {/* Presets (filtered via equipment/place/injury) */}
-        {!!safePresets.length && (
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {safePresets.map((p) => (
-              <Pressable
-                key={p.id}
-                style={[
-                  chip,
-                  {
-                    backgroundColor: withAlpha(colors.primary, 0.12),
-                    borderColor: withAlpha(colors.primary, 0.3),
-                  },
-                ]}
-                onPress={() => setExercise(p.name)}
-              >
-                <Text style={{ color: colors.text }}>{p.name}</Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
-
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          <Field
-            icon="today-outline"
-            placeholder="YYYY-MM-DD"
-            value={date}
-            onChangeText={setDate}
-            autoCapitalize="none"
-          />
-          <Field
-            icon="barbell-outline"
-            placeholder="Exercise"
-            value={exercise}
-            onChangeText={setExercise}
-            autoCapitalize="words"
-          />
-        </View>
-
-        {/* Injury warning for selected exercise */}
-        {conflictWarning && (
-          <Text style={{ color: "#ef4444", fontSize: 12 }}>
-            This may aggravate an injury. Try:{" "}
-            {conflictWarning.alt ?? "a machine/band alternative"}.
-          </Text>
-        )}
-
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          <Field
-            icon="layers-outline"
-            placeholder="Sets"
-            value={sets}
-            onChangeText={(v) => setSets(v.replace(/[^0-9]/g, ""))}
-            inputMode="numeric"
-          />
-          <Field
-            icon="repeat-outline"
-            placeholder="Reps"
-            value={reps}
-            onChangeText={(v) => setReps(v.replace(/[^0-9]/g, ""))}
-            inputMode="numeric"
-          />
-          <Field
-            icon="speedometer-outline"
-            placeholder={`Weight (${unit})`}
-            value={weight}
-            onChangeText={(v) => setWeight(v.replace(/[^0-9.]/g, ""))}
-            inputMode="decimal"
-          />
-        </View>
-
-        {/* Progressive overload hint */}
-        {!!exercise.trim() && nextWeightSuggestion && (
-          <Text style={{ color: colors.muted, fontSize: 12 }}>
-            Suggested: {nextWeightSuggestion.next} {unit} (prev{" "}
-            {nextWeightSuggestion.prev} {unit})
-          </Text>
-        )}
-
-        <Field
-          icon="document-text-outline"
-          placeholder="Notes (optional)"
-          value={notes}
-          onChangeText={setNotes}
+        <Hero
+          unit={unit}
+          totals={totals}
+          dailySetTarget={dailySetTarget}
+          todaySets={todaySets}
+          onToggleUnit={() =>
+            user &&
+            updateProfile(user.uid, { weightUnit: unit === "kg" ? "lb" : "kg" })
+          }
         />
 
-        {/* CTA row */}
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              gap: 8,
-              alignItems: "center" as const,
-              marginTop: 6,
-            }}
-          >
-            <Pressable
-              onPress={!addDisabled ? onAdd : undefined}
-              style={{ flex: 0 }}
-              disabled={addDisabled}
-            >
-              <LinearGradient
-                colors={
-                  addDisabled
-                    ? [
-                        withAlpha(colors.muted, 0.3),
-                        withAlpha(colors.muted, 0.3),
-                      ]
-                    : [colors.primary, "#16a34a"]
-                }
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{
-                  height: 44,
-                  paddingHorizontal: 18,
-                  borderRadius: 12,
-                  alignItems: "center" as const,
-                  justifyContent: "center" as const,
-                  opacity: addDisabled ? 0.7 : 1,
-                }}
-              >
-                <Text style={{ color: "#fff", fontWeight: "800" }}>Add</Text>
-              </LinearGradient>
-            </Pressable>
-
-            {/* Save preset */}
-            {user?.uid && (
-              <>
-                <Field
-                  icon="bookmark-outline"
-                  placeholder="Save exercise as preset (name)"
-                  value={newPreset}
-                  onChangeText={setNewPreset}
-                />
-                <Pressable
-                  hitSlop={6}
-                  style={({ pressed }) => [
-                    {
-                      height: 44,
-                      paddingHorizontal: 14,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      alignItems: "center" as const,
-                      justifyContent: "center" as const,
-                      backgroundColor: pressed
-                        ? withAlpha(colors.primary, 0.1)
-                        : "transparent",
-                    },
-                  ]}
-                  onPress={async () => {
-                    const name = newPreset.trim();
-                    if (!name || !user?.uid) return;
-                    await addWorkoutPreset(user.uid, {
-                      name,
-                      exercise: name,
-                      createdAt: Date.now(),
-                    } as Omit<WorkoutPreset, "id">);
-                    setNewPreset("");
-                  }}
-                >
-                  <Text style={{ color: colors.text, fontWeight: "700" }}>
-                    Save
-                  </Text>
-                </Pressable>
-              </>
-            )}
-          </View>
-        </KeyboardAvoidingView>
-      </Card>
-
-      {/* LIST (recent grouped) */}
-      {nothingToShow ? (
-        <EmptyState
-          title="No workouts in this range"
-          subtitle="Try changing filters or add a new workout above."
+        <AddWorkoutForm
+          unit={unit}
+          todayISO={todayISO}
+          suggested={suggested.map((s) => s.name)}
+          safePresets={safePresets}
+          conflictWarning={conflictWarning}
+          nextWeightSuggestion={nextWeightSuggestion}
+          addDisabled={addDisabled}
+          date={date}
+          setDate={setDate}
+          exercise={exercise}
+          setExercise={setExercise}
+          sets={sets}
+          setSets={(v) => setSets(v.replace(/[^0-9]/g, ""))}
+          reps={reps}
+          setReps={(v) => setReps(v.replace(/[^0-9]/g, ""))}
+          weight={weight}
+          setWeight={(v) => setWeight(v.replace(/[^0-9.]/g, ""))}
+          notes={notes}
+          setNotes={setNotes}
+          onAdd={onAdd}
+          newPreset={newPreset}
+          setNewPreset={setNewPreset}
+          onSavePreset={async () => {
+            const name = newPreset.trim();
+            if (!name || !user?.uid) return;
+            await addWorkoutPreset(user.uid, {
+              name,
+              exercise: name,
+              createdAt: Date.now(),
+            } as Omit<WorkoutPreset, "id">);
+            setNewPreset("");
+          }}
+          onClear={() => {
+            setExercise("");
+            setSets("");
+            setReps("");
+            setWeight("");
+            setNotes("");
+            setDate(todayISO);
+          }}
+          onOpenSearch={() => setSearchOpen(true)}
         />
-      ) : (
-        grouped.map(({ date, items }) => (
-          <Card key={date} style={{ gap: 10 }}>
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between" as const,
-                alignItems: "center" as const,
-              }}
-            >
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center" as const,
-                  gap: 8,
-                }}
-              >
-                <Badge
-                  tint={withAlpha(colors.primary, 0.18)}
-                  border={withAlpha(colors.primary, 0.35)}
-                >
-                  <Ionicons
-                    name="calendar-outline"
-                    size={12}
-                    color={colors.primary}
-                  />
-                  <Text
-                    style={{
-                      color: colors.primary,
-                      fontWeight: "700",
-                      marginLeft: 4,
-                    }}
-                  >
-                    {date}
-                  </Text>
-                </Badge>
-              </View>
-              <Text style={{ color: colors.muted }}>
-                {items.reduce((s, it) => s + (it.sets || 0), 0)} sets •{" "}
-                {items.length} exercises
-              </Text>
-            </View>
 
-            {items.map((w, idx) => {
-              const isTemp = w.id.startsWith?.("temp-");
-              const isEditing = editId === w.id;
-              const showDivider = idx !== items.length - 1 && !isEditing;
-
-              return (
-                <View key={w.id} style={{ paddingTop: 6 }}>
-                  {isEditing ? (
-                    <>
-                      <View style={{ flexDirection: "row", gap: 8 }}>
-                        <Field
-                          icon="today-outline"
-                          value={edit.date}
-                          onChangeText={(v) =>
-                            setEdit((e) => ({ ...e, date: v }))
-                          }
-                        />
-                        <Field
-                          icon="barbell-outline"
-                          value={edit.exercise}
-                          onChangeText={(v) =>
-                            setEdit((e) => ({ ...e, exercise: v }))
-                          }
-                        />
-                      </View>
-                      <View
-                        style={{ flexDirection: "row", gap: 8, marginTop: 8 }}
-                      >
-                        <Field
-                          icon="layers-outline"
-                          placeholder="Sets"
-                          value={edit.sets}
-                          onChangeText={(v) =>
-                            setEdit((e) => ({
-                              ...e,
-                              sets: v.replace(/[^0-9]/g, ""),
-                            }))
-                          }
-                          inputMode="numeric"
-                        />
-                        <Field
-                          icon="repeat-outline"
-                          placeholder="Reps"
-                          value={edit.reps}
-                          onChangeText={(v) =>
-                            setEdit((e) => ({
-                              ...e,
-                              reps: v.replace(/[^0-9]/g, ""),
-                            }))
-                          }
-                          inputMode="numeric"
-                        />
-                        <Field
-                          icon="speedometer-outline"
-                          placeholder={`Weight (${unit})`}
-                          value={edit.weight}
-                          onChangeText={(v) =>
-                            setEdit((e) => ({
-                              ...e,
-                              weight: v.replace(/[^0-9.]/g, ""),
-                            }))
-                          }
-                          inputMode="decimal"
-                        />
-                      </View>
-                      <Field
-                        icon="document-text-outline"
-                        placeholder="Notes"
-                        value={edit.notes}
-                        onChangeText={(v) =>
-                          setEdit((e) => ({ ...e, notes: v }))
-                        }
-                      />
-                      <View
-                        style={{ flexDirection: "row", gap: 8, marginTop: 8 }}
-                      >
-                        <SoftButton
-                          label="Cancel"
-                          onPress={() => setEditId(null)}
-                        />
-                        <GradientButton label="Save" onPress={saveEdit} />
-                      </View>
-                    </>
-                  ) : (
-                    <Pressable
-                      onPress={() => startEdit(w)}
-                      android_ripple={{
-                        color: withAlpha(colors.primary, 0.12),
-                      }}
-                      style={({ pressed }) => [
-                        {
-                          paddingVertical: 10,
-                          paddingHorizontal: 10,
-                          borderRadius: 12,
-                          flexDirection: "row",
-                          alignItems: "center" as const,
-                          justifyContent: "space-between" as const,
-                          backgroundColor: pressed
-                            ? withAlpha(colors.primary, 0.06)
-                            : "transparent",
-                        },
-                      ]}
-                    >
-                      {/* left */}
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center" as const,
-                          gap: 10,
-                          flex: 1,
-                        }}
-                      >
-                        <View
-                          style={{
-                            width: 6,
-                            height: "100%",
-                            backgroundColor: withAlpha(colors.primary, 0.6),
-                            borderRadius: 3,
-                          }}
-                        />
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={{ fontWeight: "700", color: colors.text }}
-                            numberOfLines={1}
-                          >
-                            {w.exercise} — {w.sets ?? 0}×{w.reps ?? 0} @{" "}
-                            {unit === "lb"
-                              ? Math.round(kgToLb(w.weight || 0))
-                              : Math.round(w.weight || 0)}{" "}
-                            {unit}
-                            {isTemp && (
-                              <Text style={{ color: colors.muted }}>
-                                {"  "}(saving…)
-                              </Text>
-                            )}
-                          </Text>
-                          <Text
-                            style={{ color: colors.muted }}
-                            numberOfLines={1}
-                          >
-                            {w.notes ? w.notes : "Tap to edit"}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* actions */}
-                      <View style={{ flexDirection: "row", gap: 8 }}>
-                        <IconButton
-                          icon="create-outline"
-                          onPress={() => !isTemp && startEdit(w)}
-                          disabled={isTemp}
-                        />
-                        <IconButton
-                          icon="trash-outline"
-                          onPress={() => removeWorkout(w.id)}
-                          danger
-                        />
-                      </View>
-                    </Pressable>
-                  )}
-
-                  {showDivider && (
-                    <View
-                      style={{
-                        height: 1,
-                        backgroundColor: colors.border,
-                        marginLeft: 16,
-                        marginTop: 8,
-                      }}
-                    />
-                  )}
-                </View>
-              );
-            })}
-          </Card>
-        ))
-      )}
-    </ScrollView>
-  );
-}
-
-/* ────────────────────────────────────────────────────────────────────────── */
-/* Reusable bits                                                               */
-/* ────────────────────────────────────────────────────────────────────────── */
-
-function Field(
-  props: {
-    icon: keyof typeof Ionicons.glyphMap;
-  } & React.ComponentProps<typeof TextInput>
-) {
-  const { colors } = useTheme();
-  const { icon, style, ...rest } = props;
-  return (
-    <View
-      style={[
-        {
-          flex: 1,
-          height: 44,
-          borderWidth: 1,
-          borderColor: colors.inputBorder,
-          borderRadius: 12,
-          paddingHorizontal: 12,
-          backgroundColor: colors.inputBg,
-          flexDirection: "row" as const,
-          alignItems: "center" as const,
-        },
-        style as any,
-      ]}
-    >
-      <Ionicons name={icon} size={18} color={colors.muted} />
-      <TextInput
-        placeholderTextColor={colors.placeholder}
-        style={{ flex: 1, marginLeft: 8, color: colors.text, fontSize: 16 }}
-        {...rest}
-      />
-    </View>
-  );
-}
-
-function Metric({ value, label }: { value: number; label: string }) {
-  const { colors } = useTheme();
-  return (
-    <View
-      style={{
-        flex: 1,
-        padding: 12,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.card,
-      }}
-    >
-      <Text style={{ color: colors.muted, fontSize: 12 }}>{label}</Text>
-      <Text style={{ color: colors.text, fontSize: 18, fontWeight: "800" }}>
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-function Badge({
-  children,
-  tint,
-  border,
-}: {
-  children: React.ReactNode;
-  tint: string;
-  border: string;
-}) {
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center" as const,
-        paddingVertical: 4,
-        paddingHorizontal: 8,
-        borderRadius: 999,
-        backgroundColor: tint,
-        borderWidth: 1,
-        borderColor: border,
-      }}
-    >
-      {children}
-    </View>
-  );
-}
-
-function IconButton({
-  icon,
-  onPress,
-  disabled,
-  danger,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  onPress: () => void;
-  disabled?: boolean;
-  danger?: boolean;
-}) {
-  const { colors } = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      hitSlop={8}
-      style={({ pressed }) => [
-        {
-          height: 38,
-          width: 38,
-          borderRadius: 10,
-          borderWidth: 1,
-          borderColor: danger ? withAlpha("#ef4444", 0.5) : colors.border,
-          alignItems: "center" as const,
-          justifyContent: "center" as const,
-          backgroundColor: pressed
-            ? withAlpha(colors.primary, 0.06)
-            : "transparent",
-          opacity: disabled ? 0.5 : 1,
-        },
-      ]}
-    >
-      <Ionicons
-        name={icon}
-        size={18}
-        color={danger ? "#ef4444" : colors.text}
-      />
-    </Pressable>
-  );
-}
-
-function GradientButton({
-  label,
-  onPress,
-}: {
-  label: string;
-  onPress: () => void;
-}) {
-  const { colors } = useTheme();
-  return (
-    <Pressable onPress={onPress} style={{ flex: 0 }}>
-      <LinearGradient
-        colors={[colors.primary, "#16a34a"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{
-          height: 42,
-          paddingHorizontal: 18,
-          borderRadius: 12,
-          alignItems: "center" as const,
-          justifyContent: "center" as const,
-        }}
-      >
-        <Text style={{ color: "#fff", fontWeight: "800" }}>{label}</Text>
-      </LinearGradient>
-    </Pressable>
-  );
-}
-
-function SoftButton({
-  label,
-  onPress,
-}: {
-  label: string;
-  onPress: () => void;
-}) {
-  const { colors } = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={8}
-      style={({ pressed }) => [
-        {
-          height: 42,
-          paddingHorizontal: 14,
-          borderRadius: 12,
-          borderWidth: 1,
-          borderColor: colors.border,
-          alignItems: "center" as const,
-          justifyContent: "center" as const,
-          backgroundColor: pressed
-            ? withAlpha(colors.primary, 0.08)
-            : "transparent",
-        },
-      ]}
-    >
-      <Text style={{ color: colors.text, fontWeight: "700" }}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function EmptyState({ title, subtitle }: { title: string; subtitle?: string }) {
-  const { colors } = useTheme();
-  return (
-    <Card
-      style={{ alignItems: "center" as const, gap: 6, paddingVertical: 28 }}
-    >
-      <Text style={{ fontSize: 36 }}>🗓️</Text>
-      <Text style={{ color: colors.text, fontWeight: "800" }}>{title}</Text>
-      {!!subtitle && <Text style={{ color: colors.muted }}>{subtitle}</Text>}
-    </Card>
+        <ExerciseSearchSheet
+          open={searchOpen}
+          onClose={() => setSearchOpen(false)}
+          onPick={(name) => {
+            setExercise(name);
+            // Optional: auto-suggest sets/reps just like typing:
+            const scheme = suggestScheme(goal);
+            if (!sets) setSets(String(scheme.sets));
+            if (!reps) setReps(String(scheme.reps));
+          }}
+        />
+        <Filters
+          preset={preset}
+          setPreset={setPreset}
+          from={from}
+          to={to}
+          setFrom={setFrom}
+          setTo={setTo}
+        />
+        {nothingToShow ? (
+          <EmptyState
+            title="No workouts in this range"
+            subtitle="Try changing filters or add a new workout above."
+          />
+        ) : (
+          <GroupedWorkouts
+            grouped={grouped}
+            unit={unit}
+            colors={colors}
+            editId={editId}
+            edit={edit}
+            setEdit={setEdit}
+            startEdit={startEdit}
+            saveEdit={saveEdit}
+            removeWorkout={removeWorkout}
+            onCancelEdit={cancelEdit}
+          />
+        )}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }

@@ -3,6 +3,7 @@
 # dependencies
 node_modules/
 
+*.tools/.env.local
 # Expo
 .expo/
 dist/

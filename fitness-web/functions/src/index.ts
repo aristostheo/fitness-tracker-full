@@ -11,6 +11,11 @@ import { setGlobalOptions } from "firebase-functions";
 // import { onRequest } from "firebase-functions/https";
 // import * as logger from "firebase-functions/logger";
 import { parseMeal } from "../parseMeal";
+// functions/src/index.ts
+export { onNutritionEntryCreated } from "./foodHistory";
+
+// (keep your other exports here)
+
 export { parseMeal };
 
 // Start writing functions

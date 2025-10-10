@@ -1,0 +1,16 @@
+[
+  {
+    "id": "0001",
+    "name": "Barbell Bench Press",
+    "target": "chest",
+    "equipment": "barbell",
+    "gifUrl": "https://media.tenor.com/1Z8gVtP89nAAAAAC/bench-press.gif"
+  },
+  {
+    "id": "0002",
+    "name": "Lat Pulldown",
+    "target": "lats",
+    "equipment": "cable-machine",
+    "gifUrl": "https://media.tenor.com/1n0l9sV2q1oAAAAC/lat-pulldown.gif"
+  }
+]

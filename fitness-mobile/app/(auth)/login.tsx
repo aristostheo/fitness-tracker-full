@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   TextInput,
@@ -15,6 +15,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useTheme } from "@/content/ThemeProvider";
+import { useGoogleLogin, signInWithApple } from "@/lib/authSocial";
+import { onAuthStateChanged } from "firebase/auth";
 
 export default function Login() {
   const { colors, isDark } = useTheme();
@@ -40,6 +42,17 @@ export default function Login() {
   }
 
   const disabled = !email.trim() || !pass;
+
+  const { request, signInWithGoogle } = useGoogleLogin();
+
+  // After successful auth, your app likely already navigates in a gate,
+  // but we can push to tabs here too:
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      if (u) router.replace("/(tabs)");
+    });
+    return unsub;
+  }, []);
 
   return (
     <LinearGradient
@@ -253,17 +266,39 @@ export default function Login() {
               />
             </View>
 
-            {/* Social buttons (wire up later if you want) */}
+            {/* Social buttons */}
             <View style={{ flexDirection: "row", gap: 10 }}>
               <SocialButton
                 label="Google"
                 icon="logo-google"
-                onPress={() => {}}
+                onPress={async () => {
+                  setErr("");
+                  try {
+                    if (!request) throw new Error("Google auth not ready");
+                    setLoading(true);
+                    await signInWithGoogle();
+                    // router.replace("/(tabs)"); // gate/observer will handle
+                  } catch (e: any) {
+                    setErr(e?.message ?? "Google sign-in failed");
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
               />
               <SocialButton
                 label="Apple"
                 icon="logo-apple"
-                onPress={() => {}}
+                onPress={async () => {
+                  setErr("");
+                  try {
+                    setLoading(true);
+                    await signInWithApple();
+                  } catch (e: any) {
+                    setErr(e?.message ?? "Apple sign-in failed");
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
               />
             </View>
 
