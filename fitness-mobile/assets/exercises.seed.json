@@ -1,0 +1,6266 @@
+[
+  {
+    "id": "1-arm-half-kneeling-lat-pulldown",
+    "name": "1-Arm Half-Kneeling Lat Pulldown",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "2-handed-kettlebell-swing",
+    "name": "2 Handed Kettlebell Swing",
+    "primaryMuscles": [],
+    "equipment": [
+      "kettlebell"
+    ]
+  },
+  {
+    "id": "3-d-lunge-warmup",
+    "name": "3D lunge warmup",
+    "primaryMuscles": [],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "4-count-burpees",
+    "name": "4-count burpees",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "ab-wheel",
+    "name": "Ab wheel",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "abdominal-stabilization",
+    "name": "Abdominal Stabilization",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "gym-mat"
+    ]
+  },
+  {
+    "id": "abduction-while-standing",
+    "name": "Abduction while standing",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "alternate-back-lunges",
+    "name": "Alternate back lunges",
+    "primaryMuscles": [
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "alternating-bicep-curls",
+    "name": "Alternating bicep curls",
+    "primaryMuscles": [],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "alternating-biceps-curls-with-dumbbell",
+    "name": "Alternating Biceps Curls With Dumbbell",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "alternating-dumbbell-hammer-curl",
+    "name": "Alternating dumbbell hammer curl",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "alternating-high-cable-row",
+    "name": "Alternating High Cable Row",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "alternative-db-gorilla-rows",
+    "name": "Alternative DB Gorilla rows",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "arabesque",
+    "name": "Arabesque",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "gluteus-maximus"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "archer-pull-up",
+    "name": "Archer Pull Up",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "arco-femorale-una-gamba",
+    "name": "Arco femorale una gamba",
+    "primaryMuscles": [
+      "gluteus-maximus",
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "arm-raises-t-y-i",
+    "name": "Arm Raises (T/Y/I)",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "latissimus-dorsi",
+      "serratus-anterior",
+      "trapezius"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "arnold-shoulder-press",
+    "name": "Arnold Shoulder Press",
+    "primaryMuscles": [],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "australian-pull-ups",
+    "name": "Australian pull-ups",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "biceps-brachii",
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "axe-hold",
+    "name": "Axe Hold",
+    "primaryMuscles": [],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "back-bridge",
+    "name": "Back bridge",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "back-extension",
+    "name": "Back extensión",
+    "primaryMuscles": [
+      "latissimus-dorsi",
+      "serratus-anterior"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "back-neck-stretch",
+    "name": "Back neck stretch",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "backward-arm-circles",
+    "name": "Backward arm circles",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "backward-shoulder-rotation",
+    "name": "Backward shoulder rotation",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "bag-training",
+    "name": "Bag training",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "pectoralis-major",
+      "trapezius"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "ball-crunches",
+    "name": "Ball crunches",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "ball-slams",
+    "name": "Ball Slams",
+    "primaryMuscles": [
+      "latissimus-dorsi",
+      "obliquus-externus-abdominis",
+      "rectus-abdominis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "band-pull-aparts",
+    "name": "Band pull-aparts",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "barbell-ab-rollout",
+    "name": "Barbell Ab Rollout",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "barbell-bench-press-nb",
+    "name": "Barbell Bench Press - NB",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "barbell-clean-and-press",
+    "name": "Barbell Clean and press",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "barbell-hack-squats",
+    "name": "Barbell Hack Squats",
+    "primaryMuscles": [],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "barbell-hip-thrust",
+    "name": "Barbell Hip Thrust",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "barbell-lunges-standing",
+    "name": "Barbell Lunges Standing",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "barbell-lunges-walking",
+    "name": "Barbell Lunges Walking",
+    "primaryMuscles": [],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "barbell-reverse-wrist-curl",
+    "name": "Barbell Reverse Wrist Curl",
+    "primaryMuscles": [],
+    "equipment": [
+      "barbell",
+      "bench"
+    ]
+  },
+  {
+    "id": "barbell-squat",
+    "name": "Barbell squat",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "gluteus-maximus"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "barbell-triceps-extension",
+    "name": "Barbell Triceps Extension",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "barbell-wrist-curl",
+    "name": "Barbell Wrist Curl",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "biceps-femoris"
+    ],
+    "equipment": [
+      "barbell",
+      "bench"
+    ]
+  },
+  {
+    "id": "battle-ropes",
+    "name": "Battle Ropes",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "gluteus-maximus",
+      "latissimus-dorsi",
+      "obliquus-externus-abdominis",
+      "quadriceps-femoris",
+      "rectus-abdominis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "bayesian-curl",
+    "name": "Bayesian Curl",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "bear-walk",
+    "name": "Bear Walk",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "gastrocnemius",
+      "pectoralis-major",
+      "rectus-abdominis",
+      "serratus-anterior",
+      "soleus",
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "bench-dips-on-floor-hd",
+    "name": "Bench Dips On Floor HD",
+    "primaryMuscles": [
+      "biceps-brachii",
+      "brachialis",
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "bench-press",
+    "name": "Bench Press",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "barbell",
+      "bench"
+    ]
+  },
+  {
+    "id": "bench-press-narrow-grip",
+    "name": "Bench Press Narrow Grip",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "barbell",
+      "bench"
+    ]
+  },
+  {
+    "id": "benchpress-dumbbells",
+    "name": "Benchpress Dumbbells",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "bench",
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "bent-high-pulls",
+    "name": "Bent High Pulls",
+    "primaryMuscles": [
+      "trapezius"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "bent-over-cable-flye",
+    "name": "Bent over Cable Flye",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "bent-over-dumbbell-rows",
+    "name": "Bent Over Dumbbell Rows",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "bench",
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "bent-over-lateral-raises",
+    "name": "Bent-over Lateral Raises",
+    "primaryMuscles": [],
+    "equipment": [
+      "bench",
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "bent-over-row-to-external-rotation",
+    "name": "Bent over row to external rotation",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "bent-over-rowing",
+    "name": "Bent Over Rowing",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "bent-over-rowing-reverse",
+    "name": "Bent Over Rowing Reverse",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "biceps-close-grip-pull-down",
+    "name": "Biceps Close Grip Pull Down",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "biceps-curl-machine",
+    "name": "Biceps Curl Machine",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "biceps-curl-with-cable",
+    "name": "Biceps Curl With Cable",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "biceps-curls-with-barbell",
+    "name": "Biceps Curls With Barbell",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "biceps-curls-with-dumbbell",
+    "name": "Biceps Curls With Dumbbell",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "biceps-curls-with-sz-bar",
+    "name": "Biceps Curls With SZ-bar",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "sz-bar"
+    ]
+  },
+  {
+    "id": "biceps-with-trx",
+    "name": "Biceps with TRX",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "bicycle-crunches",
+    "name": "bicycle crunches",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "bird-dog",
+    "name": "Bird Dog",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "bizeps-curls-trifecta",
+    "name": "Bizeps Curls Trifecta",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "black-widow-knee-slides",
+    "name": "Black Widow Knee Slides",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis",
+      "rectus-abdominis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "blackroll",
+    "name": "Blackroll",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "blaze",
+    "name": "Blaze",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "gluteus-maximus",
+      "pectoralis-major",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "bench",
+      "dumbbell",
+      "kettlebell",
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "body-ups",
+    "name": "Body-Ups",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "bodyweight-biceps-curl",
+    "name": "Bodyweight Biceps Curl",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "bodyweight-lunge-hd",
+    "name": "Bodyweight lunge HD",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "bodyweight-squat-hd",
+    "name": "Bodyweight Squat HD",
+    "primaryMuscles": [
+      "gluteus-maximus",
+      "quadriceps-femoris",
+      "soleus"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "box-jumps",
+    "name": "box jumps",
+    "primaryMuscles": [
+      "gluteus-maximus"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "box-squat",
+    "name": "Box Squat",
+    "primaryMuscles": [
+      "gluteus-maximus",
+      "quadriceps-femoris",
+      "soleus"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "braced-squat",
+    "name": "Braced Squat",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "bretzel-stretch",
+    "name": "Bretzel stretch",
+    "primaryMuscles": [
+      "gluteus-maximus"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "bronco",
+    "name": "Bronco",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "bulgarian-split-squats-left",
+    "name": "Bulgarian split squats left",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "bulgarian-split-squats-right",
+    "name": "Bulgarian split squats right",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "burpees",
+    "name": "Burpees",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "bus-drivers",
+    "name": "BUS DRIVERS",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "butterfly",
+    "name": "Butterfly",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "butterfly-narrow-grip",
+    "name": "Butterfly Narrow Grip",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "butterfly-reverse",
+    "name": "Butterfly Reverse",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "butterfly-sit-up",
+    "name": "Butterfly Sit Up",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis",
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "cable-chest-press-decline",
+    "name": "Cable Chest Press - Decline",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "cable-chest-press-incline",
+    "name": "Cable Chest Press - Incline",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "cable-concentration-curl",
+    "name": "Cable Concentration Curl",
+    "primaryMuscles": [
+      "biceps-brachii",
+      "brachialis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "cable-cross-over",
+    "name": "Cable Cross-over",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "cable-curls",
+    "name": "Cable Curls",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "cable-external-rotation",
+    "name": "Cable External Rotation",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "cable-fly",
+    "name": "Cable Fly",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "cable-lateral-raises-single-arm",
+    "name": "Cable Lateral Raises (Single Arm)",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "cable-press-around",
+    "name": "Cable Press Around",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "pectoralis-major",
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "cable-rear-delt-fly",
+    "name": "Cable Rear Delt Fly",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "trapezius"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "cable-shrug-in",
+    "name": "Cable Shrug-In",
+    "primaryMuscles": [
+      "trapezius"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "cable-tri-extension-external-rotation",
+    "name": "Cable Tri Extension - External Rotation",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "cable-tri-extension-internal-rotation",
+    "name": "Cable Tri Extension - Internal Rotation",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "cable-tricep-kickback",
+    "name": "Cable Tricep Kickback",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "cable-triceps-press",
+    "name": "Cable Triceps Press",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "cable-woodchoppers",
+    "name": "Cable Woodchoppers",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "calf-press-using-leg-press-machine",
+    "name": "Calf Press Using Leg Press Machine",
+    "primaryMuscles": [
+      "gastrocnemius",
+      "soleus"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "calf-raise-using-hack-squat-machine",
+    "name": "Calf Raise using Hack Squat Machine",
+    "primaryMuscles": [
+      "gastrocnemius",
+      "soleus"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "calf-raise-with-machine-seated",
+    "name": "Calf Raise with machine (seated)",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "calf-raises-left-leg",
+    "name": "Calf raises, left leg",
+    "primaryMuscles": [
+      "gastrocnemius"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "calf-raises-on-hackenschmitt-machine",
+    "name": "Calf Raises on Hackenschmitt Machine",
+    "primaryMuscles": [
+      "gastrocnemius"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "calf-raises-one-legged",
+    "name": "Calf raises, one legged",
+    "primaryMuscles": [
+      "gastrocnemius"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "calf-raises-right-leg",
+    "name": "Calf raises, right leg",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "cardio-en-bicicleta-estatica",
+    "name": "Cardio en bicicleta estática",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "chest-press",
+    "name": "Chest Press",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "childs-pose",
+    "name": "Child's pose",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "chin-tuck",
+    "name": "Chin tuck",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "chin-up",
+    "name": "Chin Up",
+    "primaryMuscles": [],
+    "equipment": [
+      "pull-up-bar"
+    ]
+  },
+  {
+    "id": "chin-ups",
+    "name": "Chin-ups",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "pull-up-bar"
+    ]
+  },
+  {
+    "id": "clap-push-up",
+    "name": "Clap Push-UP",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "claps-over-the-head",
+    "name": "Claps over the head",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "clean",
+    "name": "Clean",
+    "primaryMuscles": [
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "clean-and-jerk-ol",
+    "name": "Clean and Jerk OL",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "biceps-femoris",
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "climb-mill",
+    "name": "ClimbMill",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "clockwise-neck-circles",
+    "name": "Clockwise neck circles",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "close-grip-lat-pull-down",
+    "name": "Close-grip Lat Pull Down",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "close-grip-press-ups",
+    "name": "Close-grip Press-ups",
+    "primaryMuscles": [
+      "brachialis",
+      "latissimus-dorsi",
+      "pectoralis-major",
+      "trapezius"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "cobra-stretch",
+    "name": "Cobra Stretch",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "commando-pull-ups",
+    "name": "commando pull-ups",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "biceps-brachii",
+      "latissimus-dorsi",
+      "trapezius"
+    ],
+    "equipment": [
+      "pull-up-bar"
+    ]
+  },
+  {
+    "id": "concentration-curl",
+    "name": "Concentration Curl",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "copenhagen-adduction-exercise",
+    "name": "Copenhagen Adduction Exercise",
+    "primaryMuscles": [
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "bench"
+    ]
+  },
+  {
+    "id": "cossack-squat",
+    "name": "Cossack squat",
+    "primaryMuscles": [
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "counterclockwise-neck-circles",
+    "name": "Counterclockwise neck circles",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "cross-bench-dumbbell-pullovers",
+    "name": "Cross-Bench Dumbbell Pullovers",
+    "primaryMuscles": [
+      "latissimus-dorsi",
+      "pectoralis-major",
+      "serratus-anterior"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "cross-body-cable-y-raise",
+    "name": "Cross-Body Cable Y-Raise",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "latissimus-dorsi",
+      "trapezius"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "crossbody-hamstring-stretch",
+    "name": "Crossbody Hamstring Stretch",
+    "primaryMuscles": [
+      "biceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "crossbody-leg-swings",
+    "name": "Crossbody Leg Swings",
+    "primaryMuscles": [
+      "biceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "crunch-en-maquina",
+    "name": "Crunch en maquina",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis",
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "bench"
+    ]
+  },
+  {
+    "id": "crunches",
+    "name": "Crunches",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "gym-mat"
+    ]
+  },
+  {
+    "id": "crunches-hd",
+    "name": "Crunches HD",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis",
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "crunches-on-machine",
+    "name": "Crunches on Machine",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "crunches-with-cable",
+    "name": "Crunches With Cable",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "crunches-with-legs-up",
+    "name": "Crunches With Legs Up",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "curl-de-biceps-con-agarre-prono",
+    "name": "Curl de biceps con agarre prono",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "curl-with-kettlebell-two-hands",
+    "name": "Curl with kettlebell two hands",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "kettlebell"
+    ]
+  },
+  {
+    "id": "curl-with-shoulder-elevated",
+    "name": "Curl  - With Shoulder Elevated",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "cycling",
+    "name": "Cycling",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis",
+      "trapezius"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "cycling-cardio-session",
+    "name": "Cycling cardio session",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "db-cross-body-hammer-curls",
+    "name": "DB Cross Body Hammer Curls",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "db-skull-crushers",
+    "name": "DB Skull Crushers",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "db-ucv",
+    "name": "DB UCV",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "db-underhand-bench-press",
+    "name": "DB Underhand bench press",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "bench",
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "db-upper-chest-variation",
+    "name": "DB Upper Chest Variation",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "deadbug",
+    "name": "Deadbug",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "deadhang",
+    "name": "Deadhang",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "deadlifts",
+    "name": "Deadlifts",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "decline-bench-press-barbell",
+    "name": "Decline Bench Press Barbell",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "decline-bench-press-dumbbell",
+    "name": "Decline Bench Press Dumbbell",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "decline-pushups",
+    "name": "Decline Pushups",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "deficit-deadlift",
+    "name": "Deficit Deadlift",
+    "primaryMuscles": [],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "delt-stretch",
+    "name": "Delt Stretch",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "devils-press",
+    "name": "Devil’s Press",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "gluteus-maximus",
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "diagonal-shoulder-press",
+    "name": "Diagonal Shoulder Press",
+    "primaryMuscles": [],
+    "equipment": [
+      "bench"
+    ]
+  },
+  {
+    "id": "diamond-push-ups",
+    "name": "Diamond push ups",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "dips",
+    "name": "Dips",
+    "primaryMuscles": [
+      "pectoralis-major",
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "dips-between-two-benches",
+    "name": "Dips Between Two Benches",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "bench"
+    ]
+  },
+  {
+    "id": "double-kettlebell-clean-and-press",
+    "name": "Double Kettlebell Clean and Press",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "biceps-brachii",
+      "brachialis",
+      "quadriceps-femoris",
+      "trapezius",
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "kettlebell"
+    ]
+  },
+  {
+    "id": "double-kettlebell-front-squat",
+    "name": "Double Kettlebell Front Squat",
+    "primaryMuscles": [
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "kettlebell"
+    ]
+  },
+  {
+    "id": "double-leg-calf-raise",
+    "name": "Double Leg Calf Raise",
+    "primaryMuscles": [
+      "gastrocnemius",
+      "soleus"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "drag-pushdown",
+    "name": "Drag Pushdown",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "sz-bar"
+    ]
+  },
+  {
+    "id": "dragon-flag",
+    "name": "Dragon-flag",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis",
+      "rectus-abdominis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "dragon-squat",
+    "name": "Dragon squat",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "drop-curl",
+    "name": "Drop Curl",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbel-bradford-press",
+    "name": "Dumbbel Bradford press",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-bent-over-face-pull",
+    "name": "Dumbbell Bent Over Face Pull",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-bent-over-row",
+    "name": "Dumbbell Bent Over Row",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "biceps-brachii",
+      "latissimus-dorsi",
+      "serratus-anterior",
+      "trapezius",
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-bicep-curl-to-press",
+    "name": "Dumbbell bicep curl to press",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-cheat-curl",
+    "name": "Dumbbell Cheat Curl",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-chest-press",
+    "name": "Dumbbell Chest Press",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "dumbbell-close-grip-bench-press",
+    "name": "Dumbbell close grip bench press",
+    "primaryMuscles": [
+      "pectoralis-major",
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-concentration-curl",
+    "name": "Dumbbell Concentration Curl",
+    "primaryMuscles": [
+      "brachialis"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-crunches",
+    "name": "Dumbbell Crunches",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-deadlift",
+    "name": "Dumbbell Deadlift",
+    "primaryMuscles": [],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-decline-bench-press",
+    "name": "Dumbbell Decline Bench Press",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "dumbbell",
+      "incline-bench"
+    ]
+  },
+  {
+    "id": "dumbbell-drag-curls",
+    "name": "Dumbbell drag curls",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-farmers-carrie",
+    "name": "Dumbbell farmer's carrie",
+    "primaryMuscles": [],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-floor-press",
+    "name": "Dumbbell Floor Press",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-frog-press",
+    "name": "Dumbbell Frog Press",
+    "primaryMuscles": [
+      "gluteus-maximus"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-front-squat",
+    "name": "Dumbbell Front Squat",
+    "primaryMuscles": [
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-goblet-squat",
+    "name": "Dumbbell Goblet Squat",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-hang-power-cleans",
+    "name": "Dumbbell Hang Power Cleans",
+    "primaryMuscles": [],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-hex-press",
+    "name": "Dumbbell Hex Press",
+    "primaryMuscles": [],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-hip-thrust",
+    "name": "Dumbbell Hip Thrust",
+    "primaryMuscles": [
+      "gluteus-maximus"
+    ],
+    "equipment": [
+      "bench"
+    ]
+  },
+  {
+    "id": "dumbbell-incline-curl",
+    "name": "Dumbbell Incline Curl",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-incline-fly",
+    "name": "Dumbbell Incline Fly",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "dumbbell",
+      "incline-bench"
+    ]
+  },
+  {
+    "id": "dumbbell-lunges-standing",
+    "name": "Dumbbell Lunges Standing",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-lunges-walking",
+    "name": "Dumbbell Lunges Walking",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-pullover",
+    "name": "Dumbbell Pullover",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-push-up",
+    "name": "Dumbbell Push-Up",
+    "primaryMuscles": [],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-rear-delt-row",
+    "name": "Dumbbell rear delt row",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "brachialis",
+      "trapezius"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-rear-lunge",
+    "name": "Dumbbell Rear Lunge",
+    "primaryMuscles": [
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-romanian-deadlift",
+    "name": "Dumbbell Romanian Deadlift",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "gluteus-maximus"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-scaption",
+    "name": "Dumbbell Scaption",
+    "primaryMuscles": [
+      "trapezius"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-shoulder-rotations",
+    "name": "Dumbbell Shoulder Rotations",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-shrug",
+    "name": "Dumbbell Shrug",
+    "primaryMuscles": [],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-side-bend",
+    "name": "Dumbbell Side Bend",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-side-squat",
+    "name": "Dumbbell Side Squat",
+    "primaryMuscles": [
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "dumbbell-single-leg-hip-thrust",
+    "name": "Dumbbell Single-leg Hip Thrust",
+    "primaryMuscles": [
+      "gluteus-maximus"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "dumbbell-split-squat",
+    "name": "Dumbbell Split Squat",
+    "primaryMuscles": [],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-sumo-deadlift",
+    "name": "Dumbbell sumo deadlift",
+    "primaryMuscles": [],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-triceps-extension",
+    "name": "Dumbbell Triceps Extension",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-underhand-dead-row",
+    "name": "Dumbbell Underhand Dead Row",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-upright-row",
+    "name": "Dumbbell upright-row",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "biceps-brachii",
+      "serratus-anterior"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbell-wide-bicep-curls",
+    "name": "Dumbbell wide bicep curls",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "dumbbells-on-scott-machine",
+    "name": "Dumbbells on Scott Machine",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "dynamic-planche",
+    "name": "Dynamic Planche",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "dynamic-side-hold",
+    "name": "Dynamic side hold",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis"
+    ],
+    "equipment": [
+      "kettlebell"
+    ]
+  },
+  {
+    "id": "elbows-tucked-db-bench-press",
+    "name": "Elbows Tucked DB Bench Press",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "bench",
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "elephant-walks",
+    "name": "Elephant Walks",
+    "primaryMuscles": [
+      "biceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "elevated-prayer-stretch",
+    "name": "Elevated prayer stretch",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "bench"
+    ]
+  },
+  {
+    "id": "elliptical",
+    "name": "Elliptical",
+    "primaryMuscles": [
+      "gluteus-maximus",
+      "quadriceps-femoris",
+      "trapezius"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "estiramiento-de-brazos-y-cuello",
+    "name": "Estiramiento de brazos y cuello",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "trapezius",
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "estiramiento-de-piernas-y-cadera",
+    "name": "Estiramiento de piernas y cadera",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "exercise-band-dorsiflexion",
+    "name": "Exercise Band Dorsiflexion",
+    "primaryMuscles": [
+      "soleus"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "exercise-band-plantarflexion",
+    "name": "Exercise Band Plantarflexion",
+    "primaryMuscles": [
+      "gastrocnemius"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "extension-de-gluteo-en-maquina",
+    "name": "Extensión de gluteo en  máquina",
+    "primaryMuscles": [
+      "gluteus-maximus"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "extension-de-gluteos-en-polea",
+    "name": "Extensión de gluteos en polea",
+    "primaryMuscles": [
+      "gluteus-maximus"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "ez-bar-skullcrusher-nb",
+    "name": "EZ-Bar Skullcrusher - NB",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "sz-bar"
+    ]
+  },
+  {
+    "id": "facepull",
+    "name": "Facepull",
+    "primaryMuscles": [
+      "trapezius"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "finger-pushup",
+    "name": "Finger Pushup",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "fingerboard-20-mm-edge",
+    "name": "Fingerboard 20 mm edge",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "flexion-lateral",
+    "name": "Flexión lateral",
+    "primaryMuscles": [],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "floor-dips",
+    "name": "Floor dips",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "floor-skull-crusher",
+    "name": "Floor Skull Crusher",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "sz-bar"
+    ]
+  },
+  {
+    "id": "flutter-kicks",
+    "name": "Flutter Kicks",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis",
+      "rectus-abdominis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "fly-with-cable",
+    "name": "Fly With Cable",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "fly-with-dumbbells",
+    "name": "Fly With Dumbbells",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "fly-with-dumbbells-decline-bench",
+    "name": "Fly With Dumbbells, Decline Bench",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "forearm-curls-underhand-grip",
+    "name": "Forearm Curls (underhand grip)",
+    "primaryMuscles": [],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "forward-arm-circles",
+    "name": "Forward arm circles",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "forward-shoulder-rotation",
+    "name": "Forward shoulder rotation",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "frog-stand",
+    "name": "Frog stand",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "biceps-brachii",
+      "brachialis",
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "front-lever",
+    "name": "Front Lever",
+    "primaryMuscles": [
+      "latissimus-dorsi",
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "front-lever-pull-up",
+    "name": "Front lever pull-up",
+    "primaryMuscles": [
+      "biceps-brachii",
+      "latissimus-dorsi",
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "pull-up-bar"
+    ]
+  },
+  {
+    "id": "front-lever-tuck",
+    "name": "Front lever tuck",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "biceps-brachii",
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "pull-up-bar"
+    ]
+  },
+  {
+    "id": "front-neck-stretch",
+    "name": "Front neck stretch",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "front-plank",
+    "name": "Front Plank",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "front-plate-raise",
+    "name": "Front Plate Raise",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "front-pull-narrow",
+    "name": "Front Pull narrow",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "barbell",
+      "sz-bar"
+    ]
+  },
+  {
+    "id": "front-pull-wide",
+    "name": "Front pull wide",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "barbell",
+      "sz-bar"
+    ]
+  },
+  {
+    "id": "front-raises",
+    "name": "Front Raises",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "barbell",
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "front-raises-with-plates",
+    "name": "Front Raises with Plates",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "trapezius"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "front-squats",
+    "name": "Front Squats",
+    "primaryMuscles": [
+      "gluteus-maximus"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "front-wood-chop",
+    "name": "Front Wood Chop",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "full-sit-outs",
+    "name": "Full Sit Outs",
+    "primaryMuscles": [
+      "gluteus-maximus",
+      "obliquus-externus-abdominis",
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "glute-bridge",
+    "name": "Glute Bridge",
+    "primaryMuscles": [
+      "gluteus-maximus"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "glute-drive",
+    "name": "Glute Drive",
+    "primaryMuscles": [
+      "gluteus-maximus"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "good-morning",
+    "name": "Good Morning",
+    "primaryMuscles": [
+      "biceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "good-mornings",
+    "name": "Good Mornings",
+    "primaryMuscles": [
+      "biceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "hack-squats",
+    "name": "Hack Squats",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "hammercurls",
+    "name": "Hammercurls",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "hammercurls-on-cable",
+    "name": "Hammercurls on Cable",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "hamstring-chokes",
+    "name": "Hamstring Chokes",
+    "primaryMuscles": [
+      "biceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "hamstring-kicks",
+    "name": "Hamstring Kicks",
+    "primaryMuscles": [
+      "biceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "hand-grip",
+    "name": "Hand Grip",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "handstand",
+    "name": "Handstand",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "handstand-push-up",
+    "name": "Handstand Push Up",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "handstand-pushup",
+    "name": "Handstand Pushup",
+    "primaryMuscles": [
+      "trapezius",
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "hanging-leg-raises",
+    "name": "Hanging Leg Raises",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "pull-up-bar"
+    ]
+  },
+  {
+    "id": "head-tilts",
+    "name": "Head tilts",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "head-turns",
+    "name": "Head turns",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "heel-touches",
+    "name": "Heel Touches",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "helms-row",
+    "name": "Helms Row",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "hercules-pillars",
+    "name": "Hercules Pillars",
+    "primaryMuscles": [
+      "biceps-brachii",
+      "brachialis",
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "high-cable-cross-tricep-extention-nb",
+    "name": "High-Cable Cross Tricep Extention - NB",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "high-incline-smith-machine-press",
+    "name": "High-Incline Smith Machine Press",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "pectoralis-major",
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "high-knee-jumps",
+    "name": "High Knee Jumps",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "gastrocnemius",
+      "quadriceps-femoris",
+      "soleus"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "high-knee-skips-hd",
+    "name": "High Knee Skips HD",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis",
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "high-knees",
+    "name": "High knees",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "high-plank",
+    "name": "High plank",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "high-pull",
+    "name": "High Pull",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "high-row",
+    "name": "High Row",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "hindu-pushups",
+    "name": "Hindu Pushups",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "pectoralis-major"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "hindu-squats",
+    "name": "Hindu Squats",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "hip-hinge",
+    "name": "Hip hinge",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "gluteus-maximus"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "hip-raise-lying",
+    "name": "Hip Raise, Lying",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "hip-thrust",
+    "name": "Hip Thrust",
+    "primaryMuscles": [
+      "gluteus-maximus"
+    ],
+    "equipment": [
+      "barbell",
+      "bench"
+    ]
+  },
+  {
+    "id": "hollow-hold",
+    "name": "Hollow Hold",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis",
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "gym-mat",
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "horizontal-traction-isometry",
+    "name": "Horizontal traction isometry",
+    "primaryMuscles": [
+      "latissimus-dorsi",
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "pull-up-bar"
+    ]
+  },
+  {
+    "id": "hyper-y-w-combo",
+    "name": "Hyper Y W Combo",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "hyperextensions",
+    "name": "Hyperextensions",
+    "primaryMuscles": [
+      "trapezius"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "ice-scream-maker",
+    "name": "Ice Scream maker",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "incline-bench-press-barbell",
+    "name": "Incline Bench Press - Barbell",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "barbell",
+      "incline-bench"
+    ]
+  },
+  {
+    "id": "incline-bench-press-dumbbell",
+    "name": "Incline Bench Press - Dumbbell",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "dumbbell",
+      "incline-bench"
+    ]
+  },
+  {
+    "id": "incline-bench-press-mp",
+    "name": "Incline Bench Press - MP",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "incline-bench-reverse-fly-hello",
+    "name": "Incline Bench Reverse Fly - Hello",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "trapezius"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "incline-chest-press-db",
+    "name": "Incline Chest Press DB",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "incline-chest-supported-dumbbell-row",
+    "name": "Incline Chest-Supported Dumbbell Row",
+    "primaryMuscles": [
+      "biceps-brachii",
+      "latissimus-dorsi",
+      "trapezius"
+    ],
+    "equipment": [
+      "bench",
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "incline-close-grip-barbell-bench-press",
+    "name": "Incline Close Grip Barbell Bench Press",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "incline-crunches",
+    "name": "Incline Crunches",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "incline-bench"
+    ]
+  },
+  {
+    "id": "incline-dumbbell-bench-press",
+    "name": "Incline Dumbbell Bench Press",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "incline-dumbbell-fly",
+    "name": "Incline Dumbbell Fly",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "dumbbell",
+      "incline-bench"
+    ]
+  },
+  {
+    "id": "incline-dumbbell-press",
+    "name": "Incline Dumbbell Press",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "incline-dumbbell-row",
+    "name": "Incline Dumbbell Row",
+    "primaryMuscles": [],
+    "equipment": [
+      "dumbbell",
+      "incline-bench"
+    ]
+  },
+  {
+    "id": "incline-ohp-db",
+    "name": "Incline OHP DB",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "incline-plank-with-alternate-floor-touch",
+    "name": "Incline Plank With Alternate Floor Touch",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "incline-push-up",
+    "name": "Incline Push up",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "incline-skull-crush",
+    "name": "Incline Skull Crush",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "inverted-rows",
+    "name": "Inverted Rows",
+    "primaryMuscles": [
+      "biceps-brachii",
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "isometria-trazioni-impugnatura-inversa",
+    "name": "Isometria trazioni impugnatura inversa",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "pull-up-bar"
+    ]
+  },
+  {
+    "id": "isometric-wipers",
+    "name": "Isometric Wipers",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "jalon-abierto",
+    "name": "Jalón abierto",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "jalon-abierto-supino",
+    "name": "Jalón abierto supino",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "jalon-cerrado",
+    "name": "Jalón cerrado",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "jalon-cerrado-supino",
+    "name": "Jalón cerrado supino",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "jalon-en-banco-inclinado",
+    "name": "JALON EN BANCO INCLINADO",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "jalones-pecho-neutro",
+    "name": "JALONES PECHO NEUTRO",
+    "primaryMuscles": [
+      "biceps-brachii",
+      "latissimus-dorsi",
+      "serratus-anterior"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "jerk-ol",
+    "name": "Jerk OL",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "jm-press",
+    "name": "JM Press",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "jogging",
+    "name": "Jogging",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "jump-rope-basic-jumps",
+    "name": "Jump rope: basic jumps",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "jumping-jack-hd",
+    "name": "Jumping Jack HD",
+    "primaryMuscles": [
+      "gastrocnemius",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "jumping-jacks",
+    "name": "Jumping Jacks",
+    "primaryMuscles": [
+      "gastrocnemius",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "kettlebell-deadlifts",
+    "name": "Kettlebell deadlifts",
+    "primaryMuscles": [],
+    "equipment": [
+      "kettlebell"
+    ]
+  },
+  {
+    "id": "kettlebell-one-legged-deadlift",
+    "name": "Kettlebell One Legged Deadlift",
+    "primaryMuscles": [
+      "gluteus-maximus"
+    ],
+    "equipment": [
+      "dumbbell",
+      "kettlebell"
+    ]
+  },
+  {
+    "id": "kettlebell-sumo-deadlift",
+    "name": "kettlebell sumo deadlift",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "kettlebell"
+    ]
+  },
+  {
+    "id": "kettlebell-swing",
+    "name": "Kettlebell Swing",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "gluteus-maximus"
+    ],
+    "equipment": [
+      "kettlebell"
+    ]
+  },
+  {
+    "id": "kettlebell-swings",
+    "name": "Kettlebell Swings",
+    "primaryMuscles": [
+      "gluteus-maximus"
+    ],
+    "equipment": [
+      "kettlebell"
+    ]
+  },
+  {
+    "id": "knee-push-ups",
+    "name": "knee push-ups",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "knee-raises",
+    "name": "Knee Raises",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "pull-up-bar"
+    ]
+  },
+  {
+    "id": "knee-to-chest-stretch",
+    "name": "Knee to Chest Stretch",
+    "primaryMuscles": [
+      "gluteus-maximus"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "kneeling-kickbacks",
+    "name": "Kneeling kickbacks",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "kong-curl",
+    "name": "Kong Curl",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "kopfueber-gewichtaufheben",
+    "name": "Kopfüber Gewichtaufheben",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "kettlebell"
+    ]
+  },
+  {
+    "id": "kreis-press-db",
+    "name": "Kreis Press DB",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "kroc-row",
+    "name": "Kroc Row",
+    "primaryMuscles": [
+      "latissimus-dorsi",
+      "trapezius"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "l-hold",
+    "name": "L Hold",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "landmine-press",
+    "name": "Landmine press",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "larsen-press",
+    "name": "Larsen Press",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "lat-pull-db",
+    "name": "Lat Pull DB",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "lat-pull-down-close-grip",
+    "name": "Lat Pull Down (close grip)",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "lat-pull-down-leaning-back",
+    "name": "Lat Pull Down (Leaning Back)",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "lat-pull-down-straight-back",
+    "name": "Lat Pull Down (Straight Back)",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "lat-pulldown-cross-body-single-arm",
+    "name": "Lat Pulldown - Cross Body Single Arm",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "lateral-push-off",
+    "name": "Lateral Push Off",
+    "primaryMuscles": [
+      "gastrocnemius"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "lateral-raises",
+    "name": "Lateral Raises",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "lateral-rows-on-cable-one-armed",
+    "name": "Lateral Rows on Cable, One Armed",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "lateral-to-front-raises",
+    "name": "Lateral-to-Front Raises",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "trapezius"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "lateral-walk",
+    "name": "Lateral Walk",
+    "primaryMuscles": [
+      "gluteus-maximus"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "left-levator-scapulae-stretch",
+    "name": "Left levator scapulae stretch",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "left-neck-stretch",
+    "name": "Left neck stretch",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "leg-curl",
+    "name": "Leg Curl",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "gluteus-maximus"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "leg-curl-with-elastic",
+    "name": "Leg curl with elastic",
+    "primaryMuscles": [
+      "gastrocnemius"
+    ],
+    "equipment": [
+      "resistance-band"
+    ]
+  },
+  {
+    "id": "leg-curls-laying",
+    "name": "Leg Curls (laying)",
+    "primaryMuscles": [
+      "biceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "leg-curls-sitting",
+    "name": "Leg Curls (sitting)",
+    "primaryMuscles": [
+      "biceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "leg-curls-standing",
+    "name": "Leg Curls (standing)",
+    "primaryMuscles": [
+      "biceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "leg-extension",
+    "name": "Leg Extension",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "leg-press",
+    "name": "Leg Press",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "gastrocnemius",
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "leg-press-on-hackenschmidt-machine",
+    "name": "Leg Press on Hackenschmidt Machine",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "leg-press-toe-press",
+    "name": "Leg Press Toe Press",
+    "primaryMuscles": [
+      "gastrocnemius"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "leg-presses-narrow",
+    "name": "Leg Presses (narrow)",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "leg-presses-wide",
+    "name": "Leg Presses (wide)",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "leg-raise",
+    "name": "Leg Raise",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis",
+      "rectus-abdominis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "leg-raises-lying",
+    "name": "Leg Raises, Lying",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "gym-mat"
+    ]
+  },
+  {
+    "id": "leg-raises-pull-up-bar",
+    "name": "Leg raises pull up bar",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "pull-up-bar"
+    ]
+  },
+  {
+    "id": "leg-raises-standing",
+    "name": "Leg Raises, Standing",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "leg-swings-front-back",
+    "name": "Leg Swings (Front–Back)",
+    "primaryMuscles": [
+      "biceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "leverage-machine-chest-press",
+    "name": "Leverage Machine Chest Press",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "leverage-machine-iso-row",
+    "name": "Leverage Machine Iso Row",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "levitation-crunch",
+    "name": "Levitation Crunch",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "long-pulley-low-row",
+    "name": "Long-Pulley (low Row)",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "long-pulley-narrow",
+    "name": "Long-Pulley, Narrow",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "low-box-squat-wide-stance",
+    "name": "Low Box Squat - Wide Stance",
+    "primaryMuscles": [
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "low-cable-cross-over-nb",
+    "name": "Low-Cable Cross-Over - NB",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "low-pulley-cable-f-fly",
+    "name": "Low Pulley Cable fFly",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "lower-back-extensions",
+    "name": "Lower Back Extensions",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "lunges",
+    "name": "Lunges",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "lying-bicep-curl",
+    "name": "lying bicep curl",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "bench",
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "lying-dumbbell-curls",
+    "name": "Lying Dumbbell Curls",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "bench",
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "lying-dumbbell-row-ss-seated-shrug",
+    "name": "LYING DUMBBELL ROW SS SEATED SHRUG",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "lying-leg-raise",
+    "name": "Lying Leg Raise",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "lying-rotator-cuff-exercise",
+    "name": "Lying Rotator Cuff Exercise",
+    "primaryMuscles": [],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "lying-triceps-extensions",
+    "name": "Lying Triceps Extensions",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "barbell",
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "lying-triceps-kickback",
+    "name": "Lying Triceps Kickback",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell",
+      "incline-bench"
+    ]
+  },
+  {
+    "id": "machine-chest-fly",
+    "name": "Machine chest fly",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "machine-chest-press-exercise",
+    "name": "Machine Chest Press Exercise",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "gym-mat"
+    ]
+  },
+  {
+    "id": "machine-lateral-wise",
+    "name": "Machine lateral wise",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "gym-mat"
+    ]
+  },
+  {
+    "id": "march-or-jog-in-place",
+    "name": "March or jog in place",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "gastrocnemius",
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "meadows-row",
+    "name": "Meadows Row",
+    "primaryMuscles": [
+      "latissimus-dorsi",
+      "trapezius"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "medicine-ball-booklet-crunch",
+    "name": "Medicine ball booklet crunch",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "medicine-ball-twist",
+    "name": "Medicine ball twist",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis",
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "swiss-ball"
+    ]
+  },
+  {
+    "id": "meditacion-guiada-o-libre",
+    "name": "Meditación guiada o libre",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "military-press-mit-sz-bar",
+    "name": "Military Press mit SZ-Bar",
+    "primaryMuscles": [],
+    "equipment": [
+      "sz-bar"
+    ]
+  },
+  {
+    "id": "modified-pulldown",
+    "name": "Modified pulldown",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "incline-bench"
+    ]
+  },
+  {
+    "id": "mountain-climbers",
+    "name": "Mountain climbers",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "muscle-up",
+    "name": "Muscle up",
+    "primaryMuscles": [
+      "biceps-brachii",
+      "biceps-femoris"
+    ],
+    "equipment": [
+      "pull-up-bar"
+    ]
+  },
+  {
+    "id": "neck-half-circles",
+    "name": "Neck half circles",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "negative-crunches",
+    "name": "Negative Crunches",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "neutral-grip-lat-pulldown",
+    "name": "Neutral Grip Lat Pulldown",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "no-leg-drive-dumbbell-chest-press",
+    "name": "No Leg Drive Dumbbell Chest Press",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "bench",
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "no-push-up-burpees",
+    "name": "No push-up burpees",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "nordic-curl",
+    "name": "Nordic Curl",
+    "primaryMuscles": [
+      "biceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "omni-cable-cross-over",
+    "name": "Omni Cable Cross-over",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "sz-bar"
+    ]
+  },
+  {
+    "id": "one-arm-bent-row",
+    "name": "One Arm Bent Row",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "one-arm-overhead-cable-tricep-extension",
+    "name": "One Arm Overhead Cable Tricep Extension",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "resistance-band"
+    ]
+  },
+  {
+    "id": "one-arm-triceps-extensions-on-cable",
+    "name": "One Arm Triceps Extensions on Cable",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "one-armed-push-ups",
+    "name": "One armed push-ups",
+    "primaryMuscles": [
+      "pectoralis-major",
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "one-handed-kettlebell-curls",
+    "name": "one-handed kettlebell curls",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "kettlebell"
+    ]
+  },
+  {
+    "id": "overhand-cable-curl",
+    "name": "Overhand Cable Curl",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "overhead-cable-tricep-extension",
+    "name": "Overhead Cable Tricep Extension",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "overhead-press",
+    "name": "Overhead Press",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "overhead-squat",
+    "name": "Overhead Squat",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "overhead-triceps-extension",
+    "name": "Overhead Triceps Extension",
+    "primaryMuscles": [
+      "trapezius"
+    ],
+    "equipment": [
+      "sz-bar"
+    ]
+  },
+  {
+    "id": "pallof-press",
+    "name": "PALLOF PRESS",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "gluteus-maximus",
+      "obliquus-externus-abdominis",
+      "rectus-abdominis",
+      "serratus-anterior",
+      "trapezius"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "patada-de-burro-con-mancuerna",
+    "name": "Patada de burro con mancuerna",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "gluteus-maximus"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "pause-bench",
+    "name": "Pause Bench",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "barbell",
+      "bench"
+    ]
+  },
+  {
+    "id": "pause-hack-squats",
+    "name": "Pause Hack Squats",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "pendelay-rows",
+    "name": "Pendelay Rows",
+    "primaryMuscles": [
+      "latissimus-dorsi",
+      "trapezius"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "pendular-hack",
+    "name": "Pendular hack",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "pendulum-squat",
+    "name": "Pendulum Squat",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "perpendicular-unilateral-landmine-row",
+    "name": "Perpendicular Unilateral Landmine Row",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "trapezius"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "pike-push-ups",
+    "name": "Pike Push Ups",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "pin-bench-press-bb",
+    "name": "Pin Bench Press BB",
+    "primaryMuscles": [
+      "pectoralis-major",
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "pin-ohp",
+    "name": "Pin OHP",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "pin-squat",
+    "name": "Pin Squat",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "pistol-squat",
+    "name": "Pistol Squat",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "gluteus-maximus"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "pistol-squats-right",
+    "name": "Pistol squats right",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "planche-de-cote-dynamique",
+    "name": "Planche de cote dynamique",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "plank",
+    "name": "Plank",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis",
+      "pectoralis-major",
+      "quadriceps-femoris",
+      "rectus-abdominis",
+      "trapezius"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "plank-jacks",
+    "name": "Plank Jacks",
+    "primaryMuscles": [
+      "gluteus-maximus",
+      "obliquus-externus-abdominis",
+      "rectus-abdominis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "plank-shoulter-taps",
+    "name": "Plank Shoulter Taps",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "gluteus-maximus",
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "gym-mat"
+    ]
+  },
+  {
+    "id": "plank-to-elbow-extension",
+    "name": "Plank-to-Elbow Extension",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "rectus-abdominis",
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "plank-with-alternating-leg-lift",
+    "name": "Plank with Alternating Leg Lift",
+    "primaryMuscles": [
+      "gluteus-maximus"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "plantarflexion-stretch-with-band",
+    "name": "Plantarflexion Stretch with Band",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "plate-pinch-hold",
+    "name": "Plate Pinch Hold",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "plate-twist",
+    "name": "Plate twist",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis",
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "gym-mat"
+    ]
+  },
+  {
+    "id": "power-clean",
+    "name": "Power Clean",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "preacher-curl-externally-rotated",
+    "name": "Preacher Curl - Externally Rotated",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "preacher-curl-internally-rotated",
+    "name": "Preacher Curl - Internally Rotated",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "preacher-curls",
+    "name": "Preacher Curls",
+    "primaryMuscles": [
+      "brachialis"
+    ],
+    "equipment": [
+      "sz-bar"
+    ]
+  },
+  {
+    "id": "prisoner-squat",
+    "name": "Prisoner Squat",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "prone-scapular-retraction-arms-at-side",
+    "name": "Prone Scapular Retraction - Arms at Side",
+    "primaryMuscles": [
+      "trapezius"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "pseudo-planche-push-up",
+    "name": "Pseudo Planche Push-up",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "pull-over-polea-alta",
+    "name": "PULL OVER POLEA ALTA",
+    "primaryMuscles": [
+      "latissimus-dorsi",
+      "serratus-anterior"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "pull-up-isometric-hold",
+    "name": "Pull-up Isometric Hold",
+    "primaryMuscles": [
+      "biceps-brachii",
+      "latissimus-dorsi",
+      "trapezius"
+    ],
+    "equipment": [
+      "pull-up-bar"
+    ]
+  },
+  {
+    "id": "pull-ups",
+    "name": "Pull-ups",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "pull-up-bar"
+    ]
+  },
+  {
+    "id": "pull-ups-on-machine",
+    "name": "Pull Ups on Machine",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "pullover",
+    "name": "Pullover",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "pullover-machine",
+    "name": "Pullover Machine",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "pullup-on-fingerboard",
+    "name": "Pullup on fingerboard",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "punches",
+    "name": "punches",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "push-ohp",
+    "name": "Push OHP",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "push-press",
+    "name": "Push Press",
+    "primaryMuscles": [
+      "trapezius"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "push-up",
+    "name": "Push-Up",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "push-up-rotations",
+    "name": "Push-up rotations",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "push-ups-decline",
+    "name": "Push-Ups | Decline",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "bench",
+      "incline-bench"
+    ]
+  },
+  {
+    "id": "push-ups-incline",
+    "name": "Push-Ups | Incline",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "bench",
+      "incline-bench"
+    ]
+  },
+  {
+    "id": "push-ups-parallettes",
+    "name": "Push-Ups | Parallettes",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "quadriped-arm-and-leg-raise",
+    "name": "Quadriped Arm and Leg Raise",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "gluteus-maximus",
+      "serratus-anterior",
+      "trapezius"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "quadruped-thoracic-rotation-left",
+    "name": "Quadruped thoracic rotation left",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "quadruped-thoracic-rotation-right",
+    "name": "Quadruped thoracic rotation right",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "rack-deadlift",
+    "name": "Rack Deadlift",
+    "primaryMuscles": [
+      "gluteus-maximus"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "reach-ups",
+    "name": "Reach ups",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "rear-delt-raise",
+    "name": "Rear Delt Raise",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "trapezius"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "rear-delt-raises",
+    "name": "Rear Delt Raises",
+    "primaryMuscles": [],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "recruitment-pulls",
+    "name": "Recruitment Pulls",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "recumbent-bike",
+    "name": "Recumbent Bike",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "gastrocnemius",
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "remada-unilateral-no-cabo",
+    "name": "Remada unilateral no cabo",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "pull-up-bar"
+    ]
+  },
+  {
+    "id": "remo-maquina-agarre-estrecho",
+    "name": "Remo maquina agarre estrecho",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "remo-maquina-agarre-estrecho-supino",
+    "name": "Remo maquina agarre estrecho supino",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "renegade-row",
+    "name": "Renegade Row",
+    "primaryMuscles": [
+      "latissimus-dorsi",
+      "trapezius"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "respiracion-profunda-de-pie-o-sentado",
+    "name": "Respiración profunda (de pie o sentado)",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis",
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "rest-for-timed-workouts",
+    "name": "Rest (for timed workouts)",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "reverse-bar-curl",
+    "name": "Reverse Bar Curl",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "sz-bar"
+    ]
+  },
+  {
+    "id": "reverse-cable-flye",
+    "name": "Reverse Cable Flye",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "reverse-curl",
+    "name": "Reverse Curl",
+    "primaryMuscles": [
+      "biceps-brachii",
+      "brachialis"
+    ],
+    "equipment": [
+      "barbell",
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "reverse-ez-bar-cable-curls",
+    "name": "Reverse EZ Bar Cable Curls",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "sz-bar"
+    ]
+  },
+  {
+    "id": "reverse-grip-barbell-curls",
+    "name": "Reverse Grip Barbell Curls",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "reverse-grip-bench-press",
+    "name": "Reverse Grip Bench Press",
+    "primaryMuscles": [
+      "pectoralis-major",
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "barbell",
+      "bench"
+    ]
+  },
+  {
+    "id": "reverse-lunges",
+    "name": "Reverse lunges",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "reverse-nordic-curl",
+    "name": "Reverse Nordic Curl",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "reverse-plank",
+    "name": "Reverse Plank",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "reverse-preacher-curl-close-grip",
+    "name": "Reverse Preacher Curl (Close Grip)",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "sz-bar"
+    ]
+  },
+  {
+    "id": "reverse-snow-angel",
+    "name": "Reverse Snow Angel",
+    "primaryMuscles": [
+      "trapezius"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "reverse-wood-chops",
+    "name": "Reverse Wood Chops",
+    "primaryMuscles": [
+      "gluteus-maximus",
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "right-levator-scapulae-stretch",
+    "name": "Right levator scapulae stretch",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "right-neck-stretch",
+    "name": "Right neck stretch",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "ring-dips",
+    "name": "Ring Dips",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "rocking-triceps-pushdown",
+    "name": "Rocking Triceps Pushdown",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "sz-bar"
+    ]
+  },
+  {
+    "id": "roll-down",
+    "name": "Roll Down",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "roman-chair",
+    "name": "Roman Chair",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "romanian-deadlift",
+    "name": "Romanian Deadlift",
+    "primaryMuscles": [],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "romanian-deadlift-single-leg",
+    "name": "Romanian deadlift, single leg",
+    "primaryMuscles": [
+      "biceps-femoris"
+    ],
+    "equipment": [
+      "dumbbell",
+      "kettlebell"
+    ]
+  },
+  {
+    "id": "rope-pullover-row",
+    "name": "Rope Pullover/row",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "incline-bench"
+    ]
+  },
+  {
+    "id": "rotary-torso-machine",
+    "name": "Rotary Torso Machine",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "row",
+    "name": "Row",
+    "primaryMuscles": [
+      "latissimus-dorsi",
+      "trapezius"
+    ],
+    "equipment": [
+      "barbell",
+      "dumbbell",
+      "pull-up-bar"
+    ]
+  },
+  {
+    "id": "rowing-lying-on-bench",
+    "name": "Rowing, Lying on Bench",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "rowing-machine",
+    "name": "Rowing Machine",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "biceps-brachii",
+      "biceps-femoris",
+      "brachialis",
+      "gastrocnemius",
+      "gluteus-maximus",
+      "latissimus-dorsi",
+      "obliquus-externus-abdominis",
+      "quadriceps-femoris",
+      "rectus-abdominis",
+      "serratus-anterior",
+      "soleus",
+      "trapezius"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "rowing-seated-narrow-grip",
+    "name": "Rowing seated, narrow grip",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "rowing-t-bar",
+    "name": "Rowing, T-bar",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "rowing-with-trx-band",
+    "name": "Rowing with TRX band",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "rubber-band-glute-kickback",
+    "name": "rubber band glute kickback",
+    "primaryMuscles": [
+      "gluteus-maximus"
+    ],
+    "equipment": [
+      "resistance-band"
+    ]
+  },
+  {
+    "id": "run",
+    "name": "Run",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "run-interval-training",
+    "name": "Run - Interval Training",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "run-treadmill",
+    "name": "Run - Treadmill",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "russian-twist",
+    "name": "Russian Twist",
+    "primaryMuscles": [
+      "latissimus-dorsi",
+      "obliquus-externus-abdominis",
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "dumbbell",
+      "gym-mat",
+      "swiss-ball"
+    ]
+  },
+  {
+    "id": "scapula-pulls",
+    "name": "Scapula Pulls",
+    "primaryMuscles": [
+      "latissimus-dorsi",
+      "trapezius"
+    ],
+    "equipment": [
+      "pull-up-bar"
+    ]
+  },
+  {
+    "id": "schoulder-raise-dumbbell",
+    "name": "Schoulder Raise (Dumbbell)",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "schwimmen",
+    "name": "Schwimmen",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "scissors",
+    "name": "Scissors",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "scorpion-kick",
+    "name": "Scorpion Kick",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "seated-bench-press",
+    "name": "Seated bench press",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "bench"
+    ]
+  },
+  {
+    "id": "seated-cable-mid-trap-shrug",
+    "name": "SEATED CABLE MID TRAP SHRUG",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "seated-cable-row",
+    "name": "Seated Cable Row",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "seated-cable-rows",
+    "name": "Seated Cable Rows",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "seated-corkscrew",
+    "name": "Seated Corkscrew",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis",
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "seated-dumbbell-calf-raise",
+    "name": "Seated Dumbbell Calf Raise",
+    "primaryMuscles": [
+      "gastrocnemius"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "seated-dumbbell-curls",
+    "name": "Seated Dumbbell Curls",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "seated-dumbbell-side-lateral",
+    "name": "Seated Dumbbell Side Lateral",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "seated-hip-adduction",
+    "name": "Seated Hip Adduction",
+    "primaryMuscles": [
+      "gluteus-maximus"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "seated-knee-tuck",
+    "name": "Seated Knee Tuck",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "seated-rear-delt-rise",
+    "name": "Seated rear delt rise",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "seated-triceps-press",
+    "name": "Seated Triceps Press",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "bench",
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "seated-w-curl",
+    "name": "Seated W Curl",
+    "primaryMuscles": [
+      "biceps-brachii",
+      "brachialis"
+    ],
+    "equipment": [
+      "bench",
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "shotgun-row",
+    "name": "Shotgun Row",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "shoulder-dislocates",
+    "name": "Shoulder dislocates",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "shoulder-press-barbell",
+    "name": "Shoulder Press, Barbell",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "shoulder-press-dumbbell",
+    "name": "Shoulder Press (Dumbbell)",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "shoulder-press-dumbbells",
+    "name": "Shoulder Press, Dumbbells",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "shoulder-press-on-machine",
+    "name": "Shoulder Press, on Machine",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "shoulder-press-on-multi-press",
+    "name": "Shoulder Press, on Multi Press",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "shoulder-raise-side-and-front-db",
+    "name": "Shoulder Raise Side and Front DB",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "shoulder-shrug",
+    "name": "Shoulder Shrug",
+    "primaryMuscles": [
+      "trapezius"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "shoulder-width-three-point-push-up",
+    "name": "Shoulder width three-point push-up",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "shrugs-barbells",
+    "name": "Shrugs, Barbells",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "shrugs-dumbbells",
+    "name": "Shrugs, Dumbbells",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "shrugs-on-multipress",
+    "name": "Shrugs on Multipress",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "side-bends-on-machine",
+    "name": "Side Bends on Machine",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "side-crunch",
+    "name": "Side Crunch",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis"
+    ],
+    "equipment": [
+      "gym-mat"
+    ]
+  },
+  {
+    "id": "side-dumbbell-trunk-flexion",
+    "name": "Side Dumbbell Trunk Flexion",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "side-laying-interior-rotation",
+    "name": "Side-laying interior rotation",
+    "primaryMuscles": [
+      "trapezius"
+    ],
+    "equipment": [
+      "barbell",
+      "bench",
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "side-lying-external-rotation",
+    "name": "Side-lying External Rotation",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "side-lying-hip-abduction",
+    "name": "Side Lying Hip Abduction",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "side-plank",
+    "name": "Side Plank",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "side-plank-right",
+    "name": "Side plank right",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "side-slides-squats",
+    "name": "Side Slides + Squats",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "side-split-squats-left",
+    "name": "Side split squats left",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "side-split-squats-right",
+    "name": "Side split squats right",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "side-to-side-push-ups",
+    "name": "Side to Side Push Ups",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "obliquus-externus-abdominis",
+      "pectoralis-major",
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "single-arm-plank-to-row",
+    "name": "Single Arm Plank to Row",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "biceps-brachii",
+      "brachialis",
+      "latissimus-dorsi",
+      "obliquus-externus-abdominis",
+      "rectus-abdominis",
+      "serratus-anterior"
+    ],
+    "equipment": [
+      "kettlebell"
+    ]
+  },
+  {
+    "id": "single-arm-preacher-curl",
+    "name": "Single-arm Preacher Curl",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "single-arm-row",
+    "name": "Single arm row",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "incline-bench"
+    ]
+  },
+  {
+    "id": "single-leg-extension",
+    "name": "Single Leg Extension",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "single-leg-hamstring-stretch",
+    "name": "Single Leg Hamstring Stretch",
+    "primaryMuscles": [
+      "biceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "single-leg-rdl",
+    "name": "Single Leg RDL",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "gluteus-maximus"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "sit-and-reach",
+    "name": "Sit & Reach",
+    "primaryMuscles": [
+      "biceps-femoris"
+    ],
+    "equipment": [
+      "gym-mat"
+    ]
+  },
+  {
+    "id": "sit-up-elbow-thrust",
+    "name": "Sit Up Elbow Thrust",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis",
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "sit-ups",
+    "name": "Sit-ups",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "sitting-calf-raises",
+    "name": "Sitting Calf Raises",
+    "primaryMuscles": [
+      "gastrocnemius"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "sitting-calf-stretch-dorsiflexion",
+    "name": "Sitting Calf Stretch (Dorsiflexion)",
+    "primaryMuscles": [
+      "gastrocnemius",
+      "soleus"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "ski-machine",
+    "name": "Ski Machine",
+    "primaryMuscles": [
+      "gastrocnemius",
+      "latissimus-dorsi",
+      "trapezius",
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "skipping-standard",
+    "name": "Skipping - Standard",
+    "primaryMuscles": [
+      "gastrocnemius"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "skullcrusher-dumbbells",
+    "name": "Skullcrusher Dumbbells",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "bench",
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "skullcrusher-sz-bar",
+    "name": "Skullcrusher SZ-bar",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "bench",
+      "sz-bar"
+    ]
+  },
+  {
+    "id": "skydiver-with-arms-in-t-position",
+    "name": "Skydiver with arms in T-position",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "sled-push",
+    "name": "Sled Push",
+    "primaryMuscles": [
+      "gastrocnemius",
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "sliding-lateral-lunge",
+    "name": "Sliding Lateral Lunge",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "sloper-hanging",
+    "name": "Sloper hanging",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "smith-machine-close-grip-bench-press",
+    "name": "Smith Machine Close-grip Bench Press",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "smith-machine-slight-incline-press",
+    "name": "SMITH MACHINE SLIGHT INCLINE PRESS",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "smith-machine-split-squat",
+    "name": "Smith Machine Split Squat",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "smith-press",
+    "name": "Smith Press",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "incline-bench"
+    ]
+  },
+  {
+    "id": "snach",
+    "name": "Snach",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "snap-down",
+    "name": "Snap Down",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "snatch-ol",
+    "name": "Snatch OL",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "biceps-femoris",
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "speed-deadlift",
+    "name": "Speed Deadlift",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "spider-curl",
+    "name": "Spider Curl",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": [
+      "incline-bench"
+    ]
+  },
+  {
+    "id": "splinter-sit-ups",
+    "name": "Splinter Sit-ups",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "split-squats-left",
+    "name": "Split squats left",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "split-squats-right",
+    "name": "Split squats right",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "squat-jumps",
+    "name": "Squat Jumps",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "squat-thrust",
+    "name": "Squat Thrust",
+    "primaryMuscles": [
+      "gluteus-maximus",
+      "quadriceps-femoris",
+      "rectus-abdominis",
+      "soleus"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "squats",
+    "name": "Squats",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "squats-on-multipress",
+    "name": "Squats on Multipress",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "stair-master",
+    "name": "Stair Master",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "gastrocnemius",
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "standing-bicep-curl",
+    "name": "Standing Bicep Curl",
+    "primaryMuscles": [
+      "biceps-brachii",
+      "brachialis"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "standing-biceps-stretch-left",
+    "name": "Standing biceps stretch left",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "biceps-brachii",
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "standing-biceps-stretch-right",
+    "name": "Standing biceps stretch right",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "biceps-brachii",
+      "pectoralis-major"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "standing-calf-raises",
+    "name": "Standing Calf Raises",
+    "primaryMuscles": [
+      "gastrocnemius"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "standing-calf-stretch",
+    "name": "Standing Calf Stretch",
+    "primaryMuscles": [
+      "gastrocnemius"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "standing-dowel-shoulder-press",
+    "name": "Standing Dowel Shoulder press",
+    "primaryMuscles": [],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "standing-pancake",
+    "name": "Standing Pancake",
+    "primaryMuscles": [
+      "biceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "standing-pancake-good-morning",
+    "name": "Standing Pancake Good Morning",
+    "primaryMuscles": [
+      "biceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "standing-rope-forearm",
+    "name": "Standing Rope Forearm",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "standing-side-crunches",
+    "name": "Standing Side Crunches",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "standing-soleus-stretch",
+    "name": "Standing Soleus Stretch",
+    "primaryMuscles": [
+      "soleus"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "stationary-bike",
+    "name": "Stationary Bike",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "step-ups",
+    "name": "Step-ups",
+    "primaryMuscles": [],
+    "equipment": [
+      "bench"
+    ]
+  },
+  {
+    "id": "stiff-legged-deadlifts",
+    "name": "Stiff-legged Deadlifts",
+    "primaryMuscles": [
+      "biceps-femoris"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "straight-arm-pull-down-bar-attachment",
+    "name": "Straight-arm Pull Down (bar Attachment)",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "straight-arm-pull-down-rope-attachment",
+    "name": "Straight-arm Pull Down (rope Attachment)",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "straight-bar-cable-curls",
+    "name": "Straight Bar Cable Curls",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "straight-bar-cable-front-raise",
+    "name": "Straight Bar Cable Front Raise",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "sz-bar"
+    ]
+  },
+  {
+    "id": "sumo-deadlift",
+    "name": "Sumo Deadlift",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "sumo-squats",
+    "name": "Sumo Squats",
+    "primaryMuscles": [
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "superman",
+    "name": "Superman",
+    "primaryMuscles": [
+      "gluteus-maximus",
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "gym-mat"
+    ]
+  },
+  {
+    "id": "supine-press",
+    "name": "Supine press",
+    "primaryMuscles": [
+      "trapezius"
+    ],
+    "equipment": [
+      "barbell",
+      "bench"
+    ]
+  },
+  {
+    "id": "suspended-crossess",
+    "name": "Suspended crossess",
+    "primaryMuscles": [
+      "pectoralis-major"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "swimming-50m-sprints",
+    "name": "Swimming 50m sprints",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "t-bar-row",
+    "name": "T-Bar row",
+    "primaryMuscles": [
+      "latissimus-dorsi",
+      "trapezius"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "talons-fesses",
+    "name": "Talons fesses",
+    "primaryMuscles": [
+      "gastrocnemius"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "thruster",
+    "name": "Thruster",
+    "primaryMuscles": [
+      "anterior-deltoid"
+    ],
+    "equipment": [
+      "barbell"
+    ]
+  },
+  {
+    "id": "tibialis-raises",
+    "name": "Tibialis raises",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "toe-taps",
+    "name": "Toe Taps",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "toe-touch",
+    "name": "Toe Touch",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "gluteus-maximus"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "toes-to-bar",
+    "name": "Toes to bar",
+    "primaryMuscles": [],
+    "equipment": [
+      "pull-up-bar"
+    ]
+  },
+  {
+    "id": "torso-rotation-strech",
+    "name": "Torso rotation strech",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "torso-twist",
+    "name": "TORSO TWIST",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "towel-superman",
+    "name": "Towel Superman",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "trap-press",
+    "name": "Trap press",
+    "primaryMuscles": [
+      "trapezius"
+    ],
+    "equipment": [
+      "barbell",
+      "bench",
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "trazioni-impugnatura-inversa",
+    "name": "Trazioni impugnatura inversa",
+    "primaryMuscles": [
+      "biceps-brachii",
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "pull-up-bar"
+    ]
+  },
+  {
+    "id": "treadmill-cardio",
+    "name": "Treadmill Cardio",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "tricep-dumbbell-kickback",
+    "name": "Tricep Dumbbell Kickback",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "tricep-pushdown-on-cable",
+    "name": "Tricep Pushdown on Cable",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "triceps-dips-assisted",
+    "name": "Triceps Dips (Assisted)",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "triceps-extensions-on-cable",
+    "name": "Triceps Extensions on Cable",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "triceps-extensions-on-cable-with-bar",
+    "name": "Triceps Extensions on Cable With Bar",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "triceps-machine",
+    "name": "Triceps Machine",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "triceps-overhead-dumbbell",
+    "name": "Triceps Overhead (Dumbbell)",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "triceps-pushdown",
+    "name": "Triceps Pushdown",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "triceps-stretch-left",
+    "name": "Triceps stretch left",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "triceps-stretch-right",
+    "name": "Triceps stretch right",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "trunk-rotation-with-cable",
+    "name": "Trunk Rotation With Cable",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "trx-dips",
+    "name": "TRX dips",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "trx-gorilla-biceps-curl",
+    "name": "TRX gorilla biceps curl",
+    "primaryMuscles": [
+      "brachialis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "trx-hammer-curl",
+    "name": "TRX hammer curl",
+    "primaryMuscles": [
+      "biceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "trx-obliques",
+    "name": "TRX Obliques",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis",
+      "rectus-abdominis",
+      "serratus-anterior"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "trx-roll-out",
+    "name": "TRX roll out",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "trx-rows",
+    "name": "TRX Rows",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "biceps-brachii",
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "trx-single-arm-bicep-curl",
+    "name": "Trx Single Arm Bicep Curl",
+    "primaryMuscles": [
+      "biceps-brachii",
+      "brachialis"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "trx-tricep-extension",
+    "name": "TRX Tricep Extension",
+    "primaryMuscles": [
+      "triceps-brachii"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "turkish-get-up",
+    "name": "Turkish Get-Up",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "gluteus-maximus",
+      "obliquus-externus-abdominis",
+      "serratus-anterior"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "typewriter-pull-ups",
+    "name": "Typewriter Pull-ups",
+    "primaryMuscles": [
+      "biceps-brachii",
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "underhand-lat-pull-down",
+    "name": "Underhand Lat Pull Down",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "unilateral-cable-row",
+    "name": "Unilateral Cable row",
+    "primaryMuscles": [
+      "latissimus-dorsi",
+      "serratus-anterior"
+    ],
+    "equipment": [
+      "bench"
+    ]
+  },
+  {
+    "id": "upper-back",
+    "name": "Upper Back",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "trapezius"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "upper-external-oblique",
+    "name": "Upper External Oblique",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis"
+    ],
+    "equipment": [
+      "pull-up-bar"
+    ]
+  },
+  {
+    "id": "upright-row-on-multi-press",
+    "name": "Upright Row, on Multi Press",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "trapezius"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "upright-row-sz-bar",
+    "name": "Upright Row, SZ-bar",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "trapezius"
+    ],
+    "equipment": [
+      "sz-bar"
+    ]
+  },
+  {
+    "id": "upright-row-w-dumbbells",
+    "name": "Upright Row w/ Dumbbells",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "trapezius"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "v-bar-pull-downs",
+    "name": "V-BAR PULL DOWNS",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "v-bar-pulldown",
+    "name": "V-Bar Pulldown",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "vpushup",
+    "name": "Vpushup",
+    "primaryMuscles": [
+      "pectoralis-major",
+      "quadriceps-femoris",
+      "rectus-abdominis",
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "w-raise",
+    "name": "W-Raise",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis",
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "walking",
+    "name": "Walking",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "gastrocnemius",
+      "gluteus-maximus",
+      "latissimus-dorsi",
+      "obliquus-externus-abdominis",
+      "quadriceps-femoris",
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "walking-bridge",
+    "name": "walking bridge",
+    "primaryMuscles": [
+      "rectus-abdominis"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "wall-balls",
+    "name": "Wall balls",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "swiss-ball"
+    ]
+  },
+  {
+    "id": "wall-drills",
+    "name": "Wall Drills",
+    "primaryMuscles": [
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "wall-handstand",
+    "name": "Wall Handstand",
+    "primaryMuscles": [],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "wall-pushup",
+    "name": "Wall Pushup",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "pectoralis-major",
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "wall-sit",
+    "name": "Wall-sit",
+    "primaryMuscles": [
+      "gluteus-maximus",
+      "quadriceps-femoris"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "wall-slides",
+    "name": "Wall Slides",
+    "primaryMuscles": [
+      "biceps-brachii",
+      "biceps-femoris",
+      "pectoralis-major",
+      "trapezius",
+      "triceps-brachii"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "wall-squat",
+    "name": "Wall Squat",
+    "primaryMuscles": [
+      "biceps-femoris",
+      "quadriceps-femoris"
+    ],
+    "equipment": [
+      "none-bodyweight-exercise"
+    ]
+  },
+  {
+    "id": "weighted-crunch",
+    "name": "Weighted Crunch",
+    "primaryMuscles": [
+      "obliquus-externus-abdominis"
+    ],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "weighted-step-ups",
+    "name": "Weighted Step-ups",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "wide-grip-pulldown",
+    "name": "Wide-grip Pulldown",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": []
+  },
+  {
+    "id": "wide-pull-up",
+    "name": "Wide Pull Up",
+    "primaryMuscles": [
+      "latissimus-dorsi"
+    ],
+    "equipment": [
+      "pull-up-bar"
+    ]
+  },
+  {
+    "id": "wrist-curl-dumbbells",
+    "name": "Wrist curl, dumbbells",
+    "primaryMuscles": [],
+    "equipment": [
+      "dumbbell"
+    ]
+  },
+  {
+    "id": "yoga-exercise-cow-cat",
+    "name": "Yoga exercise: Cow-cat",
+    "primaryMuscles": [
+      "anterior-deltoid",
+      "latissimus-dorsi",
+      "trapezius"
+    ],
+    "equipment": [
+      "gym-mat"
+    ]
+  },
+  {
+    "id": "ywts",
+    "name": "YWTs",
+    "primaryMuscles": [],
+    "equipment": []
+  },
+  {
+    "id": "zone-2-running",
+    "name": "Zone 2 Running",
+    "primaryMuscles": [],
+    "equipment": []
+  }
+]

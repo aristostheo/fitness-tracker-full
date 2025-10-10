@@ -247,7 +247,7 @@ export default function HomeScreen() {
           {/* ⚙️ -> Account page */}
           <IconBtn
             icon="settings-outline"
-            onPress={() => router.push("/(tabs)/account")}
+            onPress={() => router.push("/(modals)/settings")}
           />
         </View>
       </View>

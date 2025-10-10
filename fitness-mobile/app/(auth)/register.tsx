@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   Platform,
   TextInput,
 } from "react-native";
-import { Link } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,10 +16,12 @@ import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useTheme } from "@/content/ThemeProvider";
+import { useGoogleLogin, signInWithApple } from "@/lib/authSocial";
+import { onAuthStateChanged } from "firebase/auth";
 
 export default function Register() {
   const { colors, isDark } = useTheme();
-
+  const router = useRouter();
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
@@ -57,7 +59,16 @@ export default function Register() {
   }
 
   const disabled = !email.trim() || pass.length < 6;
+  const { request, signInWithGoogle } = useGoogleLogin();
 
+  // After successful auth, your app likely already navigates in a gate,
+  // but we can push to tabs here too:
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      if (u) router.replace("/(tabs)");
+    });
+    return unsub;
+  }, []);
   return (
     <LinearGradient
       colors={
@@ -240,6 +251,42 @@ export default function Register() {
               </LinearGradient>
             </Pressable>
 
+            {/* Social buttons */}
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <SocialButton
+                label="Google"
+                icon="logo-google"
+                onPress={async () => {
+                  setErr("");
+                  try {
+                    if (!request) throw new Error("Google auth not ready");
+                    setLoading(true);
+                    await signInWithGoogle();
+                    // router.replace("/(tabs)"); // gate/observer will handle
+                  } catch (e: any) {
+                    setErr(e?.message ?? "Google sign-in failed");
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+              />
+              <SocialButton
+                label="Apple"
+                icon="logo-apple"
+                onPress={async () => {
+                  setErr("");
+                  try {
+                    setLoading(true);
+                    await signInWithApple();
+                  } catch (e: any) {
+                    setErr(e?.message ?? "Apple sign-in failed");
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+              />
+            </View>
+
             {/* Footer links */}
             <View
               style={{
@@ -300,5 +347,39 @@ function Field(
         {...rest}
       />
     </View>
+  );
+}
+function SocialButton({
+  label,
+  icon,
+  onPress,
+}: {
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        {
+          flex: 1,
+          height: 44,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.card,
+          alignItems: "center",
+          justifyContent: "center",
+          flexDirection: "row",
+          gap: 8,
+          opacity: pressed ? 0.9 : 1,
+        },
+      ]}
+    >
+      <Ionicons name={icon} size={16} color={colors.text} />
+      <Text style={{ color: colors.text, fontWeight: "700" }}>{label}</Text>
+    </Pressable>
   );
 }
