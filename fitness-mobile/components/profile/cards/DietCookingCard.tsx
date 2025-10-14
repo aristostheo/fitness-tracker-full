@@ -1,4 +1,5 @@
-import React from "react";
+// components/profile/cards/DietCookingCard.tsx
+import React, { memo } from "react";
 import { View, Text } from "react-native";
 import Card from "@/components/Card";
 import { useTheme } from "@/content/ThemeProvider";
@@ -6,23 +7,26 @@ import Pill from "../ui/Pill";
 import Field from "../ui/Field";
 import { Ionicons } from "@expo/vector-icons";
 
-export default function DietCookingCard({
-  dietType,
-  setDietType,
-  allergies,
-  setAllergies,
-  dislikes,
-  setDislikes,
-  cookMins,
-  setCookMins,
-  cookSkill,
-  setCookSkill,
-  budgetPerMeal,
-  setBudgetPerMeal,
-}: any) {
-  const { colors } = useTheme();
+type DietType =
+  | "balanced"
+  | "mediterranean"
+  | "high-protein"
+  | "vegetarian"
+  | "vegan"
+  | "keto";
 
-  const Glass = ({ children, style }: any) => (
+type Skill = "beginner" | "intermediate" | "advanced";
+
+/** Stable glass */
+const GlassBox = memo(function GlassBox({
+  children,
+  style,
+}: {
+  children: React.ReactNode;
+  style?: any;
+}) {
+  const { colors } = useTheme();
+  return (
     <View
       style={[
         {
@@ -38,6 +42,36 @@ export default function DietCookingCard({
       {children}
     </View>
   );
+});
+
+export default function DietCookingCard({
+  dietType,
+  setDietType,
+  allergies,
+  setAllergies,
+  dislikes,
+  setDislikes,
+  cookMins,
+  setCookMins,
+  cookSkill,
+  setCookSkill,
+  budgetPerMeal,
+  setBudgetPerMeal,
+}: {
+  dietType: DietType;
+  setDietType: (v: DietType) => void; // ✅ match the union type
+  allergies: string | undefined;
+  setAllergies: (s: string) => void;
+  dislikes: string | undefined;
+  setDislikes: (s: string) => void;
+  cookMins: string | number | undefined;
+  setCookMins: (s: string) => void;
+  cookSkill: Skill;
+  setCookSkill: (v: Skill) => void;
+  budgetPerMeal: string | number | undefined;
+  setBudgetPerMeal: (s: string) => void;
+}) {
+  const { colors } = useTheme();
 
   return (
     <Card
@@ -50,6 +84,7 @@ export default function DietCookingCard({
         gap: 12,
       }}
     >
+      {/* Header */}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
         <View
           style={{
@@ -73,7 +108,8 @@ export default function DietCookingCard({
         </View>
       </View>
 
-      <Glass>
+      {/* Diet type */}
+      <GlassBox>
         <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 6 }}>
           Diet type
         </Text>
@@ -86,7 +122,7 @@ export default function DietCookingCard({
               "vegetarian",
               "vegan",
               "keto",
-            ] as const
+            ] as DietType[]
           ).map((v) => (
             <Pill
               key={v}
@@ -97,50 +133,61 @@ export default function DietCookingCard({
             </Pill>
           ))}
         </View>
-      </Glass>
+      </GlassBox>
 
-      <Glass style={{ gap: 10 }}>
+      {/* Allergies / Dislikes */}
+      <GlassBox style={{ gap: 10 }}>
         <Field
           label="Allergies / intolerances"
-          value={allergies}
+          value={allergies ?? ""}
           onChangeText={setAllergies}
           placeholder="comma separated (e.g., peanuts, lactose)"
+          style={{ width: "100%" }}
+          inputStyle={{ paddingVertical: 10 }}
         />
         <Field
           label="Dislikes"
-          value={dislikes}
+          value={dislikes ?? ""}
           onChangeText={setDislikes}
           placeholder="comma separated"
+          style={{ width: "100%" }}
+          inputStyle={{ paddingVertical: 10 }}
         />
-      </Glass>
+      </GlassBox>
 
+      {/* Time / Budget */}
       <View style={{ flexDirection: "row", gap: 10 }}>
-        <Glass style={{ flex: 1 }}>
+        <GlassBox style={{ flex: 1 }}>
           <Field
             label="Cooking time"
-            value={cookMins}
+            value={cookMins == null ? "" : String(cookMins)}
             onChangeText={setCookMins}
             placeholder="minutes"
             inputMode="numeric"
+            style={{ width: "100%" }}
+            inputStyle={{ paddingVertical: 10 }}
           />
-        </Glass>
-        <Glass style={{ flex: 1 }}>
+        </GlassBox>
+        <GlassBox style={{ flex: 1 }}>
           <Field
             label="Budget per meal"
-            value={budgetPerMeal}
+            value={budgetPerMeal == null ? "" : String(budgetPerMeal)}
             onChangeText={setBudgetPerMeal}
             placeholder="USD"
             inputMode="decimal"
+            style={{ width: "100%" }}
+            inputStyle={{ paddingVertical: 10 }}
           />
-        </Glass>
+        </GlassBox>
       </View>
 
-      <Glass>
+      {/* Skill */}
+      <GlassBox>
         <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 6 }}>
           Cooking skill
         </Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-          {(["beginner", "intermediate", "advanced"] as const).map((s) => (
+          {(["beginner", "intermediate", "advanced"] as Skill[]).map((s) => (
             <Pill
               key={s}
               active={cookSkill === s}
@@ -150,7 +197,7 @@ export default function DietCookingCard({
             </Pill>
           ))}
         </View>
-      </Glass>
+      </GlassBox>
     </Card>
   );
 }

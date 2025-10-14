@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { View, Text } from "react-native";
 import Card from "@/components/Card";
 import { useTheme } from "@/content/ThemeProvider";
@@ -6,26 +6,15 @@ import Field from "../ui/Field";
 import Pill from "../ui/Pill";
 import { Ionicons } from "@expo/vector-icons";
 
-export default function GoalsActivityCard({
-  targetWeight,
-  setTargetWeight,
-  targetDate,
-  setTargetDate,
-  weightUnit,
-  activityLevel,
-  setActivityLevel,
-  trainingDaysPerWeek,
-  setTrainingDaysPerWeek,
-  stepsGoal,
-  setStepsGoal,
-}: any) {
+const GlassBox = memo(function GlassBox({
+  children,
+  style,
+}: {
+  children: React.ReactNode;
+  style?: any;
+}) {
   const { colors } = useTheme();
-
-  const Row = ({ children, style }: any) => (
-    <View style={[{ flexDirection: "row", gap: 10 }, style]}>{children}</View>
-  );
-
-  const Glass = ({ children, style }: any) => (
+  return (
     <View
       style={[
         {
@@ -41,6 +30,34 @@ export default function GoalsActivityCard({
       {children}
     </View>
   );
+});
+
+export default function GoalsActivityCard({
+  targetWeight,
+  setTargetWeight,
+  targetDate,
+  setTargetDate,
+  weightUnit,
+  activityLevel,
+  setActivityLevel,
+  trainingDaysPerWeek,
+  setTrainingDaysPerWeek,
+  stepsGoal,
+  setStepsGoal,
+}: {
+  targetWeight: string | number | undefined;
+  setTargetWeight: (v: string) => void;
+  targetDate: string | undefined;
+  setTargetDate: (v: string) => void;
+  weightUnit: "kg" | "lb";
+  activityLevel: "sedentary" | "light" | "moderate" | "active" | "athlete";
+  setActivityLevel: (v: any) => void;
+  trainingDaysPerWeek: string | number | undefined;
+  setTrainingDaysPerWeek: (v: string) => void;
+  stepsGoal: string | number | undefined;
+  setStepsGoal: (v: string) => void;
+}) {
+  const { colors } = useTheme();
 
   return (
     <Card
@@ -53,6 +70,7 @@ export default function GoalsActivityCard({
         gap: 12,
       }}
     >
+      {/* Header */}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
         <View
           style={{
@@ -76,30 +94,36 @@ export default function GoalsActivityCard({
         </View>
       </View>
 
-      <Row>
-        <Glass style={{ flex: 1 }}>
+      {/* Target weight / date */}
+      <View style={{ flexDirection: "row", gap: 10 }}>
+        <GlassBox style={{ flex: 1 }}>
           <Field
             label={`Target weight (${weightUnit})`}
-            value={targetWeight}
+            value={targetWeight == null ? "" : String(targetWeight)}
             onChangeText={setTargetWeight}
             placeholder={weightUnit}
             inputMode="decimal"
+            style={{ width: "100%" }}
+            inputStyle={{ paddingVertical: 10 }}
           />
-        </Glass>
-        <Glass style={{ flex: 1 }}>
+        </GlassBox>
+        <GlassBox style={{ flex: 1 }}>
           <Field
             label="Target date"
-            value={targetDate}
+            value={targetDate ?? ""}
             onChangeText={setTargetDate}
             placeholder="YYYY-MM-DD"
+            style={{ width: "100%" }}
+            inputStyle={{ paddingVertical: 10 }}
           />
           <Text style={{ color: colors.muted, fontSize: 11, marginTop: 6 }}>
-            Tip: use a realistic pace (0.25–0.75 kg/week).
+            Tip: use a realistic pace (0.25–0.75 {weightUnit}/week).
           </Text>
-        </Glass>
-      </Row>
+        </GlassBox>
+      </View>
 
-      <Glass>
+      {/* Activity level */}
+      <GlassBox>
         <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 6 }}>
           Activity level
         </Text>
@@ -116,28 +140,35 @@ export default function GoalsActivityCard({
             </Pill>
           ))}
         </View>
-      </Glass>
+      </GlassBox>
 
-      <Row>
-        <Glass style={{ flex: 1 }}>
+      {/* Training days / Steps */}
+      <View style={{ flexDirection: "row", gap: 10 }}>
+        <GlassBox style={{ flex: 1 }}>
           <Field
             label="Training days / week"
-            value={trainingDaysPerWeek}
+            value={
+              trainingDaysPerWeek == null ? "" : String(trainingDaysPerWeek)
+            }
             onChangeText={setTrainingDaysPerWeek}
             inputMode="numeric"
             placeholder="e.g., 4"
+            style={{ width: "100%" }}
+            inputStyle={{ paddingVertical: 10 }}
           />
-        </Glass>
-        <Glass style={{ flex: 1 }}>
+        </GlassBox>
+        <GlassBox style={{ flex: 1 }}>
           <Field
             label="Steps goal / day"
-            value={stepsGoal}
+            value={stepsGoal == null ? "" : String(stepsGoal)}
             onChangeText={setStepsGoal}
             inputMode="numeric"
             placeholder="e.g., 8000"
+            style={{ width: "100%" }}
+            inputStyle={{ paddingVertical: 10 }}
           />
-        </Glass>
-      </Row>
+        </GlassBox>
+      </View>
     </Card>
   );
 }

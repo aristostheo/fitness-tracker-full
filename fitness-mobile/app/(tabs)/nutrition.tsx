@@ -29,6 +29,8 @@ import {
 import Header from "@/components/nutrition/Header";
 import MealSection from "@/components/nutrition/MealSection";
 import ExerciseCard from "@/components/nutrition/ExerciseCard";
+import EmptySuggestions from "@/components/ui/EmptySuggestions";
+import BottomTabSpacer from "@/components/ui/BottomTapSpacer";
 
 /* -------------------- small utils -------------------- */
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -285,6 +287,16 @@ function FancyMealPanel({
         : "systemThinMaterialLight"
       : "default";
 
+  // Map meal → emoji for empty-state
+  const mealEmoji =
+    meal === "breakfast"
+      ? "🍳"
+      : meal === "lunch"
+      ? "🥪"
+      : meal === "dinner"
+      ? "🍽️"
+      : "🍇";
+
   return (
     <View
       style={{
@@ -361,24 +373,44 @@ function FancyMealPanel({
             </Pressable>
           ) : null}
 
-          <MealSection
-            meal={meal}
-            items={items as any}
-            onStartEdit={onStartEdit}
-            editId={editId}
-            edit={edit}
-            setEdit={setEdit}
-            onCancelEdit={onCancelEdit}
-            onSaveEdit={onSaveEdit}
-            onDeleteItem={onDeleteItem}
-          />
+          {/* Empty state vs items */}
+          {!items || items.length === 0 ? (
+            <View style={{ marginTop: 2 }}>
+              <EmptySuggestions
+                emoji={mealEmoji}
+                title="No foods yet"
+                subtitle="Add a favorite or search the USDA database."
+                actions={[
+                  {
+                    icon: "star-outline",
+                    label: "Favorites",
+                    onPress: onQuickAdd || (() => {}),
+                  },
+                  {
+                    icon: "search-outline",
+                    label: "Search foods",
+                    onPress: onQuickAdd || (() => {}),
+                  },
+                ]}
+              />
+            </View>
+          ) : (
+            <MealSection
+              meal={meal}
+              items={items as any}
+              onStartEdit={onStartEdit}
+              editId={editId}
+              edit={edit}
+              setEdit={setEdit}
+              onCancelEdit={onCancelEdit}
+              onSaveEdit={onSaveEdit}
+              onDeleteItem={onDeleteItem}
+            />
+          )}
         </View>
       ) : null}
     </View>
   );
-
-  // Make sure FancyMealPanel receives: pulse?: boolean (default false)
-  // function FancyMealPanel({ ..., pulse = false }: { ..., pulse?: boolean }) { ... }
 
   function HeaderContent() {
     return (
@@ -390,14 +422,13 @@ function FancyMealPanel({
             style={{
               position: "absolute",
               inset: 0,
-              borderRadius: 22, // match your header/card rounding
+              borderRadius: 22,
               backgroundColor: "rgba(255,255,255,0.35)",
-              opacity: 0.25, // subtle
+              opacity: 0.25,
             }}
           />
         )}
 
-        {/* ORIGINAL CONTENT (unchanged) */}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
           <View
             style={{
@@ -546,7 +577,6 @@ export default function NutritionScreen() {
             const node = mealAnchors.current[targetMeal];
             if (!node || !scrollRef.current) return;
 
-            // measure() gives us absolute Y; scroll so the header lands nicely
             (node as any).measure?.(
               (
                 x: number,
@@ -561,7 +591,7 @@ export default function NutritionScreen() {
                   animated: true,
                 });
                 setPulseMeal(targetMeal);
-                setTimeout(() => setPulseMeal(null), 1000); // 1s soft glow
+                setTimeout(() => setPulseMeal(null), 1000);
               }
             );
           });
@@ -662,6 +692,13 @@ export default function NutritionScreen() {
   const cardBg = isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)";
   const borderC = colors.border;
 
+  // Day-level empty?
+  const dayIsEmpty =
+    !mealsMap.breakfast?.length &&
+    !mealsMap.lunch?.length &&
+    !mealsMap.dinner?.length &&
+    !mealsMap.snacks?.length;
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Soft background tint */}
@@ -687,6 +724,35 @@ export default function NutritionScreen() {
         contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 28 }}
       >
         <Header date={date} onChangeDate={setDate} totals={totals} />
+
+        {/* Day empty suggestions */}
+        {dayIsEmpty && (
+          <EmptySuggestions
+            emoji="📅"
+            title="Nothing logged today"
+            subtitle="Stick to your streak! Add your first meal."
+            actions={[
+              {
+                icon: "cafe-outline",
+                label: "Add Breakfast",
+                onPress: () =>
+                  router.push({
+                    pathname: "/(modals)/add-meal",
+                    params: { meal: "breakfast", date },
+                  }),
+              },
+              {
+                icon: "search-outline",
+                label: "Search foods",
+                onPress: () =>
+                  router.push({
+                    pathname: "/(modals)/add-meal",
+                    params: { meal: selectedMeal, date },
+                  }),
+              },
+            ]}
+          />
+        )}
 
         {/* Add Food launcher */}
         <View
@@ -914,6 +980,7 @@ export default function NutritionScreen() {
         </View>
 
         <View style={{ height: 12 }} />
+        <BottomTabSpacer extra={16} />
       </ScrollView>
     </View>
   );

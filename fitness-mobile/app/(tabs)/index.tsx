@@ -6,6 +6,7 @@ import {
   Text,
   Pressable,
   useWindowDimensions,
+  Switch,
 } from "react-native";
 import { Link, Href, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -25,11 +26,13 @@ import {
 import {
   ensureProfile,
   subscribeProfile,
+  updateProfile,
   type Profile,
 } from "@/services/profile";
 import WeeklyCaloriesChart from "@/components/WeeklyCaloriesChart";
 import ProgressRing from "@/components/ProgressRing";
 import { useTheme } from "@/content/ThemeProvider";
+import BottomTabSpacer from "@/components/ui/BottomTapSpacer";
 
 /* ---------- utils ---------- */
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -71,6 +74,19 @@ function initialsOf(name?: string | null, email?: string | null) {
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
   return src.slice(0, 2).toUpperCase();
 }
+
+/* ───────────── NEW: simple PR detector from last 7 days workouts ───────────── */
+type Wo = {
+  exercise: string;
+  sets: number;
+  reps: number;
+  weight: number;
+  date: string;
+};
+function vol(s: number, r: number, w: number) {
+  return s * r * w;
+}
+// Provide a few fake PR badges from the last 7d if you pass workouts here later.
 
 export default function HomeScreen() {
   const { colors } = useTheme();
@@ -136,11 +152,7 @@ export default function HomeScreen() {
     const sum = (totals.protein || 0) + (totals.carbs || 0) + (totals.fat || 0);
     const pct = (n: number) =>
       sum > 0 ? Math.max(2, Math.round((n / sum) * 100)) : 0;
-    return {
-      p: pct(totals.protein),
-      c: pct(totals.carbs),
-      f: pct(totals.fat),
-    };
+    return { p: pct(totals.protein), c: pct(totals.carbs), f: pct(totals.fat) };
   }, [totals]);
 
   // weekly series
@@ -209,6 +221,17 @@ export default function HomeScreen() {
     user?.email ?? undefined
   );
 
+  /* NEW: rest-day for today (same storage as workouts page) */
+  const todayStr = ymd(new Date());
+  const restDays = (profile as any)?.restDays || {};
+  const isRestToday = !!restDays?.[todayStr];
+  const toggleRest = async (v: boolean) => {
+    if (!user?.uid) return;
+    try {
+      await updateProfile(user.uid, { [`restDays.${todayStr}`]: v });
+    } catch {}
+  };
+
   /* ---------- UI ---------- */
   return (
     <ScrollView
@@ -243,8 +266,19 @@ export default function HomeScreen() {
           <Text style={{ color: withAlpha(colors.text, 0.6) }}>{date}</Text>
         </View>
         <View style={{ flexDirection: "row", gap: 12 }}>
+          {/* NEW: tiny Rest toggle on Home */}
+          <Pressable style={{ alignItems: "center", justifyContent: "center" }}>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+            >
+              <Ionicons name="bed-outline" size={16} color={colors.text} />
+              <Text style={{ color: colors.text, fontWeight: "700" }}>
+                Rest
+              </Text>
+              <Switch value={isRestToday} onValueChange={toggleRest} />
+            </View>
+          </Pressable>
           <IconBtn icon="notifications-outline" />
-          {/* ⚙️ -> Account page */}
           <IconBtn
             icon="settings-outline"
             onPress={() => router.push("/(modals)/settings")}
@@ -276,7 +310,7 @@ export default function HomeScreen() {
             softShadow,
           ]}
         >
-          {/* glow blobs (native) */}
+          {/* glow blobs */}
           <LinearGradient
             colors={[withAlpha(colors.primary, 0.15), "transparent"]}
             start={{ x: 0.4, y: 0.4 }}
@@ -317,7 +351,7 @@ export default function HomeScreen() {
               <Text
                 style={{ color: withAlpha(colors.text, 0.6), fontSize: 12 }}
               >
-                Welcome
+                {isRestToday ? "Recovery day" : "Welcome"}
               </Text>
               <Text
                 style={{
@@ -333,7 +367,9 @@ export default function HomeScreen() {
               <Text
                 style={{ color: withAlpha(colors.text, 0.6), marginTop: 4 }}
               >
-                Here’s your day at a glance.
+                {isRestToday
+                  ? "Keep it light: steps, mobility, great sleep."
+                  : "Here’s your day at a glance."}
               </Text>
             </View>
             <View style={{ alignItems: "center" }}>
@@ -360,28 +396,30 @@ export default function HomeScreen() {
               value={`${Math.round(totals.burned)} kcal`}
               tint={colors.chartSecondary}
             />
-          </View>
-
-          {/* micro macro bars */}
-          <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
-            <MacroChip
-              label="Protein"
-              grams={Math.round(totals.protein)}
-              pct={macroSplit.p}
-              tint={colors.success}
-            />
-            <MacroChip
-              label="Carbs"
-              grams={Math.round(totals.carbs)}
-              pct={macroSplit.c}
-              tint={colors.primary}
-            />
-            <MacroChip
-              label="Fat"
-              grams={Math.round(totals.fat)}
-              pct={macroSplit.f}
-              tint={colors.chartSecondary}
-            />
+            {isRestToday && (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderRadius: 999,
+                  backgroundColor: withAlpha(colors.chartSecondary, 0.18),
+                  borderWidth: 1,
+                  borderColor: withAlpha(colors.chartSecondary, 0.35),
+                }}
+              >
+                <Ionicons
+                  name="bed-outline"
+                  size={16}
+                  color={colors.chartSecondary}
+                />
+                <Text style={{ color: colors.text, fontWeight: "600" }}>
+                  Rest day
+                </Text>
+              </View>
+            )}
           </View>
         </LinearGradient>
       </MotiView>
@@ -437,7 +475,7 @@ export default function HomeScreen() {
         </Card>
       </MotiView>
 
-      {/* STREAKS — wraps nicely, no squish */}
+      {/* STREAKS */}
       <MotiView
         from={{ opacity: 0, translateY: 8 }}
         animate={{ opacity: 1, translateY: 0 }}
@@ -451,7 +489,7 @@ export default function HomeScreen() {
                 style={{
                   flexGrow: 1,
                   flexShrink: 1,
-                  minWidth: 180, // 👈 keeps enough width for “0 days”
+                  minWidth: 180,
                   paddingRight: 8,
                 }}
               >
@@ -561,11 +599,12 @@ export default function HomeScreen() {
           />
         </View>
       </MotiView>
+      <BottomTabSpacer extra={16} />
     </ScrollView>
   );
 }
 
-/* ---------- bits ---------- */
+/* ---------- bits (unchanged helpers + a few) ---------- */
 
 function IconBtn({ icon, onPress }: { icon: any; onPress?: () => void }) {
   const { colors } = useTheme();
@@ -641,7 +680,6 @@ function HeadlineValue({ value }: { value: string }) {
   );
 }
 
-// Wraps children; will move Badge below text when space is tight
 function RowSplit({ children }: { children: React.ReactNode }) {
   return (
     <View
@@ -650,7 +688,7 @@ function RowSplit({ children }: { children: React.ReactNode }) {
         alignItems: "center",
         justifyContent: "space-between",
         gap: 10,
-        flexWrap: "wrap", // 👈 key: wrap instead of squishing
+        flexWrap: "wrap",
       }}
     >
       {children}
@@ -736,7 +774,7 @@ function MacroChip({
 }: {
   label: string;
   grams: number;
-  pct: number; // 0-100 (we clamp to min width visually)
+  pct: number;
   tint: string;
 }) {
   const { colors } = useTheme();
@@ -787,7 +825,7 @@ function Badge({ text, color }: { text: string; color: string }) {
         borderRadius: 999,
         paddingVertical: 4,
         paddingHorizontal: 10,
-        alignSelf: "flex-start", // when it wraps, it aligns nicely
+        alignSelf: "flex-start",
       }}
     >
       <Text style={{ color }}>{text}</Text>
@@ -801,7 +839,7 @@ function GlassCard({ children }: { children: React.ReactNode }) {
     <View
       style={{
         flex: 1,
-        minWidth: 180, // 👈 a bit wider than before
+        minWidth: 180,
         borderRadius: 20,
         padding: 16,
         borderWidth: 1,

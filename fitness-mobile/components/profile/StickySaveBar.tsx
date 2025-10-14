@@ -4,6 +4,7 @@ import { View, Pressable, Text, ActivityIndicator } from "react-native";
 import { useTheme } from "@/content/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
 import Glass from "./ui/Glass";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function StickySaveBar({
   onSave,
@@ -30,15 +31,16 @@ export default function StickySaveBar({
       : status === "err"
       ? "#ef4444"
       : colors.buttonBg;
+  const insets = useSafeAreaInsets();
+  const TAB_BAR_BASE = 58 + Math.max(0, insets.bottom - 8);
 
   return (
     <View
       style={{
         position: "absolute",
-        left: 0,
-        right: 0,
-        bottom: 0,
-        padding: 12,
+        left: 16,
+        right: 16,
+        bottom: TAB_BAR_BASE + 12, // sits above the tab bar
       }}
     >
       <Glass tint={isDark ? "dark" : "light"} intensity={28} radius={16}>

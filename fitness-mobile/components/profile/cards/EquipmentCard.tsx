@@ -1,4 +1,5 @@
-import React from "react";
+// components/profile/cards/EquipmentCard.tsx
+import React, { memo } from "react";
 import { View, Text } from "react-native";
 import Card from "@/components/Card";
 import { useTheme } from "@/content/ThemeProvider";
@@ -6,26 +7,16 @@ import Pill from "../ui/Pill";
 import Field from "../ui/Field";
 import { Ionicons } from "@expo/vector-icons";
 
-export default function EquipmentCard({
-  EQUIP,
-  equipment,
-  setEquipment,
-  workoutPlace,
-  setWorkoutPlace,
-  injuries,
-  setInjuries,
+/** Stable, memoized glass wrapper (avoid defining components inside render) */
+const GlassBox = memo(function GlassBox({
+  children,
+  style,
 }: {
-  EQUIP: readonly string[];
-  equipment: string[];
-  setEquipment: (arr: string[]) => void;
-  workoutPlace: "home" | "gym";
-  setWorkoutPlace: (p: "home" | "gym") => void;
-  injuries: string;
-  setInjuries: (s: string) => void;
+  children: React.ReactNode;
+  style?: any;
 }) {
   const { colors } = useTheme();
-
-  const Glass = ({ children, style }: any) => (
+  return (
     <View
       style={[
         {
@@ -41,6 +32,26 @@ export default function EquipmentCard({
       {children}
     </View>
   );
+});
+
+export default function EquipmentCard({
+  EQUIP,
+  equipment,
+  setEquipment,
+  workoutPlace,
+  setWorkoutPlace,
+  injuries,
+  setInjuries,
+}: {
+  EQUIP: readonly string[];
+  equipment: string[];
+  setEquipment: (arr: string[]) => void;
+  workoutPlace: "home" | "gym";
+  setWorkoutPlace: (p: "home" | "gym") => void;
+  injuries?: string;
+  setInjuries: (s: string) => void;
+}) {
+  const { colors } = useTheme();
 
   return (
     <Card
@@ -53,6 +64,7 @@ export default function EquipmentCard({
         gap: 12,
       }}
     >
+      {/* Header */}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
         <View
           style={{
@@ -76,7 +88,8 @@ export default function EquipmentCard({
         </View>
       </View>
 
-      <Glass>
+      {/* Equipment chips */}
+      <GlassBox>
         <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 6 }}>
           Equipment
         </Text>
@@ -100,10 +113,11 @@ export default function EquipmentCard({
             );
           })}
         </View>
-      </Glass>
+      </GlassBox>
 
+      {/* Place + Injuries */}
       <View style={{ flexDirection: "row", gap: 10 }}>
-        <Glass style={{ flex: 1 }}>
+        <GlassBox style={{ flex: 1 }}>
           <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 6 }}>
             Place
           </Text>
@@ -112,25 +126,27 @@ export default function EquipmentCard({
               <Pill
                 key={p}
                 active={workoutPlace === p}
-                onPress={() => setWorkoutPlace(p)}
+                onPress={() => setWorkoutPlace(p)} // ✅ correct handler
               >
                 {p}
               </Pill>
             ))}
           </View>
-        </Glass>
+        </GlassBox>
 
-        <Glass style={{ flex: 1 }}>
+        <GlassBox style={{ flex: 1 }}>
           <Field
             label="Injuries / avoid"
-            value={injuries}
+            value={injuries ?? ""}
             onChangeText={setInjuries}
             placeholder="comma separated (optional)"
+            style={{ width: "100%" }}
+            inputStyle={{ paddingVertical: 10 }}
           />
           <Text style={{ color: colors.muted, fontSize: 11, marginTop: 6 }}>
             We’ll avoid or modify risky movements.
           </Text>
-        </Glass>
+        </GlassBox>
       </View>
     </Card>
   );

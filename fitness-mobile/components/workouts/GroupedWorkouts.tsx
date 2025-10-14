@@ -13,6 +13,7 @@ import { SoftButton } from "./ui/SoftButton";
 import { Badge } from "./ui/Badge";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
+import EmptySuggestions from "@/components/ui/EmptySuggestions";
 
 export default function GroupedWorkouts({
   grouped,
@@ -25,6 +26,7 @@ export default function GroupedWorkouts({
   saveEdit,
   removeWorkout,
   onCancelEdit,
+  prFlags,
 }: {
   grouped: Array<{ date: string; items: any[] }>;
   unit: "kg" | "lb";
@@ -43,9 +45,24 @@ export default function GroupedWorkouts({
   saveEdit: () => void;
   removeWorkout: (id: string) => void;
   onCancelEdit: () => void;
+  prFlags?: Record<string, { prWeight: boolean; prVolume: boolean }>;
 }) {
   const theme = useTheme();
   const { isDark } = theme as any;
+
+  // Empty-state for days with no workouts
+  if (!grouped || grouped.length === 0) {
+    return (
+      <View style={{ paddingHorizontal: 16 }}>
+        <EmptySuggestions
+          emoji="🏖️"
+          title="Rest day? Nothing logged yet."
+          subtitle="Start with a favorite or browse exercises."
+          actions={[]}
+        />
+      </View>
+    );
+  }
 
   return (
     <>
@@ -93,201 +110,215 @@ export default function GroupedWorkouts({
               </View>
             </GlassHeader>
 
-            {/* Rows */}
-            {items.map((w, idx) => {
-              const isTemp = w.id.startsWith?.("temp-");
-              const isEditing = editId === w.id;
-              const showDivider = idx !== items.length - 1 && !isEditing;
+            {/* Rows or per-day empty hint */}
+            {items.length === 0 ? (
+              <View style={{ paddingHorizontal: 12, paddingBottom: 12 }}>
+                <EmptySuggestions
+                  emoji="💪"
+                  title="No exercises here yet"
+                  subtitle="Tap the Add workout form above to log your first set."
+                  actions={[]}
+                />
+              </View>
+            ) : (
+              items.map((w, idx) => {
+                const isTemp = w.id.startsWith?.("temp-");
+                const isEditing = editId === w.id;
+                const showDivider = idx !== items.length - 1 && !isEditing;
 
-              return (
-                <View key={w.id} style={{ paddingTop: 6 }}>
-                  {isEditing ? (
-                    <GlassPanel>
-                      <View style={{ flexDirection: "row", gap: 8 }}>
+                return (
+                  <View key={w.id} style={{ paddingTop: 6 }}>
+                    {isEditing ? (
+                      <GlassPanel>
+                        <View style={{ flexDirection: "row", gap: 8 }}>
+                          <Field
+                            icon="today-outline"
+                            value={edit.date}
+                            onChangeText={(v) =>
+                              setEdit((e) => ({ ...e, date: v }))
+                            }
+                          />
+                          <Field
+                            icon="barbell-outline"
+                            value={edit.exercise}
+                            onChangeText={(v) =>
+                              setEdit((e) => ({ ...e, exercise: v }))
+                            }
+                          />
+                        </View>
+                        <View
+                          style={{ flexDirection: "row", gap: 8, marginTop: 8 }}
+                        >
+                          <Field
+                            icon="layers-outline"
+                            placeholder="Sets"
+                            value={edit.sets}
+                            onChangeText={(v) =>
+                              setEdit((e) => ({
+                                ...e,
+                                sets: v.replace(/[^0-9]/g, ""),
+                              }))
+                            }
+                            inputMode="numeric"
+                          />
+                          <Field
+                            icon="repeat-outline"
+                            placeholder="Reps"
+                            value={edit.reps}
+                            onChangeText={(v) =>
+                              setEdit((e) => ({
+                                ...e,
+                                reps: v.replace(/[^0-9]/g, ""),
+                              }))
+                            }
+                            inputMode="numeric"
+                          />
+                          <Field
+                            icon="speedometer-outline"
+                            placeholder={`Weight (${unit})`}
+                            value={edit.weight}
+                            onChangeText={(v) =>
+                              setEdit((e) => ({
+                                ...e,
+                                weight: v.replace(/[^0-9.]/g, ""),
+                              }))
+                            }
+                            inputMode="decimal"
+                          />
+                        </View>
                         <Field
-                          icon="today-outline"
-                          value={edit.date}
+                          icon="document-text-outline"
+                          placeholder="Notes"
+                          value={edit.notes}
                           onChangeText={(v) =>
-                            setEdit((e) => ({ ...e, date: v }))
+                            setEdit((e) => ({ ...e, notes: v }))
                           }
                         />
-                        <Field
-                          icon="barbell-outline"
-                          value={edit.exercise}
-                          onChangeText={(v) =>
-                            setEdit((e) => ({ ...e, exercise: v }))
-                          }
-                        />
-                      </View>
-                      <View
-                        style={{ flexDirection: "row", gap: 8, marginTop: 8 }}
-                      >
-                        <Field
-                          icon="layers-outline"
-                          placeholder="Sets"
-                          value={edit.sets}
-                          onChangeText={(v) =>
-                            setEdit((e) => ({
-                              ...e,
-                              sets: v.replace(/[^0-9]/g, ""),
-                            }))
-                          }
-                          inputMode="numeric"
-                        />
-                        <Field
-                          icon="repeat-outline"
-                          placeholder="Reps"
-                          value={edit.reps}
-                          onChangeText={(v) =>
-                            setEdit((e) => ({
-                              ...e,
-                              reps: v.replace(/[^0-9]/g, ""),
-                            }))
-                          }
-                          inputMode="numeric"
-                        />
-                        <Field
-                          icon="speedometer-outline"
-                          placeholder={`Weight (${unit})`}
-                          value={edit.weight}
-                          onChangeText={(v) =>
-                            setEdit((e) => ({
-                              ...e,
-                              weight: v.replace(/[^0-9.]/g, ""),
-                            }))
-                          }
-                          inputMode="decimal"
-                        />
-                      </View>
-                      <Field
-                        icon="document-text-outline"
-                        placeholder="Notes"
-                        value={edit.notes}
-                        onChangeText={(v) =>
-                          setEdit((e) => ({ ...e, notes: v }))
-                        }
-                      />
 
-                      <View
-                        style={{ flexDirection: "row", gap: 8, marginTop: 8 }}
-                      >
-                        {/* Keeping cancel behavior the same as original (logic unchanged) */}
-                        <SoftButton
-                          label="Cancel"
-                          onPress={() => {
-                            onCancelEdit(); // clear edit mode
-                            // optional: reset local edit fields back to blank/current day (purely UI)
-                            // setEdit((e) => ({ ...e, notes: e.notes })); // no-op if you prefer
-                          }}
-                        />
-                        <GradientButton label="Save" onPress={saveEdit} />
-                      </View>
-                    </GlassPanel>
-                  ) : (
-                    <Pressable
-                      onPress={() => startEdit(w)}
-                      android_ripple={{
-                        color: withAlpha(colors.primary, 0.12),
-                      }}
-                      style={({ pressed }) => [
-                        {
-                          paddingVertical: 12,
-                          paddingHorizontal: 12,
-                          borderRadius: 14,
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          backgroundColor: pressed
-                            ? withAlpha(colors.primary, 0.06)
-                            : "transparent",
-                        },
-                      ]}
-                    >
-                      {/* Left block: accent bar + text */}
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 10,
-                          flex: 1,
+                        <View
+                          style={{ flexDirection: "row", gap: 8, marginTop: 8 }}
+                        >
+                          <SoftButton
+                            label="Cancel"
+                            onPress={() => {
+                              onCancelEdit();
+                            }}
+                          />
+                          <GradientButton label="Save" onPress={saveEdit} />
+                        </View>
+                      </GlassPanel>
+                    ) : (
+                      <Pressable
+                        onPress={() => startEdit(w)}
+                        android_ripple={{
+                          color: withAlpha(colors.primary, 0.12),
                         }}
+                        style={({ pressed }) => [
+                          {
+                            paddingVertical: 12,
+                            paddingHorizontal: 12,
+                            borderRadius: 14,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            backgroundColor: pressed
+                              ? withAlpha(colors.primary, 0.06)
+                              : "transparent",
+                          },
+                        ]}
                       >
+                        {/* Left block: accent bar + text */}
                         <View
                           style={{
-                            width: 6,
-                            height: 40,
-                            backgroundColor: withAlpha(colors.primary, 0.6),
-                            borderRadius: 3,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 10,
+                            flex: 1,
                           }}
-                        />
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={{ fontWeight: "800", color: colors.text }}
-                            numberOfLines={1}
-                          >
-                            {w.exercise}
-                            {isTemp && (
-                              <Text style={{ color: colors.muted }}>
-                                {"  "}(saving…)
-                              </Text>
-                            )}
-                          </Text>
-
-                          {/* Chips row: scheme + weight */}
+                        >
                           <View
                             style={{
-                              flexDirection: "row",
-                              gap: 6,
-                              marginTop: 6,
-                              flexWrap: "wrap",
+                              width: 6,
+                              height: 40,
+                              backgroundColor: withAlpha(colors.primary, 0.6),
+                              borderRadius: 3,
                             }}
-                          >
-                            <MiniChip
-                              icon="grid-outline"
-                              text={`${w.sets ?? 0}×${w.reps ?? 0}`}
-                            />
-                            <MiniChip
-                              icon="speedometer-outline"
-                              text={`${
-                                unit === "lb"
-                                  ? Math.round(kgToLb(w.weight || 0))
-                                  : Math.round(w.weight || 0)
-                              } ${unit}`}
-                            />
-                            {!!w.notes && <NotePill text={w.notes} />}
+                          />
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={{ fontWeight: "800", color: colors.text }}
+                              numberOfLines={1}
+                            >
+                              {w.exercise}
+                              {isTemp && (
+                                <Text style={{ color: colors.muted }}>
+                                  {"  "}(saving…)
+                                </Text>
+                              )}
+                            </Text>
+
+                            {/* Chips row: scheme + weight */}
+                            <View
+                              style={{
+                                flexDirection: "row",
+                                gap: 6,
+                                marginTop: 6,
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              <MiniChip
+                                icon="grid-outline"
+                                text={`${w.sets ?? 0}×${w.reps ?? 0}`}
+                              />
+                              <MiniChip
+                                icon="speedometer-outline"
+                                text={`${
+                                  unit === "lb"
+                                    ? Math.round(kgToLb(w.weight || 0))
+                                    : Math.round(w.weight || 0)
+                                } ${unit}`}
+                              />
+                              {!!w.notes && <NotePill text={w.notes} />}
+                              {prFlags?.[w.id]?.prWeight && (
+                                <PRBadge kind="weight" />
+                              )}
+                              {prFlags?.[w.id]?.prVolume && (
+                                <PRBadge kind="volume" />
+                              )}
+                            </View>
                           </View>
                         </View>
-                      </View>
 
-                      {/* Actions */}
-                      <View style={{ flexDirection: "row", gap: 8 }}>
-                        <IconButton
-                          icon="create-outline"
-                          onPress={() => !isTemp && startEdit(w)}
-                          disabled={isTemp}
-                        />
-                        <IconButton
-                          icon="trash-outline"
-                          onPress={() => removeWorkout(w.id)}
-                          danger
-                        />
-                      </View>
-                    </Pressable>
-                  )}
+                        {/* Actions */}
+                        <View style={{ flexDirection: "row", gap: 8 }}>
+                          <IconButton
+                            icon="create-outline"
+                            onPress={() => !isTemp && startEdit(w)}
+                            disabled={isTemp}
+                          />
+                          <IconButton
+                            icon="trash-outline"
+                            onPress={() => removeWorkout(w.id)}
+                            danger
+                          />
+                        </View>
+                      </Pressable>
+                    )}
 
-                  {showDivider && (
-                    <View
-                      style={{
-                        height: 1,
-                        backgroundColor: colors.border,
-                        marginLeft: 18,
-                        marginTop: 8,
-                      }}
-                    />
-                  )}
-                </View>
-              );
-            })}
+                    {showDivider && (
+                      <View
+                        style={{
+                          height: 1,
+                          backgroundColor: colors.border,
+                          marginLeft: 18,
+                          marginTop: 8,
+                        }}
+                      />
+                    )}
+                  </View>
+                );
+              })
+            )}
           </Card>
         );
       })}
@@ -483,6 +514,59 @@ function NotePill({ text }: { text: string }) {
       <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 12 }}>
         {text}
       </Text>
+    </View>
+  );
+}
+function PRBadge({
+  kind, // "weight" | "volume"
+}: {
+  kind: "weight" | "volume";
+}) {
+  const { colors, isDark } = useTheme() as any;
+
+  // gold for weight PR, royal for volume PR
+  const palette =
+    kind === "weight"
+      ? { a: "#F7C948", b: "#F59E0B", border: "#EAB308" } // gold → amber
+      : { a: "#C084FC", b: "#8B5CF6", border: "#7C3AED" }; // lilac → violet
+
+  return (
+    <View
+      style={{
+        borderRadius: 999,
+        overflow: "hidden",
+        borderWidth: 1.5,
+        borderColor: palette.border,
+      }}
+    >
+      <LinearGradient
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        colors={[palette.a, palette.b]}
+        style={{
+          paddingVertical: 7, // a tad bigger than your MiniChip
+          paddingHorizontal: 12, // comfy touch target
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
+        <Ionicons
+          name={kind === "weight" ? "trophy-outline" : "trophy"}
+          size={14}
+          color={isDark ? "#1f2937" : "#111827"} // dark ink for contrast on the gradient
+        />
+        <Text
+          style={{
+            fontWeight: "900",
+            fontSize: 12.5,
+            color: isDark ? "#111827" : "#0b0f18",
+            letterSpacing: 0.2,
+          }}
+        >
+          {kind === "weight" ? "PR • Weight" : "PR • Volume"}
+        </Text>
+      </LinearGradient>
     </View>
   );
 }

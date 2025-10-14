@@ -7,6 +7,7 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/content/AuthContext";
@@ -50,6 +51,7 @@ import Filters from "@/components/workouts/Filters";
 import AddWorkoutForm from "@/components/workouts/AddWorkoutForm";
 import GroupedWorkouts from "@/components/workouts/GroupedWorkouts";
 import ExerciseSearchSheet from "@/components/workouts/ExerciseSearchSheet";
+import BottomTabSpacer from "@/components/ui/BottomTapSpacer";
 
 /* ────────────────────────────────────────────────────────────── */
 /* Types & helpers                                                */
@@ -142,6 +144,42 @@ const EXERCISES: Ex[] = [
   },
 ];
 
+/* ─────────────────── NEW: PR helpers ─────────────────── */
+function volumeKgOf(w: Workout) {
+  const s = Number(w.sets || 0);
+  const r = Number(w.reps || 0);
+  const wt = Number(w.weight || 0);
+  return s * r * wt;
+}
+
+/** Build a map id→{prWeight, prVolume} by scanning history in date order. */
+function computePrFlags(all: Workout[]) {
+  // Make a stable (oldest→newest) list
+  const list = all
+    .slice()
+    .sort(
+      (a, b) =>
+        (a.date || "").localeCompare(b.date || "") ||
+        Number(a.createdAt || 0) - Number(b.createdAt || 0)
+    );
+  const bestByExercise = new Map<string, { weight: number; volume: number }>();
+  const flags: Record<string, { prWeight: boolean; prVolume: boolean }> = {};
+  for (const w of list) {
+    const ex = (w.exercise || "").trim().toLowerCase();
+    const prev = bestByExercise.get(ex) || { weight: 0, volume: 0 };
+    const isPRw = Number(w.weight || 0) > prev.weight;
+    const vol = volumeKgOf(w);
+    const isPRv = vol > prev.volume;
+    flags[w.id] = { prWeight: isPRw, prVolume: isPRv };
+    // update best after evaluating this record
+    bestByExercise.set(ex, {
+      weight: Math.max(prev.weight, Number(w.weight || 0)),
+      volume: Math.max(prev.volume, vol),
+    });
+  }
+  return flags;
+}
+
 export default function WorkoutsScreen() {
   const { colors, isDark } = useTheme();
   const { user } = useAuth();
@@ -164,6 +202,20 @@ export default function WorkoutsScreen() {
       } catch {}
     };
   }, [user?.uid]);
+
+  /* NEW: rest-day flag (stored per date in profile.restDays[YYYY-MM-DD]) */
+  const todayStr = useMemo(() => fmt(new Date()), []);
+  const restDays = (profile as any)?.restDays || {};
+  const isRestToday = !!restDays?.[todayStr];
+
+  async function toggleRestToday(v: boolean) {
+    if (!user?.uid) return;
+    try {
+      await updateProfile(user.uid, { [`restDays.${todayStr}`]: v });
+    } catch (e) {
+      console.warn("toggle rest day", e);
+    }
+  }
 
   /* Derived "profile context" */
   const goal = (profile?.goal as "maintain" | "lose" | "gain") ?? "maintain";
@@ -531,7 +583,6 @@ export default function WorkoutsScreen() {
     if (!editId) return;
     const w = workouts.find((x) => x.id === editId);
     if (w) {
-      // restore exactly what startEdit set originally
       setEdit({
         date: w.date || todayISO,
         exercise: w.exercise || "",
@@ -544,8 +595,11 @@ export default function WorkoutsScreen() {
         notes: w.notes || "",
       });
     }
-    setEditId(null); // leave edit mode
+    setEditId(null);
   };
+
+  /* NEW: compute PR flags once per render */
+  const prFlags = useMemo(() => computePrFlags(workouts), [workouts]);
 
   /* ────────────────────────── render ────────────────────────── */
 
@@ -553,7 +607,7 @@ export default function WorkoutsScreen() {
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={0} // tweak if you have a custom header
+      keyboardVerticalOffset={0}
     >
       <ScrollView
         style={{ flex: 1, backgroundColor: colors.background }}
@@ -570,6 +624,74 @@ export default function WorkoutsScreen() {
             updateProfile(user.uid, { weightUnit: unit === "kg" ? "lb" : "kg" })
           }
         />
+
+        {/* NEW: Rest-day switch + soft banner */}
+        <Card
+          style={{
+            padding: 12,
+            gap: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
+              <View
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 8,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: withAlpha(colors.chartSecondary, 0.15),
+                  borderWidth: 1,
+                  borderColor: withAlpha(colors.chartSecondary, 0.35),
+                }}
+              >
+                <Ionicons
+                  name="bed-outline"
+                  size={16}
+                  color={colors.chartSecondary}
+                />
+              </View>
+              <Text style={{ color: colors.text, fontWeight: "800" }}>
+                Today is a rest day
+              </Text>
+            </View>
+            <Switch
+              value={isRestToday}
+              onValueChange={(v) => toggleRestToday(v)}
+            />
+          </View>
+
+          {isRestToday && (
+            <View
+              style={{
+                borderRadius: 14,
+                padding: 12,
+                borderWidth: 1,
+                borderColor: withAlpha(colors.chartSecondary, 0.35),
+                backgroundColor: withAlpha(colors.chartSecondary, 0.12),
+              }}
+            >
+              <Text style={{ color: colors.text, fontWeight: "700" }}>
+                Recovery tips
+              </Text>
+              <Text style={{ color: colors.muted, marginTop: 4 }}>
+                Try 10–15 min of mobility, 6–8k easy steps, and 30–40g protein
+                spread across meals.
+              </Text>
+            </View>
+          )}
+        </Card>
 
         <AddWorkoutForm
           unit={unit}
@@ -620,12 +742,12 @@ export default function WorkoutsScreen() {
           onClose={() => setSearchOpen(false)}
           onPick={(name) => {
             setExercise(name);
-            // Optional: auto-suggest sets/reps just like typing:
             const scheme = suggestScheme(goal);
             if (!sets) setSets(String(scheme.sets));
             if (!reps) setReps(String(scheme.reps));
           }}
         />
+
         <Filters
           preset={preset}
           setPreset={setPreset}
@@ -634,6 +756,7 @@ export default function WorkoutsScreen() {
           setFrom={setFrom}
           setTo={setTo}
         />
+
         {nothingToShow ? (
           <EmptyState
             title="No workouts in this range"
@@ -651,8 +774,11 @@ export default function WorkoutsScreen() {
             saveEdit={saveEdit}
             removeWorkout={removeWorkout}
             onCancelEdit={cancelEdit}
+            /* NEW: pass PR flags for inline badges */
+            prFlags={prFlags}
           />
         )}
+        <BottomTabSpacer extra={16} />
       </ScrollView>
     </KeyboardAvoidingView>
   );

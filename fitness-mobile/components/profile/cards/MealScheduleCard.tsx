@@ -1,33 +1,20 @@
-import React from "react";
+import React, { memo } from "react";
 import { View, Text } from "react-native";
 import Card from "@/components/Card";
 import { useTheme } from "@/content/ThemeProvider";
 import Field from "../ui/Field";
 import { Ionicons } from "@expo/vector-icons";
 
-type Meal = {
-  label: "breakfast" | "lunch" | "dinner" | "snacks";
-  time?: string;
-};
-
-export default function MealScheduleCard({
-  meals,
-  setMeals,
+/** Stable glass */
+const GlassBox = memo(function GlassBox({
+  children,
+  style,
 }: {
-  meals: Meal[];
-  setMeals: (m: Meal[]) => void;
+  children: React.ReactNode;
+  style?: any;
 }) {
   const { colors } = useTheme();
-
-  const Row = ({ children, style }: any) => (
-    <View
-      style={[{ flexDirection: "row", alignItems: "center", gap: 10 }, style]}
-    >
-      {children}
-    </View>
-  );
-
-  const Glass = ({ children, style }: any) => (
+  return (
     <View
       style={[
         {
@@ -43,6 +30,21 @@ export default function MealScheduleCard({
       {children}
     </View>
   );
+});
+
+type Meal = {
+  label: "breakfast" | "lunch" | "dinner" | "snacks";
+  time?: string;
+};
+
+export default function MealScheduleCard({
+  meals,
+  setMeals,
+}: {
+  meals: Meal[];
+  setMeals: (m: Meal[]) => void;
+}) {
+  const { colors } = useTheme();
 
   return (
     <Card
@@ -55,6 +57,7 @@ export default function MealScheduleCard({
         gap: 12,
       }}
     >
+      {/* Header */}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
         <View
           style={{
@@ -80,8 +83,10 @@ export default function MealScheduleCard({
 
       <View style={{ gap: 10 }}>
         {meals.map((m, idx) => (
-          <Glass key={m.label}>
-            <Row>
+          <GlassBox key={m.label}>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+            >
               <View
                 style={{
                   width: 44,
@@ -118,20 +123,22 @@ export default function MealScheduleCard({
                 </Text>
               </View>
 
-              <View style={{ width: 120 }}>
+              <View style={{ width: 138 }}>
                 <Field
                   label=""
-                  value={m.time || ""}
+                  value={m.time ?? ""}
                   onChangeText={(t: string) => {
-                    const arr = meals.slice();
-                    arr[idx] = { ...arr[idx], time: t };
-                    setMeals(arr);
+                    const next = meals.slice();
+                    next[idx] = { ...next[idx], time: t };
+                    setMeals(next);
                   }}
                   placeholder="HH:MM"
+                  inputStyle={{ paddingVertical: 10, textAlign: "center" }}
+                  returnKeyType="done"
                 />
               </View>
-            </Row>
-          </Glass>
+            </View>
+          </GlassBox>
         ))}
       </View>
     </Card>
