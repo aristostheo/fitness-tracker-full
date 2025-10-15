@@ -511,21 +511,17 @@ export default function AddMealModal() {
 
     setCalcLoading(true);
     try {
-      const token = getAuth().currentUser?.getIdToken
-        ? await getAuth().currentUser!.getIdToken()
-        : null;
-
+      const token = await getAuth().currentUser?.getIdToken(true);
       if (!AI_URL) {
-        setCalcError(
-          "AI endpoint is not configured (EXPO_PUBLIC_AI_DESCRIBE_URL)."
-        );
+        setCalcError("AI endpoint is not configured.");
         return;
       }
 
-      const body = {
-        text,
-        qty: dQty ? Number(dQty) : null,
-        unit: dUnit || null,
+      const payload = {
+        mode: "meal:v1",
+        query: text,
+        rawText: text,
+        context: { meal, date },
       };
 
       const res = await fetch(AI_URL, {
@@ -534,28 +530,48 @@ export default function AddMealModal() {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
-
-      if (!res.ok || !data?.totals) {
-        setCalcError(data?.error || "AI parse failed");
+      if (res.status === 401) {
+        setCalcError("Please sign in to use Describe.");
         return;
       }
 
-      const totals = data.totals || {};
-      setDName(data.name || text);
-      setDQty(String(data.qty ?? (dQty || "1")));
-      setDUnit(String(data.unit ?? (dUnit || "serving")));
-      setDCalories(String(totals.calories ?? ""));
-      setDProtein(String(totals.protein ?? ""));
-      setDCarbs(String(totals.carbs ?? ""));
-      setDFat(String(totals.fat ?? ""));
-      setDSugar(String(totals.sugar ?? ""));
-      setDFiber(String(totals.fiber ?? ""));
-    } catch {
-      setCalcError("Couldn’t parse that. Try adding portion details.");
+      const data = await res.json();
+
+      // Try primary shape: { items: [...] }
+      let first =
+        Array.isArray(data?.items) && data.items.length > 0
+          ? data.items[0]
+          : null;
+
+      // Fallbacks: some older handlers return a single object or different key
+      if (!first && data?.item) first = data.item;
+      if (!first && data?.result) first = data.result;
+
+      if (!first) {
+        setCalcError(
+          "I couldn’t parse that. Try adding portion details (e.g., 1 cup, 150 g)."
+        );
+        return;
+      }
+
+      const norm = normalizeMealItem(first, text);
+
+      setDName(norm.name);
+      setDQty(String(dQty || "1"));
+      setDUnit(String(norm.serving || dUnit || "serving"));
+
+      // Set every macro; keep empty string only when truly undefined
+      setDCalories(norm.calories !== undefined ? String(norm.calories) : "");
+      setDProtein(norm.protein !== undefined ? String(norm.protein) : "");
+      setDCarbs(norm.carbs !== undefined ? String(norm.carbs) : "");
+      setDFat(norm.fat !== undefined ? String(norm.fat) : "");
+      setDSugar(norm.sugar !== undefined ? String(norm.sugar) : "");
+      setDFiber(norm.fiber !== undefined ? String(norm.fiber) : "");
+    } catch (e) {
+      setCalcError("Describe service unavailable. Please try again.");
     } finally {
       setCalcLoading(false);
     }
@@ -708,6 +724,54 @@ export default function AddMealModal() {
       source: (editSource ?? "manual") as AddPayload["source"],
       fdcId: editSource === "fdc" ? eFdcId : null,
     });
+  }
+  function normalizeMealItem(raw: any, fallbackName: string) {
+    // Flatten if macros are nested
+    const m = raw?.macros && typeof raw.macros === "object" ? raw.macros : raw;
+
+    const numFrom = (v: any): number | undefined => {
+      if (v == null) return undefined;
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+      // Extract leading numeric part from strings like "120 kcal", "32g"
+      const s = String(v).trim().replace(",", ".");
+      const match = s.match(/-?\d+(\.\d+)?/);
+      if (!match) return undefined;
+      const n = Number(match[0]);
+      return Number.isFinite(n) ? n : undefined;
+    };
+
+    const pick = (obj: any, keys: string[]) => {
+      for (const k of keys) {
+        if (obj && obj[k] != null) return obj[k];
+      }
+      return undefined;
+    };
+
+    const name =
+      String(
+        raw?.name ??
+          raw?.food ??
+          raw?.title ??
+          (typeof raw === "string" ? raw : "") ??
+          fallbackName
+      ).trim() || fallbackName;
+
+    const serving = pick(raw, ["serving", "portion", "unit", "size"]);
+
+    const calories = numFrom(
+      pick(m, ["calories", "kcal", "energy", "energy_kcal", "calories_kcal"])
+    );
+    const protein = numFrom(
+      pick(m, ["protein", "protein_g", "proteins", "prot"])
+    );
+    const carbs = numFrom(
+      pick(m, ["carbs", "carbohydrates", "carbs_g", "carbohydrate_g"])
+    );
+    const fat = numFrom(pick(m, ["fat", "fats", "fat_g", "lipids"]));
+    const sugar = numFrom(pick(m, ["sugar", "sugars", "sugar_g"]));
+    const fiber = numFrom(pick(m, ["fiber", "fibre", "fiber_g"]));
+
+    return { name, serving, calories, protein, carbs, fat, sugar, fiber };
   }
 
   const filteredHistory = useMemo(() => {

@@ -12,9 +12,6 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/content/AuthContext";
 import { useTheme } from "@/content/ThemeProvider";
-import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
-
 import Card from "@/components/Card";
 import {
   addWorkout,
@@ -36,6 +33,7 @@ import {
 } from "@/services/presets";
 import { kgToLb, lbToKg } from "@/utils/units";
 import { fmt, startOfMonth, startOfWeek, endOfToday } from "@/utils/date";
+import { auth } from "@/lib/firebase";
 
 import { withAlpha } from "@/components/workouts/utils/withAlpha";
 import { Field } from "@/components/workouts/ui/Field";
@@ -52,6 +50,7 @@ import AddWorkoutForm from "@/components/workouts/AddWorkoutForm";
 import GroupedWorkouts from "@/components/workouts/GroupedWorkouts";
 import ExerciseSearchSheet from "@/components/workouts/ExerciseSearchSheet";
 import BottomTabSpacer from "@/components/ui/BottomTapSpacer";
+import WorkoutGenerator from "@/components/workouts/WorkoutGenerator";
 
 /* ────────────────────────────────────────────────────────────── */
 /* Types & helpers                                                */
@@ -144,7 +143,7 @@ const EXERCISES: Ex[] = [
   },
 ];
 
-/* ─────────────────── NEW: PR helpers ─────────────────── */
+/* ─────────────────── PR helpers ─────────────────── */
 function volumeKgOf(w: Workout) {
   const s = Number(w.sets || 0);
   const r = Number(w.reps || 0);
@@ -152,9 +151,7 @@ function volumeKgOf(w: Workout) {
   return s * r * wt;
 }
 
-/** Build a map id→{prWeight, prVolume} by scanning history in date order. */
 function computePrFlags(all: Workout[]) {
-  // Make a stable (oldest→newest) list
   const list = all
     .slice()
     .sort(
@@ -171,7 +168,6 @@ function computePrFlags(all: Workout[]) {
     const vol = volumeKgOf(w);
     const isPRv = vol > prev.volume;
     flags[w.id] = { prWeight: isPRw, prVolume: isPRv };
-    // update best after evaluating this record
     bestByExercise.set(ex, {
       weight: Math.max(prev.weight, Number(w.weight || 0)),
       volume: Math.max(prev.volume, vol),
@@ -180,8 +176,92 @@ function computePrFlags(all: Workout[]) {
   return flags;
 }
 
+/* ───────────── NEW: OpenAI workout generator helpers ───────────── */
+function profileContext(profile: Profile | null) {
+  if (!profile) return {};
+  return {
+    goal: (profile as any)?.goal ?? null,
+    trainingDaysPerWeek: (profile as any)?.trainingDaysPerWeek ?? null,
+    equipment: profile?.equipment ?? [],
+    place: (profile as any)?.workoutPlace ?? null,
+    injuries: profile?.injuries ?? [],
+    weightUnit: profile?.weightUnit ?? "kg",
+    dietType: (profile as any)?.dietType ?? null,
+    stepsGoal: (profile as any)?.stepsGoal ?? null,
+    restDays: (profile as any)?.restDays ?? {},
+  };
+}
+
+function recentHistory(workouts: Workout[], limit = 12) {
+  return workouts
+    .slice()
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, limit)
+    .map((w) => ({
+      date: w.date,
+      exercise: w.exercise,
+      sets: w.sets,
+      reps: w.reps,
+      weight_kg: w.weight,
+    }));
+}
+
+async function generatePlanWithOpenAI(args: {
+  dayText: string;
+  profile: any;
+  recent: any[];
+}) {
+  const url = process.env.EXPO_PUBLIC_AI_DESCRIBE_URL;
+  if (!url) throw new Error("Missing EXPO_PUBLIC_AI_DESCRIBE_URL");
+
+  const idToken = await auth.currentUser?.getIdToken(true);
+  if (!idToken) throw new Error("Not signed in (no ID token)");
+
+  const payload = {
+    mode: "workout_plan:v1",
+    today: args.dayText,
+    profile: args.profile ?? {},
+    recent: args.recent ?? [],
+    system:
+      "You are a concise strength coach. Return ONLY JSON with keys: items (array of {exercise, sets, reps, weight_kg?, notes?}) and rationale (string, optional). Keep items 4–7. Prefer available equipment. Avoid injuries. Omit weight_kg if unknown. Use short exercise names.",
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${idToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`Describe API error ${res.status}: ${t}`);
+  }
+
+  const ct = res.headers.get("content-type") || "";
+  let raw: any = ct.includes("application/json")
+    ? await res.json()
+    : await res.text();
+  let plan: any = null;
+
+  if (raw && raw.items && Array.isArray(raw.items)) plan = raw;
+  else if (raw && raw.data && raw.data.items) plan = raw.data;
+  else if (typeof raw === "string") {
+    const m = raw.match(/\{[\s\S]*\}$/);
+    if (m) {
+      try {
+        const parsed = JSON.parse(m[0]);
+        if (parsed && Array.isArray(parsed.items)) plan = parsed;
+      } catch {}
+    }
+  }
+  return plan ?? { items: [], rationale: "" };
+}
+
 export default function WorkoutsScreen() {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { user } = useAuth();
   const uid = user?.uid ?? "__demo__";
 
@@ -203,7 +283,7 @@ export default function WorkoutsScreen() {
     };
   }, [user?.uid]);
 
-  /* NEW: rest-day flag (stored per date in profile.restDays[YYYY-MM-DD]) */
+  /* Rest-day flag */
   const todayStr = useMemo(() => fmt(new Date()), []);
   const restDays = (profile as any)?.restDays || {};
   const isRestToday = !!restDays?.[todayStr];
@@ -217,7 +297,6 @@ export default function WorkoutsScreen() {
     }
   }
 
-  /* Derived "profile context" */
   const goal = (profile?.goal as "maintain" | "lose" | "gain") ?? "maintain";
   const trainingDays = Number((profile as any)?.trainingDaysPerWeek ?? 3);
   const equipmentOwned = (profile?.equipment ?? []) as string[];
@@ -225,7 +304,7 @@ export default function WorkoutsScreen() {
   const injuries = (profile?.injuries ?? []) as string[];
   const isLB = unit === "lb";
 
-  /* Profile-friendly exercise pool */
+  /* Filter exercise pool by profile */
   const profileFriendlyExercises = useMemo(() => {
     const owns = new Set(equipmentOwned);
     const inj = (injuries || []).map((s) => s.toLowerCase());
@@ -308,7 +387,7 @@ export default function WorkoutsScreen() {
     [uid, from, to]
   );
 
-  /* Workout presets (filtered by profile) */
+  /* Workout presets */
   const [presets, setPresets] = useState<WorkoutPreset[]>([]);
   const [newPreset, setNewPreset] = useState("");
   useEffect(() => {
@@ -335,7 +414,6 @@ export default function WorkoutsScreen() {
 
   const [searchOpen, setSearchOpen] = useState(false);
 
-  // Goal-aware default scheme (autofill when exercise chosen)
   function suggestScheme(g: "maintain" | "lose" | "gain") {
     switch (g) {
       case "gain":
@@ -351,9 +429,8 @@ export default function WorkoutsScreen() {
     const scheme = suggestScheme(goal);
     if (!sets) setSets(String(scheme.sets));
     if (!reps) setReps(String(scheme.reps));
-  }, [exercise, goal]); // logic unchanged
+  }, [exercise, goal]);
 
-  // Most recent record for overload hint
   const lastRecord = useMemo(() => {
     const name = exercise.trim().toLowerCase();
     if (!name) return null;
@@ -374,22 +451,24 @@ export default function WorkoutsScreen() {
     return latest;
   }, [workouts, exercise]);
 
+  const unitIsLB = unit === "lb";
   const nextWeightSuggestion = useMemo(() => {
     if (!lastRecord) return null;
     const lastKg = Number(lastRecord.weight || 0);
-    const incKg = isLB ? lbToKg(5) : 2.5;
+    const incKg = unitIsLB ? lbToKg(5) : 2.5;
     const target = Number(sets || 0) * Number(reps || 0);
     const completed =
       Number(lastRecord.sets || 0) * Number(lastRecord.reps || 0);
     const proposedKg = completed >= target ? lastKg + incKg : lastKg;
-    const val = isLB ? Math.round(kgToLb(proposedKg)) : Math.round(proposedKg);
-    const prev = isLB
+    const val = unitIsLB
+      ? Math.round(kgToLb(proposedKg))
+      : Math.round(proposedKg);
+    const prev = unitIsLB
       ? Math.round(kgToLb(Number(lastRecord.weight || 0)))
       : Math.round(Number(lastRecord.weight || 0));
     return { next: val, prev };
-  }, [lastRecord, sets, reps, isLB]);
+  }, [lastRecord, sets, reps, unitIsLB]);
 
-  // Injury hint
   const conflictWarning = useMemo(() => {
     if (!exercise.trim() || !injuries?.length) return null;
     const ex = EXERCISES.find(
@@ -443,7 +522,6 @@ export default function WorkoutsScreen() {
       setWorkouts((prev) =>
         prev.map((w) => (w.id === tempId ? { ...w, id: ref.id } : w))
       );
-      // reset
       setExercise("");
       setSets("");
       setReps("");
@@ -457,7 +535,7 @@ export default function WorkoutsScreen() {
     }
   }
 
-  /* Inline edit state & handlers */
+  /* Inline edit */
   const [editId, setEditId] = useState<string | null>(null);
   const [edit, setEdit] = useState({
     date: "",
@@ -528,7 +606,7 @@ export default function WorkoutsScreen() {
     }
   }
 
-  /* Grouped list data */
+  /* Grouped list */
   const grouped = useMemo(() => {
     const byDate: Record<string, Workout[]> = {};
     for (const w of workouts) (byDate[w.date] ??= []).push(w);
@@ -542,7 +620,7 @@ export default function WorkoutsScreen() {
     }));
   }, [workouts]);
 
-  /* Quick metrics + targets */
+  /* Metrics */
   const totals = useMemo(() => {
     let setsSum = 0,
       volumeKg = 0;
@@ -553,14 +631,16 @@ export default function WorkoutsScreen() {
       setsSum += s;
       volumeKg += s * r * wt;
     }
-    const volume = isLB ? Math.round(kgToLb(volumeKg)) : Math.round(volumeKg);
+    const volume = unitIsLB
+      ? Math.round(kgToLb(volumeKg))
+      : Math.round(volumeKg);
     return {
       workouts: workouts.length,
       sets: setsSum,
       volume,
       volumeUnit: unit,
     };
-  }, [workouts, isLB, unit]);
+  }, [workouts, unitIsLB, unit]);
 
   const dailySetTarget = useMemo(() => {
     if (goal === "gain")
@@ -598,11 +678,69 @@ export default function WorkoutsScreen() {
     setEditId(null);
   };
 
-  /* NEW: compute PR flags once per render */
   const prFlags = useMemo(() => computePrFlags(workouts), [workouts]);
 
-  /* ────────────────────────── render ────────────────────────── */
+  /* ─────────────── Coach Spark generator state ─────────────── */
+  const [genDay, setGenDay] = useState<string>("");
+  const [genLoading, setGenLoading] = useState<boolean>(false);
+  const [genPlan, setGenPlan] = useState<null | {
+    items: {
+      exercise: string;
+      sets?: number;
+      reps?: number;
+      weight_kg?: number;
+      notes?: string;
+    }[];
+    rationale?: string;
+  }>(null);
 
+  async function handleGenerate() {
+    if (!genDay.trim()) return;
+    try {
+      setGenLoading(true);
+      const plan = await generatePlanWithOpenAI({
+        dayText: genDay.trim(),
+        profile: profileContext(profile),
+        recent: recentHistory(workouts, 12),
+      });
+      setGenPlan(plan);
+    } catch (e) {
+      console.warn(e);
+      alert((e as any)?.message || "Could not generate workout");
+    } finally {
+      setGenLoading(false);
+    }
+  }
+
+  function handleRegenerate() {
+    // reuse the same input
+    void handleGenerate();
+  }
+
+  function handleClear() {
+    setGenPlan(null);
+    // keep what user typed; if you prefer to reset the prompt too, uncomment:
+    // setGenDay("");
+  }
+
+  function insertItemToForm(it: {
+    exercise: string;
+    sets?: number;
+    reps?: number;
+    weight_kg?: number;
+    notes?: string;
+  }) {
+    setExercise(it.exercise || "");
+    setSets(String(it.sets ?? ""));
+    setReps(String(it.reps ?? ""));
+    const wKg = Number(it.weight_kg || 0);
+    const wVal = unitIsLB ? Math.round(kgToLb(wKg)) : Math.round(wKg);
+    setWeight(wVal ? String(wVal) : "");
+    setNotes(it.notes || "");
+    setDate(todayISO);
+  }
+
+  /* ────────────────────────── render ────────────────────────── */
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
@@ -625,7 +763,7 @@ export default function WorkoutsScreen() {
           }
         />
 
-        {/* NEW: Rest-day switch + soft banner */}
+        {/* Rest-day switch + soft banner */}
         <Card
           style={{
             padding: 12,
@@ -666,10 +804,7 @@ export default function WorkoutsScreen() {
                 Today is a rest day
               </Text>
             </View>
-            <Switch
-              value={isRestToday}
-              onValueChange={(v) => toggleRestToday(v)}
-            />
+            <Switch value={isRestToday} onValueChange={toggleRestToday} />
           </View>
 
           {isRestToday && (
@@ -692,6 +827,19 @@ export default function WorkoutsScreen() {
             </View>
           )}
         </Card>
+
+        {/* Coach Spark */}
+        <WorkoutGenerator
+          dayText={genDay}
+          setDayText={(v: string) => setGenDay(v)}
+          loading={genLoading}
+          plan={genPlan}
+          onPickPreset={(v: string) => setGenDay(v)}
+          onGenerate={handleGenerate}
+          onRegenerate={handleRegenerate}
+          onClear={handleClear}
+          onInsertItem={insertItemToForm}
+        />
 
         <AddWorkoutForm
           unit={unit}
@@ -757,7 +905,7 @@ export default function WorkoutsScreen() {
           setTo={setTo}
         />
 
-        {nothingToShow ? (
+        {grouped.length === 0 ? (
           <EmptyState
             title="No workouts in this range"
             subtitle="Try changing filters or add a new workout above."
@@ -774,7 +922,6 @@ export default function WorkoutsScreen() {
             saveEdit={saveEdit}
             removeWorkout={removeWorkout}
             onCancelEdit={cancelEdit}
-            /* NEW: pass PR flags for inline badges */
             prFlags={prFlags}
           />
         )}

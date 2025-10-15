@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useLayoutEffect } from "react";
+// app/(modals)/settings.tsx
+import React, { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import {
   ScrollView,
   View,
@@ -23,10 +24,10 @@ import {
   updateProfile,
   type Profile,
 } from "@/services/profile";
+import ThemeChooser from "@/components/settings/ThemeChooser";
 
 type ThemePref = "system" | "light" | "dark";
 type Unit = "kg" | "lb";
-
 type Settings = {
   notificationsEnabled: boolean;
   notifyDaily: boolean;
@@ -40,6 +41,7 @@ type Settings = {
   soundEffects: boolean;
   analytics: boolean;
   weightUnit: Unit;
+  themeOverrides?: { primary?: string; accent?: string };
 };
 
 const DEFAULTS: Settings = {
@@ -55,6 +57,7 @@ const DEFAULTS: Settings = {
   soundEffects: false,
   analytics: true,
   weightUnit: "kg",
+  themeOverrides: undefined,
 };
 
 function toTimeString(s: string | undefined): string {
@@ -63,7 +66,8 @@ function toTimeString(s: string | undefined): string {
 }
 
 export default function SettingsModal() {
-  const { colors, isDark } = useTheme() as any;
+  const theme = useTheme() as any;
+  const { colors, isDark } = theme;
   const { user } = useAuth();
   const nav = useNavigation();
 
@@ -71,26 +75,58 @@ export default function SettingsModal() {
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
   const [saving, setSaving] = useState(false);
 
-  // ── Header (pinned)
+  const currentPrimary = (settings.themeOverrides?.primary ||
+    colors.primary) as string;
+  const currentAccent = (settings.themeOverrides?.accent ||
+    colors.accent) as string;
+
+  // glossy header
   useLayoutEffect(() => {
     nav.setOptions({
-      headerLargeTitle: Platform.OS === "ios",
+      headerShadowVisible: false,
+      headerBackground: () => (
+        <View style={{ position: "absolute", inset: 0 }}>
+          <LinearGradient
+            colors={
+              isDark
+                ? ["rgba(16,18,28,0.85)", "rgba(16,18,28,0.65)"]
+                : ["rgba(244,247,255,0.85)", "rgba(244,247,255,0.65)"]
+            }
+            style={{ position: "absolute", inset: 0 }}
+          />
+          <BlurView
+            intensity={24}
+            tint={
+              isDark ? "systemThickMaterialDark" : "systemThickMaterialLight"
+            }
+            style={{ position: "absolute", inset: 0 }}
+          />
+          <View
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 1,
+              backgroundColor: isDark
+                ? "rgba(255,255,255,0.08)"
+                : "rgba(0,0,0,0.06)",
+            }}
+          />
+        </View>
+      ),
       headerTitle: () => (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <View
             style={{
               padding: 8,
               borderRadius: 12,
-              backgroundColor: `${colors.primary}20`,
+              backgroundColor: `${currentPrimary}26`,
               borderWidth: 1,
-              borderColor: `${colors.primary}55`,
+              borderColor: `${currentPrimary}66`,
             }}
           >
-            <Ionicons
-              name="settings-outline"
-              size={18}
-              color={colors.text as string}
-            />
+            <Ionicons name="settings-outline" size={18} color={colors.text} />
           </View>
           <View>
             <Text
@@ -99,7 +135,7 @@ export default function SettingsModal() {
               Settings
             </Text>
             <Text style={{ color: colors.muted, fontSize: 12 }}>
-              Tailor the app to your preferences
+              Tailor the app to your style
             </Text>
           </View>
         </View>
@@ -127,7 +163,7 @@ export default function SettingsModal() {
         </Pressable>
       ),
     });
-  }, [nav]);
+  }, [nav, isDark, colors.text, currentPrimary]);
 
   // hydrate from profile
   useEffect(() => {
@@ -171,6 +207,7 @@ export default function SettingsModal() {
     }
   }
 
+  // helpers
   const Row = ({
     children,
     style,
@@ -193,6 +230,7 @@ export default function SettingsModal() {
       {children}
     </View>
   );
+
   const Label = ({ title, subtitle }: { title: string; subtitle?: string }) => (
     <View style={{ flex: 1 }}>
       <Text style={{ color: colors.text, fontWeight: "700" }}>{title}</Text>
@@ -201,6 +239,7 @@ export default function SettingsModal() {
       )}
     </View>
   );
+
   const Segmented = ({
     value,
     options,
@@ -234,11 +273,7 @@ export default function SettingsModal() {
             }}
           >
             <Text
-              style={{
-                color: colors.text,
-                fontWeight: active ? "800" : "600",
-                textTransform: "capitalize",
-              }}
+              style={{ color: colors.text, fontWeight: active ? "800" : "600" }}
             >
               {o.label}
             </Text>
@@ -247,45 +282,51 @@ export default function SettingsModal() {
       })}
     </View>
   );
-  const Field = ({
-    value,
-    onChangeText,
-    placeholder,
-    width = 100,
-    keyboardType = "default" as const,
-  }: {
-    value: string;
-    onChangeText: (v: string) => void;
-    placeholder?: string;
-    width?: number;
-    keyboardType?: "default" | "numeric";
-  }) => (
-    <TextInput
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      placeholderTextColor={colors.placeholder}
-      keyboardType={keyboardType}
-      style={{
-        width,
-        borderWidth: 1,
-        borderColor: colors.inputBorder,
-        borderRadius: 12,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        backgroundColor: colors.inputBg,
-        color: colors.text,
-        textAlign: "center",
-      }}
-    />
-  );
 
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentInsetAdjustmentBehavior="automatic"
       contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 28 }}
+      keyboardShouldPersistTaps="handled"
     >
+      {/* Theme Studio — uses drop-in ThemeChooser */}
+      <Card style={{ padding: 16, gap: 12 }}>
+        <Text
+          style={{
+            color: colors.text,
+            fontSize: 16,
+            fontWeight: "800",
+            letterSpacing: 0.3,
+          }}
+        >
+          Theme & Colors
+        </Text>
+
+        <ThemeChooser
+          primary={currentPrimary}
+          accent={currentAccent}
+          onApply={(p, a) => {
+            // Save into local state; Settings "Save" button persists to Firestore.
+            setSettings((s) => ({
+              ...s,
+              themeOverrides: { primary: p, accent: a },
+            }));
+            // Optional live-apply if ThemeProvider exposes setAccents()
+            (theme as any)?.setAccents?.(p, a);
+          }}
+          onReset={() => {
+            setSettings((s) => ({ ...s, themeOverrides: undefined }));
+            (theme as any)?.resetAccents?.();
+          }}
+        />
+
+        <Text style={{ color: colors.muted, fontSize: 12 }}>
+          Your color selection takes effect across the app. Tap Save at the
+          bottom to persist.
+        </Text>
+      </Card>
+
       {/* General */}
       <Card style={{ padding: 16 }}>
         <Text
@@ -367,13 +408,26 @@ export default function SettingsModal() {
         </Row>
         <Row>
           <Label title="Daily reminder time" subtitle="HH:MM (24h)" />
-          <Field
+          <TextInput
             value={settings.dailyReminder}
             onChangeText={(txt) =>
               setSettings((s) => ({ ...s, dailyReminder: toTimeString(txt) }))
             }
-            width={100}
+            placeholder="08:00"
+            placeholderTextColor={colors.placeholder}
             keyboardType="numeric"
+            style={{
+              width: 110,
+              borderWidth: 1,
+              borderColor: colors.inputBorder,
+              borderRadius: 12,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              backgroundColor: colors.inputBg,
+              color: colors.text,
+              textAlign: "center",
+              fontWeight: "700",
+            }}
           />
         </Row>
         <Row>
@@ -421,7 +475,7 @@ export default function SettingsModal() {
           Appearance & UX
         </Text>
         <Row>
-          <Label title="Theme" subtitle="Future: force Light/Dark" />
+          <Label title="Theme" subtitle="Force Light/Dark or follow System" />
           <Segmented
             value={settings.theme}
             onChange={(v) =>
@@ -557,7 +611,7 @@ export default function SettingsModal() {
           }}
         >
           <LinearGradient
-            colors={["#6366F1", "#8B5CF6"]}
+            colors={[currentPrimary, currentAccent]}
             start={{ x: 0, y: 0.5 }}
             end={{ x: 1, y: 0.5 }}
             style={{
