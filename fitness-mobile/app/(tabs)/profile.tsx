@@ -12,8 +12,15 @@ import {
   Text,
   Animated,
   Easing,
+  Pressable,
+  StyleSheet,
+  KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import {
+  useSafeAreaInsets,
+  SafeAreaView,
+} from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/content/ThemeProvider";
 import { useAuth } from "@/content/AuthContext";
@@ -43,10 +50,22 @@ import Tip from "@/components/profile/Tip";
 import HeaderSection from "@/components/profile/HeaderSection";
 // at top with other imports
 import HeaderActions from "@/components/profile/HeaderActions";
-import { useNavigation } from "expo-router";
+import { useNavigation, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import BottomTabSpacer from "@/components/ui/BottomTapSpacer";
 
 // ───────── helpers ─────────
 const clamp01 = (x: number) => Math.max(0, Math.min(1, Number(x) || 0));
+
+const withAlpha = (hex: string, a = 0.18) => {
+  const m = hex?.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+  if (!m) return hex;
+  const r = parseInt(m[1], 16),
+    g = parseInt(m[2], 16),
+    b = parseInt(m[3], 16);
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+};
+
 function toISO(d: Date) {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
@@ -148,6 +167,10 @@ export default function ProfileScreen() {
   const [workoutPlace, setWorkoutPlace] = useState<"home" | "gym">("home");
   const [injuries, setInjuries] = useState("");
 
+  const insets = useSafeAreaInsets();
+  const TOP_BAR_H = -52; // height of your ProfileTopBar's chip cluster
+  const topPad = insets.top + TOP_BAR_H; // safe area + bar + breathing room
+
   // multi-open accordions + active chip
   const [openKeys, setOpenKeys] = useState<Record<string, boolean>>({
     basics: true,
@@ -200,12 +223,9 @@ export default function ProfileScreen() {
   }
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerRight: () => <HeaderActions />,
+      headerRight: () => <HeaderRightActions />, // ← replace here
       headerTitle: "Profile",
-      headerBackground: () => (
-        // dynamic tint per theme
-        <GlassAdaptiveHeader />
-      ),
+      headerBackground: () => <GlassAdaptiveHeader />,
       headerShadowVisible: false,
     });
   }, [navigation, colors]);
@@ -370,6 +390,7 @@ export default function ProfileScreen() {
         <LinearGradient
           colors={isDark ? ["#0b0f1a", "#0e1320"] : ["#eaf2ff", "#f6f7ff"]}
           style={{ position: "absolute", inset: 0 }}
+          pointerEvents="none"
         />
         <View style={{ flex: 1, padding: 16 }}>
           <Card style={{ padding: 16, gap: 12 }}>
@@ -527,227 +548,442 @@ export default function ProfileScreen() {
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      {/* Wallpaper */}
-      <LinearGradient
-        colors={
-          isDark
-            ? ["#0b0f1a", "#0e1320", "#0b0f1a"]
-            : ["#eaf2ff", "#f4f7ff", "#eef5ff"]
-        }
-        locations={[0, 0.6, 1]}
-        style={{ position: "absolute", inset: 0 }}
-      />
-      {/* Soft vignette */}
-      <LinearGradient
-        colors={[
-          "rgba(255,255,255,0)",
-          isDark ? "rgba(0,0,0,0.25)" : "rgba(0,0,0,0.06)",
-        ]}
-        style={{
-          position: "absolute",
-          left: -80,
-          right: -80,
-          top: -40,
-          height: 240,
-          borderBottomLeftRadius: 200,
-          borderBottomRightRadius: 200,
-        }}
-      />
-
-      <Animated.View style={{ flex: 1, opacity: fadeIn }}>
-        <ScrollView
-          ref={scrollRef}
-          contentContainerStyle={{ padding: 16, paddingBottom: 120, gap: 14 }}
-        >
-          {/* Header */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 2,
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      // If you have a fixed top bar, offset so the content centers correctly while typing:
+      keyboardVerticalOffset={-40}
+    >
+      <View style={{ flex: 1 }}>
+        {/* Wallpaper */}
+        <LinearGradient
+          colors={
+            isDark
+              ? ["#0b0f1a", "#0e1320", "#0b0f1a"]
+              : ["#eaf2ff", "#f4f7ff", "#eef5ff"]
+          }
+          locations={[0, 0.6, 1]}
+          style={{ position: "absolute", inset: 0 }}
+          pointerEvents="none"
+        />
+        {/* Soft vignette */}
+        <LinearGradient
+          colors={[
+            "rgba(255,255,255,0)",
+            isDark ? "rgba(0,0,0,0.25)" : "rgba(0,0,0,0.06)",
+          ]}
+          style={{
+            position: "absolute",
+            left: -80,
+            right: -80,
+            top: -40,
+            height: 240,
+            borderBottomLeftRadius: 200,
+            borderBottomRightRadius: 200,
+          }}
+        />
+        <ProfileTopBar />
+        <Animated.View style={{ flex: 1, opacity: fadeIn }}>
+          <ScrollView
+            ref={scrollRef}
+            keyboardShouldPersistTaps="always"
+            keyboardDismissMode="on-drag"
+            automaticallyAdjustKeyboardInsets // ⬅︎ iOS 15+: auto insets when kb shows
+            contentContainerStyle={{
+              paddingTop: topPad, // your computed topPad
+              paddingHorizontal: 16,
+              paddingBottom: 120,
+              gap: 14,
             }}
           >
-            <View>
-              <Text
-                style={{
-                  fontSize: 28,
-                  fontWeight: "800",
-                  letterSpacing: -0.2,
-                  color: colors.text,
-                }}
-              >
-                Profile
-              </Text>
-              <Text style={{ color: colors.muted, fontSize: 13 }}>
-                Personalization & goals
-              </Text>
-            </View>
-
-            {/* Right cluster: theme + quick actions */}
+            {/* Header */}
             <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 2,
+              }}
             >
-              <ThemeToggle />
-              {/* <HeaderActions /> */}
+              <View>
+                <Text
+                  style={{
+                    fontSize: 28,
+                    fontWeight: "800",
+                    letterSpacing: -0.2,
+                    color: colors.text,
+                  }}
+                >
+                  Profile
+                </Text>
+                <Text style={{ color: colors.muted, fontSize: 13 }}>
+                  Personalization & goals
+                </Text>
+              </View>
+
+              {/* Right cluster: theme + quick actions */}
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+              >
+                <ThemeToggle />
+              </View>
             </View>
-          </View>
 
-          {/* Glass chips */}
-          <SectionNav
-            activeKey={activeChip}
-            onPress={(key) => openAndJump(key as keyof typeof anchors)}
-            items={[
-              { key: "basics", label: "Basics" },
-              { key: "goals", label: "Goals" },
-              { key: "macros", label: "Macros" },
-              { key: "diet", label: "Diet" },
-              { key: "meals", label: "Meals" },
-              { key: "equipment", label: "Equipment" },
-            ]}
-          />
+            {/* Glass chips */}
+            <SectionNav
+              activeKey={activeChip}
+              onPress={(key) => openAndJump(key as keyof typeof anchors)}
+              items={[
+                { key: "basics", label: "Basics" },
+                { key: "goals", label: "Goals" },
+                { key: "macros", label: "Macros" },
+                { key: "diet", label: "Diet" },
+                { key: "meals", label: "Meals" },
+                { key: "equipment", label: "Equipment" },
+              ]}
+            />
 
-          {/* Basics */}
-          <View ref={anchors.basics}>
-            <AccordionCard
-              title="Basics"
-              subtitle="Age, height, weight & sex"
-              open={!!openKeys.basics}
-              onToggle={() => toggleOpen("basics")}
-            >
-              <BasicsCard
-                sex={sex}
-                setSex={setSex}
-                age={age}
-                setAge={setAge}
-                heightCm={heightCm}
-                setHeightCm={setHeightCm}
-                weightUnit={weightUnit}
-                setWeightUnit={setWeightUnit}
-                weightInput={weightInput}
-                setWeightInput={setWeightInput}
-              />
-            </AccordionCard>
-          </View>
+            {/* Basics */}
+            <View ref={anchors.basics}>
+              <AccordionCard
+                title="Basics"
+                subtitle="Age, height, weight & sex"
+                open={!!openKeys.basics}
+                onToggle={() => toggleOpen("basics")}
+              >
+                <BasicsCard
+                  sex={sex}
+                  setSex={setSex}
+                  age={age}
+                  setAge={setAge}
+                  heightCm={heightCm}
+                  setHeightCm={setHeightCm}
+                  weightUnit={weightUnit}
+                  setWeightUnit={setWeightUnit}
+                  weightInput={weightInput}
+                  setWeightInput={setWeightInput}
+                />
+              </AccordionCard>
+            </View>
 
-          {/* Goals */}
-          <View ref={anchors.goals}>
-            <AccordionCard
-              title="Goals & Activity"
-              subtitle="Target weight, date & movement"
-              open={!!openKeys.goals}
-              onToggle={() => toggleOpen("goals")}
-            >
-              <GoalsActivityCard
-                targetWeight={targetWeight}
-                setTargetWeight={setTargetWeight}
-                targetDate={targetDate}
-                setTargetDate={setTargetDate}
-                weightUnit={weightUnit}
-                activityLevel={activityLevel}
-                setActivityLevel={setActivityLevel}
-                trainingDaysPerWeek={trainingDaysPerWeek}
-                setTrainingDaysPerWeek={setTrainingDaysPerWeek}
-                stepsGoal={stepsGoal}
-                setStepsGoal={setStepsGoal}
-              />
-            </AccordionCard>
-          </View>
+            {/* Goals */}
+            <View ref={anchors.goals}>
+              <AccordionCard
+                title="Goals & Activity"
+                subtitle="Target weight, date & movement"
+                open={!!openKeys.goals}
+                onToggle={() => toggleOpen("goals")}
+              >
+                <GoalsActivityCard
+                  targetWeight={targetWeight}
+                  setTargetWeight={setTargetWeight}
+                  targetDate={targetDate}
+                  setTargetDate={setTargetDate}
+                  weightUnit={weightUnit}
+                  activityLevel={activityLevel}
+                  setActivityLevel={setActivityLevel}
+                  trainingDaysPerWeek={trainingDaysPerWeek}
+                  setTrainingDaysPerWeek={setTrainingDaysPerWeek}
+                  stepsGoal={stepsGoal}
+                  setStepsGoal={setStepsGoal}
+                />
+              </AccordionCard>
+            </View>
 
-          {/* Macros */}
-          <View ref={anchors.macros} style={{ position: "relative" }}>
-            <AccordionCard
-              title="Macros"
-              subtitle="Pick a method and fine-tune"
-              open={!!openKeys.macros}
-              onToggle={() => toggleOpen("macros")}
-            >
-              <Tip text="Percent mode auto-balances to 100%. Cycling sets different carbs on training vs rest days; fat fills the remainder." />
-              <MacrosCard
-                macroMethod={macroMethod}
-                setMacroMethod={setMacroMethod}
-                proteinPerKg={proteinPerKg}
-                setProteinPerKg={setProteinPerKg}
-                proteinPct={proteinPct}
-                setProteinPct={setProteinPct}
-                carbPct={carbPct}
-                setCarbPct={setCarbPct}
-                fatPct={fatPct}
-                setFatPct={setFatPct}
-                trainCarbPct={trainCarbPct}
-                setTrainCarbPct={setTrainCarbPct}
-                restCarbPct={restCarbPct}
-                setRestCarbPct={setRestCarbPct}
-                setSplit={setSplit}
-                preview={preview}
-                clamp01={clamp01}
-              />
-            </AccordionCard>
-          </View>
+            {/* Macros */}
+            <View ref={anchors.macros} style={{ position: "relative" }}>
+              <AccordionCard
+                title="Macros"
+                subtitle="Pick a method and fine-tune"
+                open={!!openKeys.macros}
+                onToggle={() => toggleOpen("macros")}
+              >
+                <Tip text="Percent mode auto-balances to 100%. Cycling sets different carbs on training vs rest days; fat fills the remainder." />
+                <MacrosCard
+                  macroMethod={macroMethod}
+                  setMacroMethod={setMacroMethod}
+                  proteinPerKg={proteinPerKg}
+                  setProteinPerKg={setProteinPerKg}
+                  proteinPct={proteinPct}
+                  setProteinPct={setProteinPct}
+                  carbPct={carbPct}
+                  setCarbPct={setCarbPct}
+                  fatPct={fatPct}
+                  setFatPct={setFatPct}
+                  trainCarbPct={trainCarbPct}
+                  setTrainCarbPct={setTrainCarbPct}
+                  restCarbPct={restCarbPct}
+                  setRestCarbPct={setRestCarbPct}
+                  setSplit={setSplit}
+                  preview={preview}
+                  clamp01={clamp01}
+                />
+              </AccordionCard>
+            </View>
 
-          {/* Diet */}
-          <View ref={anchors.diet}>
-            <AccordionCard
-              title="Diet & Cooking"
-              subtitle="Food preferences & constraints"
-              open={!!openKeys.diet}
-              onToggle={() => toggleOpen("diet")}
-            >
-              <DietCookingCard
-                dietType={dietType}
-                setDietType={setDietType}
-                allergies={allergies}
-                setAllergies={setAllergies}
-                dislikes={dislikes}
-                setDislikes={setDislikes}
-                cookMins={cookMins}
-                setCookMins={setCookMins}
-                cookSkill={cookSkill}
-                setCookSkill={setCookSkill}
-                budgetPerMeal={budgetPerMeal}
-                setBudgetPerMeal={setBudgetPerMeal}
-              />
-            </AccordionCard>
-          </View>
+            {/* Diet */}
+            <View ref={anchors.diet}>
+              <AccordionCard
+                title="Diet & Cooking"
+                subtitle="Food preferences & constraints"
+                open={!!openKeys.diet}
+                onToggle={() => toggleOpen("diet")}
+              >
+                <DietCookingCard
+                  dietType={dietType}
+                  setDietType={setDietType}
+                  allergies={allergies}
+                  setAllergies={setAllergies}
+                  dislikes={dislikes}
+                  setDislikes={setDislikes}
+                  cookMins={cookMins}
+                  setCookMins={setCookMins}
+                  cookSkill={cookSkill}
+                  setCookSkill={setCookSkill}
+                  budgetPerMeal={budgetPerMeal}
+                  setBudgetPerMeal={setBudgetPerMeal}
+                />
+              </AccordionCard>
+            </View>
 
-          {/* Meal schedule */}
-          <View ref={anchors.meals}>
-            <AccordionCard
-              title="Meal schedule"
-              subtitle="Times for reminders & planning"
-              open={!!openKeys.meals}
-              onToggle={() => toggleOpen("meals")}
-            >
-              <MealScheduleCard meals={meals} setMeals={setMeals} />
-            </AccordionCard>
-          </View>
+            {/* Meal schedule */}
+            <View ref={anchors.meals}>
+              <AccordionCard
+                title="Meal schedule"
+                subtitle="Times for reminders & planning"
+                open={!!openKeys.meals}
+                onToggle={() => toggleOpen("meals")}
+              >
+                <MealScheduleCard meals={meals} setMeals={setMeals} />
+              </AccordionCard>
+            </View>
 
-          {/* Equipment */}
-          <View ref={anchors.equipment}>
-            <AccordionCard
-              title="Equipment & constraints"
-              subtitle="Available gear, place & injuries"
-              open={!!openKeys.equipment}
-              onToggle={() => toggleOpen("equipment")}
-            >
-              <EquipmentCard
-                EQUIP={EQUIP as readonly string[]}
-                equipment={equipment}
-                setEquipment={setEquipment}
-                workoutPlace={workoutPlace}
-                setWorkoutPlace={setWorkoutPlace}
-                injuries={injuries}
-                setInjuries={setInjuries}
-              />
-            </AccordionCard>
-          </View>
+            {/* Equipment */}
+            <View ref={anchors.equipment}>
+              <AccordionCard
+                title="Equipment & constraints"
+                subtitle="Available gear, place & injuries"
+                open={!!openKeys.equipment}
+                onToggle={() => toggleOpen("equipment")}
+              >
+                <EquipmentCard
+                  EQUIP={EQUIP as readonly string[]}
+                  equipment={equipment}
+                  setEquipment={setEquipment}
+                  workoutPlace={workoutPlace}
+                  setWorkoutPlace={setWorkoutPlace}
+                  injuries={injuries}
+                  setInjuries={setInjuries}
+                />
+              </AccordionCard>
+            </View>
 
-          <View style={{ height: 24 }} />
-        </ScrollView>
-      </Animated.View>
+            <View style={{ height: 24 }} />
+            <BottomTabSpacer extra={16} />
+          </ScrollView>
+        </Animated.View>
 
-      <StickySaveBar saving={saving} status={saveStatus} onSave={onSave} />
+        <StickySaveBar saving={saving} status={saveStatus} onSave={onSave} />
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+function HeaderRightActions() {
+  const { colors, isDark } = useTheme();
+  const router = useRouter();
+  let BlurView: any = View;
+  try {
+    BlurView = require("expo-blur").BlurView;
+  } catch {}
+
+  const Chip = ({
+    icon,
+    label,
+    onPress,
+  }: {
+    icon: keyof typeof Ionicons.glyphMap;
+    label: string;
+    onPress: () => void;
+  }) => (
+    <View
+      style={{
+        marginLeft: 8,
+        borderRadius: 999,
+        overflow: "hidden",
+        borderWidth: 1,
+        borderColor: withAlpha(colors.primary, 0.35),
+      }}
+    >
+      <Pressable
+        onPress={onPress}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          paddingHorizontal: 12,
+          paddingVertical: 6,
+          backgroundColor: withAlpha(colors.primary, 0.12),
+        }}
+        hitSlop={6}
+      >
+        <Ionicons
+          name={icon}
+          size={14}
+          color={colors.primary}
+          style={{ marginRight: 6 }}
+        />
+        <Text
+          style={{ color: colors.primary, fontWeight: "800", fontSize: 12 }}
+        >
+          {label}
+        </Text>
+      </Pressable>
     </View>
+  );
+
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center" }}>
+      {BlurView !== View ? (
+        <BlurView
+          intensity={18}
+          tint={isDark ? "dark" : "light"}
+          style={{
+            flexDirection: "row",
+            borderRadius: 999,
+            overflow: "hidden",
+          }}
+        >
+          <Chip
+            icon="person-circle-outline"
+            label="Account"
+            onPress={() => router.push("/(modals)/account")}
+          />
+          <Chip
+            icon="settings-outline"
+            label="Settings"
+            onPress={() => router.push("/(modals)/settings")}
+          />
+        </BlurView>
+      ) : (
+        <>
+          <Chip
+            icon="person-circle-outline"
+            label="Account"
+            onPress={() => router.push("/(modals)/account")}
+          />
+          <Chip
+            icon="settings-outline"
+            label="Settings"
+            onPress={() => router.push("/(modals)/settings")}
+          />
+        </>
+      )}
+    </View>
+  );
+}
+
+function ProfileTopBar() {
+  const { colors, isDark } = useTheme();
+  const router = useRouter();
+
+  // ⬇️ TUNING KNOBS
+  const COMPACT_LIFT = 48; // pulls the chip cluster UP (reduce gap under island). Try 4–10.
+  const OUTER_BOTTOM = 2; // space between bar and page content (vertical)
+  const SHELL_PAD = 4; // inner padding of the glass container around the chips
+  const CHIP_VPAD = 6; // chip vertical padding (height)
+  const CHIP_HPAD = 12; // chip horizontal padding (width)
+
+  let BlurView: any = View;
+  try {
+    BlurView = require("expo-blur").BlurView;
+  } catch {}
+
+  const Chip = ({
+    icon,
+    label,
+    onPress,
+  }: {
+    icon: keyof typeof Ionicons.glyphMap;
+    label: string;
+    onPress: () => void;
+  }) => (
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        paddingHorizontal: CHIP_HPAD,
+        paddingVertical: CHIP_VPAD,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: withAlpha(colors.primary, 0.35),
+        backgroundColor: withAlpha(colors.primary, pressed ? 0.22 : 0.12),
+      })}
+    >
+      <Ionicons name={icon} size={14} color={colors.primary} />
+      <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 12 }}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+
+  const Shell = ({ children }: { children: React.ReactNode }) =>
+    BlurView !== View ? (
+      <BlurView
+        intensity={20}
+        tint={isDark ? "dark" : "light"}
+        style={{
+          flexDirection: "row",
+          gap: 8,
+          padding: SHELL_PAD, // ⬅️ tighter
+          borderRadius: 999,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: isDark
+            ? "rgba(12,14,20,0.25)"
+            : "rgba(245,248,255,0.25)",
+        }}
+      >
+        {children}
+      </BlurView>
+    ) : (
+      <View style={{ flexDirection: "row", gap: 8, padding: SHELL_PAD }}>
+        {children}
+      </View>
+    );
+
+  return (
+    // SafeAreaView keeps us below the island; we then *slightly* lift the content.
+    <SafeAreaView edges={["top"]} style={{ backgroundColor: "transparent" }}>
+      <View
+        style={{
+          paddingHorizontal: 12, // side gutters
+          paddingBottom: OUTER_BOTTOM, // space below the bar
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: colors.border,
+        }}
+      >
+        <View
+          style={{
+            marginTop: -COMPACT_LIFT, // ⬅️ pulls the chips closer to the island
+            alignItems: "flex-end",
+          }}
+        >
+          <Shell>
+            <Chip
+              icon="person-circle-outline"
+              label="Account"
+              onPress={() => router.push("/(modals)/account")}
+            />
+            <Chip
+              icon="settings-outline"
+              label="Settings"
+              onPress={() => router.push("/(modals)/settings")}
+            />
+          </Shell>
+        </View>
+      </View>
+    </SafeAreaView>
   );
 }

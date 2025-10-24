@@ -1,5 +1,5 @@
 // app/(modals)/settings.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import {
   ScrollView,
   View,
@@ -10,8 +10,10 @@ import {
   Alert,
   Platform,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useNavigation } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
 
 import Card from "../../components/Card";
 import { useTheme } from "@/content/ThemeProvider";
@@ -22,70 +24,151 @@ import {
   updateProfile,
   type Profile,
 } from "@/services/profile";
-
-/** ---------- types ---------- */
+import ThemeChooser from "@/components/settings/ThemeChooser";
 
 type ThemePref = "system" | "light" | "dark";
 type Unit = "kg" | "lb";
-
 type Settings = {
   notificationsEnabled: boolean;
   notifyDaily: boolean;
   dailyReminder: string; // "HH:MM"
   workoutReminders: boolean;
   mealReminders: boolean;
-
-  advancedWorkoutMode: boolean; // feature flag (future)
-  autoSyncHealth: boolean; // placeholder for Apple HealthKit / Google Fit
-
-  theme: ThemePref; // placeholder – actual theme switching can hook into ThemeProvider later
-  haptics: boolean; // placeholder UX toggle
-  soundEffects: boolean; // placeholder UX toggle
-
-  analytics: boolean; // share anonymous metrics (placeholder)
-  weightUnit: Unit; // mirrors profile.weightUnit
+  advancedWorkoutMode: boolean;
+  autoSyncHealth: boolean;
+  theme: ThemePref;
+  haptics: boolean;
+  soundEffects: boolean;
+  analytics: boolean;
+  weightUnit: Unit;
+  themeOverrides?: { primary?: string; accent?: string };
 };
 
-/** sensible defaults */
 const DEFAULTS: Settings = {
   notificationsEnabled: false,
   notifyDaily: false,
   dailyReminder: "08:00",
   workoutReminders: false,
   mealReminders: false,
-
   advancedWorkoutMode: false,
   autoSyncHealth: false,
-
   theme: "system",
   haptics: true,
   soundEffects: false,
-
   analytics: true,
   weightUnit: "kg",
+  themeOverrides: undefined,
 };
 
 function toTimeString(s: string | undefined): string {
   const v = (s || "").trim();
-  // very light validation
   return /^\d{2}:\d{2}$/.test(v) ? v : "08:00";
 }
 
-/** ---------- screen ---------- */
-
 export default function SettingsModal() {
-  const { colors, isDark } = useTheme();
+  const theme = useTheme() as any;
+  const { colors, isDark } = theme;
   const { user } = useAuth();
+  const nav = useNavigation();
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
   const [saving, setSaving] = useState(false);
 
+  const currentPrimary = (settings.themeOverrides?.primary ||
+    colors.primary) as string;
+  const currentAccent = (settings.themeOverrides?.accent ||
+    colors.accent) as string;
+
+  // glossy header
+  useLayoutEffect(() => {
+    nav.setOptions({
+      headerShadowVisible: false,
+      headerBackground: () => (
+        <View style={{ position: "absolute", inset: 0 }}>
+          <LinearGradient
+            colors={
+              isDark
+                ? ["rgba(16,18,28,0.85)", "rgba(16,18,28,0.65)"]
+                : ["rgba(244,247,255,0.85)", "rgba(244,247,255,0.65)"]
+            }
+            style={{ position: "absolute", inset: 0 }}
+          />
+          <BlurView
+            intensity={24}
+            tint={
+              isDark ? "systemThickMaterialDark" : "systemThickMaterialLight"
+            }
+            style={{ position: "absolute", inset: 0 }}
+          />
+          <View
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 1,
+              backgroundColor: isDark
+                ? "rgba(255,255,255,0.08)"
+                : "rgba(0,0,0,0.06)",
+            }}
+          />
+        </View>
+      ),
+      headerTitle: () => (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <View
+            style={{
+              padding: 8,
+              borderRadius: 12,
+              backgroundColor: `${currentPrimary}26`,
+              borderWidth: 1,
+              borderColor: `${currentPrimary}66`,
+            }}
+          >
+            <Ionicons name="settings-outline" size={18} color={colors.text} />
+          </View>
+          <View>
+            <Text
+              style={{ color: colors.text, fontSize: 18, fontWeight: "800" }}
+            >
+              Settings
+            </Text>
+            <Text style={{ color: colors.muted, fontSize: 12 }}>
+              Tailor the app to your style
+            </Text>
+          </View>
+        </View>
+      ),
+      headerRight: () => (
+        <Pressable
+          onPress={() => router.back()}
+          style={{ borderRadius: 999, overflow: "hidden" }}
+        >
+          <BlurView
+            intensity={16}
+            tint={isDark ? "systemThinMaterialDark" : "systemThinMaterialLight"}
+          >
+            <Text
+              style={{
+                paddingVertical: 8,
+                paddingHorizontal: 14,
+                color: colors.text,
+                fontWeight: "800",
+              }}
+            >
+              Done
+            </Text>
+          </BlurView>
+        </Pressable>
+      ),
+    });
+  }, [nav, isDark, colors.text, currentPrimary]);
+
   // hydrate from profile
   useEffect(() => {
     if (!user?.uid) return;
     let unsub: undefined | (() => void);
-
     (async () => {
       await ensureProfile(user.uid, user.email ? { email: user.email } : {});
       unsub = subscribeProfile(user.uid, (p) => {
@@ -94,32 +177,17 @@ export default function SettingsModal() {
         setSettings({
           ...DEFAULTS,
           ...s,
-          /** keep unit in sync with the top-level profile field as well */
           weightUnit: (p?.weightUnit === "lb" ? "lb" : "kg") as Unit,
           dailyReminder: toTimeString(s?.dailyReminder),
         });
       });
     })();
-
     return () => {
       try {
         unsub && unsub();
       } catch {}
     };
   }, [user?.uid]);
-
-  const sectionTitle = (t: string) => (
-    <Text
-      style={{
-        color: colors.text,
-        fontSize: 16,
-        fontWeight: "800",
-        letterSpacing: 0.3,
-      }}
-    >
-      {t}
-    </Text>
-  );
 
   async function onSave() {
     if (!user?.uid) return;
@@ -139,6 +207,7 @@ export default function SettingsModal() {
     }
   }
 
+  // helpers
   const Row = ({
     children,
     style,
@@ -200,15 +269,11 @@ export default function SettingsModal() {
               paddingVertical: 8,
               paddingHorizontal: 14,
               borderRadius: 999,
-              backgroundColor: active ? colors.chipActiveBg : "transparent",
+              backgroundColor: active ? "rgba(0,0,0,0.06)" : "transparent",
             }}
           >
             <Text
-              style={{
-                color: active ? colors.chipActiveText : colors.text,
-                fontWeight: active ? "800" : "600",
-                textTransform: "capitalize",
-              }}
+              style={{ color: colors.text, fontWeight: active ? "800" : "600" }}
             >
               {o.label}
             </Text>
@@ -218,107 +283,62 @@ export default function SettingsModal() {
     </View>
   );
 
-  const Field = ({
-    value,
-    onChangeText,
-    placeholder,
-    width = 100,
-    keyboardType = "default",
-  }: {
-    value: string;
-    onChangeText: (v: string) => void;
-    placeholder?: string;
-    width?: number;
-    keyboardType?: "default" | "numeric";
-  }) => (
-    <TextInput
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      placeholderTextColor={colors.placeholder}
-      keyboardType={keyboardType}
-      style={{
-        width,
-        borderWidth: 1,
-        borderColor: colors.inputBorder,
-        borderRadius: 12,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        backgroundColor: colors.inputBg,
-        color: colors.text,
-        textAlign: "center",
-      }}
-    />
-  );
-
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
+      contentInsetAdjustmentBehavior="automatic"
       contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 28 }}
+      keyboardShouldPersistTaps="handled"
     >
-      {/* Header */}
-      <Card
-        style={{
-          padding: 14,
-          borderRadius: 18,
-          borderColor: colors.border,
-          backgroundColor: colors.card,
-          borderWidth: 1,
-        }}
-      >
-        <View
+      {/* Theme Studio — uses drop-in ThemeChooser */}
+      <Card style={{ padding: 16, gap: 12 }}>
+        <Text
           style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
+            color: colors.text,
+            fontSize: 16,
+            fontWeight: "800",
+            letterSpacing: 0.3,
           }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <View
-              style={{
-                padding: 8,
-                borderRadius: 12,
-                backgroundColor: isDark ? "#101826" : "#F2F6FF",
-                borderWidth: 1,
-                borderColor: colors.border,
-              }}
-            >
-              <Ionicons
-                name="settings-outline"
-                size={18}
-                color={colors.text as string}
-              />
-            </View>
-            <View>
-              <Text
-                style={{ color: colors.text, fontSize: 22, fontWeight: "800" }}
-              >
-                Settings
-              </Text>
-              <Text style={{ color: colors.muted, fontSize: 12 }}>
-                Tailor the app to your preferences
-              </Text>
-            </View>
-          </View>
+          Theme & Colors
+        </Text>
 
-          <Pressable
-            onPress={() => router.back()}
-            style={{
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: 999,
-              paddingVertical: 8,
-              paddingHorizontal: 12,
-            }}
-          >
-            <Text style={{ color: colors.text }}>Done</Text>
-          </Pressable>
-        </View>
+        <ThemeChooser
+          primary={currentPrimary}
+          accent={currentAccent}
+          onApply={(p, a) => {
+            // Save into local state; Settings "Save" button persists to Firestore.
+            setSettings((s) => ({
+              ...s,
+              themeOverrides: { primary: p, accent: a },
+            }));
+            // Optional live-apply if ThemeProvider exposes setAccents()
+            (theme as any)?.setAccents?.(p, a);
+          }}
+          onReset={() => {
+            setSettings((s) => ({ ...s, themeOverrides: undefined }));
+            (theme as any)?.resetAccents?.();
+          }}
+        />
+
+        <Text style={{ color: colors.muted, fontSize: 12 }}>
+          Your color selection takes effect across the app. Tap Save at the
+          bottom to persist.
+        </Text>
       </Card>
 
       {/* General */}
       <Card style={{ padding: 16 }}>
-        {sectionTitle("General")}
+        <Text
+          style={{
+            color: colors.text,
+            fontSize: 16,
+            fontWeight: "800",
+            letterSpacing: 0.3,
+          }}
+        >
+          General
+        </Text>
         <Row>
           <Label title="Units" subtitle="Affects weight entry & calculations" />
           <Segmented
@@ -332,7 +352,6 @@ export default function SettingsModal() {
             ]}
           />
         </Row>
-
         <Row>
           <Label
             title="Advanced workout mode"
@@ -345,7 +364,6 @@ export default function SettingsModal() {
             }
           />
         </Row>
-
         <Row>
           <Label
             title="Auto-sync health data"
@@ -366,7 +384,16 @@ export default function SettingsModal() {
 
       {/* Notifications */}
       <Card style={{ padding: 16 }}>
-        {sectionTitle("Notifications")}
+        <Text
+          style={{
+            color: colors.text,
+            fontSize: 16,
+            fontWeight: "800",
+            letterSpacing: 0.3,
+          }}
+        >
+          Notifications
+        </Text>
         <Row>
           <Label
             title="Enable notifications"
@@ -379,19 +406,30 @@ export default function SettingsModal() {
             }
           />
         </Row>
-
         <Row>
           <Label title="Daily reminder time" subtitle="HH:MM (24h)" />
-          <Field
+          <TextInput
             value={settings.dailyReminder}
             onChangeText={(txt) =>
               setSettings((s) => ({ ...s, dailyReminder: toTimeString(txt) }))
             }
-            width={100}
+            placeholder="08:00"
+            placeholderTextColor={colors.placeholder}
             keyboardType="numeric"
+            style={{
+              width: 110,
+              borderWidth: 1,
+              borderColor: colors.inputBorder,
+              borderRadius: 12,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              backgroundColor: colors.inputBg,
+              color: colors.text,
+              textAlign: "center",
+              fontWeight: "700",
+            }}
           />
         </Row>
-
         <Row>
           <Label title="Daily check-in" subtitle="Motivation & habit streaks" />
           <Switch
@@ -401,7 +439,6 @@ export default function SettingsModal() {
             }
           />
         </Row>
-
         <Row>
           <Label
             title="Workout reminders"
@@ -414,7 +451,6 @@ export default function SettingsModal() {
             }
           />
         </Row>
-
         <Row>
           <Label title="Meal reminders" subtitle="Based on meal schedule" />
           <Switch
@@ -428,9 +464,18 @@ export default function SettingsModal() {
 
       {/* Appearance & UX */}
       <Card style={{ padding: 16 }}>
-        {sectionTitle("Appearance & UX")}
+        <Text
+          style={{
+            color: colors.text,
+            fontSize: 16,
+            fontWeight: "800",
+            letterSpacing: 0.3,
+          }}
+        >
+          Appearance & UX
+        </Text>
         <Row>
-          <Label title="Theme" subtitle="Future: force Light/Dark" />
+          <Label title="Theme" subtitle="Force Light/Dark or follow System" />
           <Segmented
             value={settings.theme}
             onChange={(v) =>
@@ -443,7 +488,6 @@ export default function SettingsModal() {
             ]}
           />
         </Row>
-
         <Row>
           <Label title="Haptics" subtitle="Subtle vibrations on actions" />
           <Switch
@@ -451,7 +495,6 @@ export default function SettingsModal() {
             onValueChange={(v) => setSettings((s) => ({ ...s, haptics: v }))}
           />
         </Row>
-
         <Row>
           <Label title="Sound effects" subtitle="Tiny taps and chimes" />
           <Switch
@@ -465,7 +508,16 @@ export default function SettingsModal() {
 
       {/* Privacy & data */}
       <Card style={{ padding: 16, gap: 10 }}>
-        {sectionTitle("Privacy & Data")}
+        <Text
+          style={{
+            color: colors.text,
+            fontSize: 16,
+            fontWeight: "800",
+            letterSpacing: 0.3,
+          }}
+        >
+          Privacy & Data
+        </Text>
         <Row>
           <Label
             title="Anonymous analytics"
@@ -476,7 +528,6 @@ export default function SettingsModal() {
             onValueChange={(v) => setSettings((s) => ({ ...s, analytics: v }))}
           />
         </Row>
-
         <Pressable
           onPress={() => Alert.alert("Export", "Export coming soon")}
           style={({ pressed }) => [
@@ -497,7 +548,6 @@ export default function SettingsModal() {
             Workouts, nutrition logs, and targets.
           </Text>
         </Pressable>
-
         <Pressable
           onPress={() =>
             Alert.alert(
@@ -554,21 +604,27 @@ export default function SettingsModal() {
         <Pressable
           onPress={onSave}
           disabled={saving}
-          style={({ pressed }) => [
-            {
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: 12,
+          style={{
+            borderRadius: 12,
+            overflow: "hidden",
+            opacity: saving ? 0.9 : 1,
+          }}
+        >
+          <LinearGradient
+            colors={[currentPrimary, currentAccent]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={{
               paddingVertical: 12,
               paddingHorizontal: 16,
-              backgroundColor: colors.buttonBg,
-              opacity: pressed || saving ? 0.9 : 1,
-            },
-          ]}
-        >
-          <Text style={{ color: colors.buttonText, fontWeight: "800" }}>
-            {saving ? "Saving…" : "Save"}
-          </Text>
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "800" }}>
+              {saving ? "Saving…" : "Save"}
+            </Text>
+          </LinearGradient>
         </Pressable>
       </View>
     </ScrollView>

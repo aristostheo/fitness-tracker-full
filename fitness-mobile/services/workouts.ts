@@ -19,7 +19,9 @@ import { db } from "@/lib/firebase";
 
 export type Workout = {
   id: string;
+  uid?: string; // <- for security rules/reads
   date: string; // "YYYY-MM-DD"
+  dateMs?: number; // <- local-midnight millis (optional but useful)
   exercise: string;
   sets?: number;
   reps?: number;
@@ -100,9 +102,30 @@ export function subscribeWorkouts(
   );
 }
 
+function normalizeISODateOrToday(s?: string) {
+  // Accepts "YYYY-MM-DD"; otherwise uses today.
+  const isISO = s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const base = isISO ? new Date(`${s}T00:00:00`) : new Date();
+  const y = base.getFullYear();
+  const m = String(base.getMonth() + 1).padStart(2, "0");
+  const d = String(base.getDate()).padStart(2, "0");
+  const iso = `${y}-${m}-${d}`;
+  const dateMs = new Date(`${iso}T00:00:00`).getTime(); // local midnight
+  return { iso, dateMs };
+}
+
 export async function addWorkout(uid: string, entry: Omit<Workout, "id">) {
+  const { iso, dateMs } = normalizeISODateOrToday(entry.date);
+
   const ref = await addDoc(col(uid), {
-    ...entry,
+    uid, // ✅ used by rules/queries
+    exercise: entry.exercise ?? "",
+    sets: Number(entry.sets ?? 0),
+    reps: Number(entry.reps ?? 0),
+    weight: Number(entry.weight ?? 0),
+    notes: entry.notes ?? "",
+    date: iso, // ✅ canonical string
+    dateMs, // ✅ numeric for future range queries
     createdAt: serverTimestamp(),
   });
   return ref;

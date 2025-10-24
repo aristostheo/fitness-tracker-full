@@ -1,4 +1,4 @@
-// theme/ThemeProvider.tsx
+// content/ThemeProvider.tsx
 import React, {
   createContext,
   useContext,
@@ -9,152 +9,169 @@ import React, {
 import { Appearance, ColorSchemeName } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-type ModeSetting = "system" | "light" | "dark";
+type ThemeMode = "system" | "light" | "dark";
 
-export type ThemeColors = {
-  success: string;
-  // core
+type ThemeColors = {
   background: string;
   text: string;
-  muted: string;
   card: string;
   border: string;
-
-  // navigation
-  tabBar: string;
-  tabActive: string;
-  tabInactive: string;
-
-  // inputs/buttons/chips
+  muted: string;
+  placeholder: string;
   inputBg: string;
   inputBorder: string;
-  buttonBg: string;
-  buttonText: string;
   chipActiveBg: string;
   chipActiveText: string;
+  buttonBg: string;
+  buttonText: string;
 
-  // misc
-  placeholder: string;
-  primary: string;
-
+  // charts / extras (already used across the app)
   chartPrimary: string;
   chartSecondary: string;
 
-  danger: string;
+  // primary & accent are user-tunable
+  primary: string;
+  accent: string;
 };
 
-const light: ThemeColors = {
-  success: "#22C55E",
-  background: "#f7f7fb",
-  text: "#111827",
-  muted: "#6b7280",
-  card: "#ffffff",
-  border: "rgba(0,0,0,0.12)",
-
-  tabBar: "#ffffff",
-  tabActive: "#111827",
-  tabInactive: "#9ca3af",
-
-  inputBg: "#ffffff",
-  inputBorder: "rgba(0,0,0,0.12)",
-  buttonBg: "#111827",
-  buttonText: "#ffffff",
-  chipActiveBg: "#111827",
-  chipActiveText: "#ffffff",
-
-  placeholder: "#9ca3af",
-  primary: "#2563eb",
-
-  chartPrimary: "#3B82F6", // consumed
-  chartSecondary: "#F59E0B", //burned
-
-  danger: "#EF4444",
-};
-
-const dark: ThemeColors = {
-  success: "#34D399",
-  background: "#0b1020",
-  text: "#f3f4f6",
-  muted: "#9ca3af",
-  card: "#0f172a",
-  border: "rgba(255,255,255,0.12)",
-
-  tabBar: "#0b1020",
-  tabActive: "#e5e7eb",
-  tabInactive: "#64748b",
-
-  inputBg: "#0f172a",
-  inputBorder: "rgba(255,255,255,0.16)",
-  buttonBg: "#2563eb",
-  buttonText: "#ffffff",
-  chipActiveBg: "#2563eb",
-  chipActiveText: "#ffffff",
-
-  placeholder: "#94a3b8",
-  primary: "#2563eb",
-
-  chartPrimary: "#60A5FA", // consumed
-  chartSecondary: "#FBBF24", // burned
-
-  danger: "#EF4444",
-};
-
-export type Theme = {
+type ThemeContextShape = {
   colors: ThemeColors;
   isDark: boolean;
-  modeSetting: ModeSetting;
-  setModeSetting: (m: ModeSetting) => void;
+  modeSetting: ThemeMode;
+  setModeSetting: (m: ThemeMode) => void;
+
+  // live accent setters so Settings can update immediately
+  setAccents: (primary?: string, accent?: string) => void;
+  resetAccents: () => void;
 };
 
-const Ctx = createContext<Theme | null>(null);
-export const THEME_STORAGE_KEY = "@app:themeSetting";
+const ThemeContext = createContext<ThemeContextShape | null>(null);
+export function useTheme() {
+  const ctx = useContext(ThemeContext);
+  if (!ctx) throw new Error("useTheme must be used within ThemeProvider");
+  return ctx;
+}
+
+// defaults if user hasn't customized
+const DEFAULT_PRIMARY = "#6366F1"; // indigo
+const DEFAULT_ACCENT = "#8B5CF6"; // violet
+
+const STORAGE_KEYS = {
+  MODE: "@theme:mode", // "system" | "light" | "dark"
+  PRIMARY: "@theme:primary", // hex
+  ACCENT: "@theme:accent", // hex
+};
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [modeSetting, setModeSetting] = useState<ModeSetting>("system");
-  const [systemScheme, setSystemScheme] = useState<ColorSchemeName>(
-    Appearance.getColorScheme()
+  const [modeSetting, setModeSetting] = useState<ThemeMode>("system");
+  const sysScheme: ColorSchemeName = Appearance.getColorScheme();
+  const isSystemDark = sysScheme === "dark";
+
+  // accents are optional — fall back to defaults
+  const [accentPrimary, setAccentPrimary] = useState<string | undefined>(
+    undefined
+  );
+  const [accentAccent, setAccentAccent] = useState<string | undefined>(
+    undefined
   );
 
-  // load saved choice
+  // hydrate once
   useEffect(() => {
     (async () => {
-      const v = await AsyncStorage.getItem(THEME_STORAGE_KEY);
-      if (v === "light" || v === "dark" || v === "system") setModeSetting(v);
+      try {
+        const [m, p, a] = await Promise.all([
+          AsyncStorage.getItem(STORAGE_KEYS.MODE),
+          AsyncStorage.getItem(STORAGE_KEYS.PRIMARY),
+          AsyncStorage.getItem(STORAGE_KEYS.ACCENT),
+        ]);
+        if (m === "system" || m === "light" || m === "dark") setModeSetting(m);
+        if (p) setAccentPrimary(p);
+        if (a) setAccentAccent(a);
+      } catch {}
     })();
   }, []);
 
-  // watch system theme
-  useEffect(() => {
-    const sub = Appearance.addChangeListener(({ colorScheme }) =>
-      setSystemScheme(colorScheme)
-    );
-    return () => sub.remove();
-  }, []);
+  // expose setters that also persist
+  const setModePersist = async (m: ThemeMode) => {
+    setModeSetting(m);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.MODE, m);
+    } catch {}
+  };
 
-  // persist user choice
-  useEffect(() => {
-    AsyncStorage.setItem(THEME_STORAGE_KEY, modeSetting).catch(() => {});
-  }, [modeSetting]);
+  const setAccents = (primary?: string, accent?: string) => {
+    setAccentPrimary(primary);
+    setAccentAccent(accent);
+    (async () => {
+      try {
+        if (primary) await AsyncStorage.setItem(STORAGE_KEYS.PRIMARY, primary);
+        else await AsyncStorage.removeItem(STORAGE_KEYS.PRIMARY);
+        if (accent) await AsyncStorage.setItem(STORAGE_KEYS.ACCENT, accent);
+        else await AsyncStorage.removeItem(STORAGE_KEYS.ACCENT);
+      } catch {}
+    })();
+  };
 
+  const resetAccents = () => setAccents(undefined, undefined);
+
+  // resolve dark vs light
   const isDark =
-    modeSetting === "dark" ||
-    (modeSetting === "system" && systemScheme === "dark");
+    modeSetting === "system" ? isSystemDark : modeSetting === "dark";
 
-  const value = useMemo<Theme>(
-    () => ({
-      colors: isDark ? dark : light,
-      isDark,
-      modeSetting,
-      setModeSetting,
-    }),
-    [isDark, modeSetting]
+  const primary = accentPrimary ?? DEFAULT_PRIMARY;
+  const accent = accentAccent ?? DEFAULT_ACCENT;
+
+  const colors: ThemeColors = useMemo(() => {
+    if (isDark) {
+      return {
+        background: "#0B0F1A",
+        text: "#EEF2FF",
+        card: "rgba(18,22,33,0.7)",
+        border: "rgba(255,255,255,0.08)",
+        muted: "rgba(255,255,255,0.6)",
+        placeholder: "rgba(255,255,255,0.45)",
+        inputBg: "rgba(255,255,255,0.06)",
+        inputBorder: "rgba(255,255,255,0.12)",
+        chipActiveBg: `${primary}33`,
+        chipActiveText: "#fff",
+        buttonBg: primary,
+        buttonText: "#fff",
+        chartPrimary: primary,
+        chartSecondary: accent,
+        primary,
+        accent,
+      };
+    }
+    return {
+      background: "#F6F9FF",
+      text: "#0B1220",
+      card: "rgba(255,255,255,0.85)",
+      border: "rgba(0,0,0,0.07)",
+      muted: "rgba(0,0,0,0.55)",
+      placeholder: "rgba(0,0,0,0.35)",
+      inputBg: "rgba(0,0,0,0.035)",
+      inputBorder: "rgba(0,0,0,0.085)",
+      chipActiveBg: `${primary}1F`,
+      chipActiveText: "#0B1220",
+      buttonBg: primary,
+      buttonText: "#fff",
+      chartPrimary: primary,
+      chartSecondary: accent,
+      primary,
+      accent,
+    };
+  }, [isDark, primary, accent]);
+
+  const value: ThemeContextShape = {
+    colors,
+    isDark,
+    modeSetting,
+    setModeSetting: setModePersist,
+    setAccents,
+    resetAccents,
+  };
+
+  return (
+    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
   );
-
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
-}
-
-export function useTheme() {
-  const v = useContext(Ctx);
-  if (!v) throw new Error("useTheme must be used within ThemeProvider");
-  return v;
 }

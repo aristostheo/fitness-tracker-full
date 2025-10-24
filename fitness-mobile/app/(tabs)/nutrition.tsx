@@ -9,7 +9,7 @@ import {
   Easing,
   Platform,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
@@ -25,15 +25,43 @@ import {
   deleteExercise,
   type FoodEntry,
 } from "@/services/nutrition";
+import {
+  upsertFoodToCatalog,
+  foodIdFor,
+  bumpUse,
+} from "@/services/foodCatalog";
 
 import Header from "@/components/nutrition/Header";
 import MealSection from "@/components/nutrition/MealSection";
 import ExerciseCard from "@/components/nutrition/ExerciseCard";
+import EmptySuggestions from "@/components/ui/EmptySuggestions";
+import BottomTapSpacer from "@/components/ui/BottomTapSpacer";
+import { computeMealScore } from "@/utils/mealScore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+/** Badges */
+import BadgeCelebrate from "@/components/badges/BadgeCelebrate";
+import { evaluateBadges } from "@/services/badges";
+
+/** Firestore helpers for counts/streak */
+import {
+  collection,
+  getCountFromServer,
+  query as fbQuery,
+  where,
+  getFirestore,
+} from "firebase/firestore";
+import { app } from "@/lib/firebase";
 
 /* -------------------- small utils -------------------- */
 const pad = (n: number) => String(n).padStart(2, "0");
 const todayISO = () => {
   const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+const dateAdd = (iso: string, deltaDays: number) => {
+  const d = new Date(iso);
+  d.setDate(d.getDate() + deltaDays);
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
@@ -46,7 +74,40 @@ type MacroFields = {
   protein: number;
   carbs: number;
   fat: number;
+  sugar?: number;
+  fiber?: number;
+  score?: number; // optional, saved from add-meal
 };
+
+/* -------------------- score badge -------------------- */
+function scoreColor(score: number) {
+  if (score >= 80) return { bg: "rgba(34,197,94,0.15)", fg: "#16a34a" }; // green
+  if (score >= 60) return { bg: "rgba(59,130,246,0.15)", fg: "#2563eb" }; // blue
+  if (score >= 40) return { bg: "rgba(245,158,11,0.18)", fg: "#d97706" }; // amber
+  return { bg: "rgba(239,68,68,0.15)", fg: "#dc2626" }; // red
+}
+
+function ScoreBadge({ score }: { score: number }) {
+  const v = Math.round(score);
+  const { bg, fg } = scoreColor(v);
+  return (
+    <View
+      style={{
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 999,
+        backgroundColor: bg,
+        borderWidth: 1,
+        borderColor: fg + "33",
+        alignSelf: "flex-start",
+      }}
+    >
+      <Text style={{ color: fg, fontWeight: "900", fontSize: 12 }}>
+        Score {v}
+      </Text>
+    </View>
+  );
+}
 
 /* -------------------- micro-interactions -------------------- */
 function usePressScale(initial = 1) {
@@ -116,22 +177,22 @@ const MEAL_THEMES: Record<
   }
 > = {
   breakfast: {
-    grad: ["#f59e0b", "#f97316"], // amber → orange
+    grad: ["#f59e0b", "#f97316"],
     chipBg: "rgba(245,158,11,0.12)",
     icon: "sunny-outline",
   },
   lunch: {
-    grad: ["#06b6d4", "#3b82f6"], // cyan → blue
+    grad: ["#06b6d4", "#3b82f6"],
     chipBg: "rgba(59,130,246,0.12)",
     icon: "pizza-outline",
   },
   dinner: {
-    grad: ["#a78bfa", "#8b5cf6"], // violet
+    grad: ["#a78bfa", "#8b5cf6"],
     chipBg: "rgba(139,92,246,0.12)",
     icon: "restaurant-outline",
   },
   snacks: {
-    grad: ["#22c55e", "#16a34a"], // green
+    grad: ["#22c55e", "#16a34a"],
     chipBg: "rgba(34,197,94,0.12)",
     icon: "ice-cream-outline",
   },
@@ -221,7 +282,7 @@ function SoftProgress({
   );
 }
 
-/* -------- typed props for the panel (fixes all undefined issues) -------- */
+/* -------- typed props for the panel -------- */
 type FancyMealPanelProps = {
   meal: Meal;
   items: Array<Partial<MacroFields>>;
@@ -236,9 +297,10 @@ type FancyMealPanelProps = {
   onSaveEdit: () => void;
   onDeleteItem: (id: string) => void;
   onQuickAdd?: () => void;
+  itemRight?: (it: Partial<MacroFields>) => React.ReactNode;
 };
 
-/** Collapsible, themed panel that wraps your existing <MealSection/> with iOS glass blur header */
+/** Collapsible, themed panel that wraps MealSection */
 function FancyMealPanel({
   meal,
   items,
@@ -253,9 +315,7 @@ function FancyMealPanel({
   onSaveEdit,
   onDeleteItem,
   onQuickAdd,
-  pulse = false,
-}: FancyMealPanelProps & { pulse?: boolean }) {
-  const theme = MEAL_THEMES[meal];
+}: FancyMealPanelProps) {
   const [open, setOpen] = useState(true);
   const rotate = useRef(new Animated.Value(1)).current;
 
@@ -277,13 +337,21 @@ function FancyMealPanel({
   const dayCals = Number(totalsColor?.dayCalories ?? 0);
   const visualGoal = Math.max(300, Math.round(dayCals / 4));
 
-  // iOS system blur tint; Android falls back to gradient header
   const blurTint =
     Platform.OS === "ios"
       ? isDark
         ? "systemThinMaterialDark"
         : "systemThinMaterialLight"
       : "default";
+
+  const mealEmoji =
+    meal === "breakfast"
+      ? "🍳"
+      : meal === "lunch"
+      ? "🥪"
+      : meal === "dinner"
+      ? "🍽️"
+      : "🍇";
 
   return (
     <View
@@ -295,15 +363,15 @@ function FancyMealPanel({
         backgroundColor: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
       }}
     >
-      {/* Header with glass blur */}
+      {/* Header */}
       <View style={{ position: "relative" }}>
         {Platform.OS === "ios" ? (
           <BlurView
-            tint={blurTint as any}
+            // @ts-ignore blur tint type
+            tint={blurTint}
             intensity={28}
             style={{ padding: 14, paddingHorizontal: 16 }}
           >
-            {/* gradient sheen on top of the blur */}
             <LinearGradient
               start={{ x: 0, y: 0.5 }}
               end={{ x: 1, y: 0.5 }}
@@ -361,43 +429,55 @@ function FancyMealPanel({
             </Pressable>
           ) : null}
 
-          <MealSection
-            meal={meal}
-            items={items as any}
-            onStartEdit={onStartEdit}
-            editId={editId}
-            edit={edit}
-            setEdit={setEdit}
-            onCancelEdit={onCancelEdit}
-            onSaveEdit={onSaveEdit}
-            onDeleteItem={onDeleteItem}
-          />
+          {/* Empty state vs items */}
+          {!items || items.length === 0 ? (
+            <View style={{ marginTop: 2 }}>
+              <EmptySuggestions
+                emoji={mealEmoji}
+                title="No foods yet"
+                subtitle="Add a favorite or search the USDA database."
+                actions={[
+                  {
+                    icon: "star-outline",
+                    label: "Favorites",
+                    onPress: onQuickAdd || (() => {}),
+                  },
+                  {
+                    icon: "search-outline",
+                    label: "Search foods",
+                    onPress: onQuickAdd || (() => {}),
+                  },
+                ]}
+              />
+            </View>
+          ) : (
+            <MealSection
+              meal={meal}
+              items={items as any}
+              onStartEdit={onStartEdit}
+              editId={editId}
+              edit={edit}
+              setEdit={setEdit}
+              onCancelEdit={onCancelEdit}
+              onSaveEdit={onSaveEdit}
+              onDeleteItem={onDeleteItem}
+              itemRight={(it: any) => {
+                const s =
+                  typeof it.score === "number"
+                    ? it.score
+                    : computeMealScore(it);
+                return <ScoreBadge score={s} />;
+              }}
+            />
+          )}
         </View>
       ) : null}
     </View>
   );
 
-  // Make sure FancyMealPanel receives: pulse?: boolean (default false)
-  // function FancyMealPanel({ ..., pulse = false }: { ..., pulse?: boolean }) { ... }
-
   function HeaderContent() {
     return (
       <View style={{ position: "relative" }}>
-        {/* Soft pulse overlay (shows for ~1s when pulse=true) */}
-        {pulse && (
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              inset: 0,
-              borderRadius: 22, // match your header/card rounding
-              backgroundColor: "rgba(255,255,255,0.35)",
-              opacity: 0.25, // subtle
-            }}
-          />
-        )}
-
-        {/* ORIGINAL CONTENT (unchanged) */}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
           <View
             style={{
@@ -409,7 +489,7 @@ function FancyMealPanel({
               justifyContent: "center",
             }}
           >
-            <Ionicons name={theme.icon} size={18} color="#fff" />
+            <Ionicons name={MEAL_THEMES[meal].icon} size={18} color="#fff" />
           </View>
 
           <View style={{ flex: 1, gap: 6 }}>
@@ -453,27 +533,54 @@ function FancyMealPanel({
             label="P"
             value={sums.protein}
             unit="g"
-            tint={theme.chipBg}
+            tint={MEAL_THEMES[meal].chipBg}
             textColor="#fff"
           />
           <MacroChip
             label="C"
             value={sums.carbs}
             unit="g"
-            tint={theme.chipBg}
+            tint={MEAL_THEMES[meal].chipBg}
             textColor="#fff"
           />
           <MacroChip
             label="F"
             value={sums.fat}
             unit="g"
-            tint={theme.chipBg}
+            tint={MEAL_THEMES[meal].chipBg}
             textColor="#fff"
           />
         </View>
       </View>
     );
   }
+}
+
+/* -------------------- helpers: counts & streak -------------------- */
+const db = getFirestore(app);
+
+/** Total meals all-time (cheap server count) */
+async function getMealsAllTime(uid: string) {
+  const coll = collection(db, "users", uid, "nutritionEntries");
+  const snap = await getCountFromServer(coll);
+  return Number(snap.data().count || 0);
+}
+
+/** Compute simple day streak ending today by checking the last 7 days for any entry. */
+async function getDaysStreak(uid: string, todayIso: string) {
+  let streak = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = dateAdd(todayIso, -i);
+    const q = fbQuery(
+      collection(db, "users", uid, "nutritionEntries"),
+      where("date", "==", d)
+    );
+    const c = await getCountFromServer(q as any);
+    const hasAny = Number(c.data().count || 0) > 0;
+    if (hasAny) streak += 1;
+    else break;
+  }
+  return streak || 1;
 }
 
 /* -------------------- main screen -------------------- */
@@ -490,6 +597,9 @@ export default function NutritionScreen() {
   // keep just selected meal locally so the modal knows where to file the result
   const [selectedMeal, setSelectedMeal] = useState<Meal>("breakfast");
 
+  // celebration
+  const [celebrateIds, setCelebrateIds] = useState<string[]>([]);
+
   /* ============================================================ */
   // Scroll + anchors
   const scrollRef = useRef<ScrollView | null>(null);
@@ -499,79 +609,139 @@ export default function NutritionScreen() {
     dinner: null,
     snacks: null,
   });
-  const [pulseMeal, setPulseMeal] = useState<Meal | null>(null);
 
-  // ----- Handle add-meal modal result -----
-  const params = useLocalSearchParams<{ addFoodPayload?: string }>();
-  useEffect(() => {
-    (async () => {
-      if (!user?.uid) return;
-      const payload = params?.addFoodPayload;
-      if (!payload) return;
+  // ----- Handle add-meal modal result (and upsert to catalog) -----
+  const params = useLocalSearchParams<{ addFoodPayload?: string | string[] }>();
 
-      try {
-        const data = JSON.parse(String(payload));
-        const entry = {
-          date: data.date || date,
-          meal: (data.meal || selectedMeal) as FoodEntry["meal"],
-          name: String(data.name || "").trim(),
-          unit: data.unit || "serving",
-          qty: Number(data.qty || 1),
-          calories: Number(data.calories || 0),
-          protein: Number(data.protein || 0),
-          carbs: Number(data.carbs || 0),
-          fat: Number(data.fat || 0),
-          sugar: Number(data.sugar || 0),
-          fiber: Number(data.fiber || 0),
-          source: data.source || "manual",
-          fdcId: data.fdcId || null,
-          createdAt: Date.now(),
-        };
+  useFocusEffect(
+    React.useCallback(() => {
+      let cancelled = false;
 
-        const tempId = `temp-${Date.now()}`;
-        setFoods((prev) => [{ id: tempId, ...entry }, ...prev]);
+      (async () => {
+        if (!user?.uid) return;
+
+        const raw = await AsyncStorage.getItem("@pending_add_meal");
+        if (!raw) return;
+
+        // clear ASAP so it can't double-fire
+        await AsyncStorage.removeItem("@pending_add_meal");
+        if (cancelled) return;
+
         try {
-          const ref = await addFood(user.uid, {
-            ...entry,
-            createdAt: undefined,
-          });
-          setFoods((prev) =>
-            prev.map((f) => (f.id === tempId ? { ...f, id: ref.id } : f))
-          );
-        } finally {
-          (router as any).setParams?.({ addFoodPayload: undefined as any });
-          // Scroll to the meal’s panel and pulse it
-          const targetMeal = (data.meal || selectedMeal) as Meal;
-          requestAnimationFrame(() => {
-            const node = mealAnchors.current[targetMeal];
-            if (!node || !scrollRef.current) return;
+          const data = JSON.parse(raw);
 
-            // measure() gives us absolute Y; scroll so the header lands nicely
-            (node as any).measure?.(
-              (
-                x: number,
-                y: number,
-                w: number,
-                h: number,
-                pageX: number,
-                pageY: number
-              ) => {
-                scrollRef.current!.scrollTo({
-                  y: Math.max(0, pageY - 80),
-                  animated: true,
-                });
-                setPulseMeal(targetMeal);
-                setTimeout(() => setPulseMeal(null), 1000); // 1s soft glow
-              }
+          // Build the base entry (no id)
+          const base: Omit<FoodEntry, "id"> = {
+            date: (data.date || date) as FoodEntry["date"],
+            meal: (data.meal || selectedMeal) as FoodEntry["meal"],
+            name: String(data.name || "").trim(),
+            unit: (data.unit || "serving") as FoodEntry["unit"],
+            qty: Number(data.qty || 1) as FoodEntry["qty"],
+            calories: Number(data.calories || 0) as FoodEntry["calories"],
+            protein: Number(data.protein || 0) as FoodEntry["protein"],
+            carbs: Number(data.carbs || 0) as FoodEntry["carbs"],
+            fat: Number(data.fat || 0) as FoodEntry["fat"],
+            ...(data.sugar != null
+              ? { sugar: Number(data.sugar) as FoodEntry["sugar"] }
+              : {}),
+            ...(data.fiber != null
+              ? { fiber: Number(data.fiber) as FoodEntry["fiber"] }
+              : {}),
+            // createdAt omitted (service/back-end can set it)
+          };
+
+          // Optimistic temp item
+          const tempId = `temp-${Date.now()}`;
+          const tempItem: FoodEntry = { ...base, id: tempId };
+          setFoods((prev) => [tempItem, ...prev]);
+
+          try {
+            // Persist the food entry
+            const ref = await addFood(user.uid, { ...base });
+
+            // ---- Community Catalog (EXACT values; same unit & qty) ----
+            try {
+              await upsertFoodToCatalog({
+                name: base.name,
+                unit: base.unit || "serving",
+                qty: Number(base.qty || 1),
+                calories: Number(base.calories || 0),
+                protein: Number(base.protein || 0),
+                carbs: Number(base.carbs || 0),
+                fat: Number(base.fat || 0),
+                sugar: base.sugar != null ? Number(base.sugar) : undefined,
+                fiber: base.fiber != null ? Number(base.fiber) : undefined,
+                submitterUid: user.uid,
+              });
+
+              // Popularity bump for the (name|unit) doc
+              await bumpUse(foodIdFor(base.name, base.unit || "serving"));
+            } catch (e) {
+              console.warn("[catalog] upsert/bump skipped:", e);
+            }
+
+            // swap temp id for real id
+            setFoods((prev) =>
+              prev.map((f) => (f.id === tempId ? { ...f, id: ref.id } : f))
             );
-          });
+
+            // ----- BADGES (unchanged logic) -----
+            const targetDate = base.date as string;
+            const todays = [
+              ...(mealsMap.breakfast || []),
+              ...(mealsMap.lunch || []),
+              ...(mealsMap.dinner || []),
+              ...(mealsMap.snacks || []),
+            ].filter((x: any) => x?.date === targetDate);
+
+            const dayTotals = todays.reduce(
+              (acc, x: any) => ({
+                calories: acc.calories + Number(x.calories || 0),
+                protein: acc.protein + Number(x.protein || 0),
+                fiber: acc.fiber + Number(x.fiber || 0),
+                sugar: acc.sugar + Number(x.sugar || 0),
+              }),
+              { calories: 0, protein: 0, fiber: 0, sugar: 0 }
+            );
+
+            // include the just-added entry
+            dayTotals.calories += Number(base.calories || 0);
+            dayTotals.protein += Number(base.protein || 0);
+            dayTotals.fiber += Number(base.fiber || 0);
+            dayTotals.sugar += Number(base.sugar || 0);
+
+            const [mealsAllTime, daysStreak] = await Promise.all([
+              getMealsAllTime(user.uid),
+              getDaysStreak(user.uid, targetDate),
+            ]);
+
+            const newly = await evaluateBadges(user.uid, {
+              type: "nutrition:add",
+              dayTotals,
+              counts: { mealsAllTime, daysStreak },
+            });
+
+            if (newly.length) {
+              setCelebrateIds((prev) => {
+                const s = new Set(prev);
+                newly.forEach((id) => s.add(id));
+                return Array.from(s);
+              });
+            }
+          } catch (e) {
+            // If save failed, drop the temp item
+            setFoods((prev) => prev.filter((f) => f.id !== tempId));
+          }
+        } catch {
+          // ignore malformed payload
         }
-      } catch {
-        (router as any).setParams?.({ addFoodPayload: undefined as any });
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params?.addFoodPayload, user?.uid]);
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [user?.uid, date, selectedMeal, mealsMap])
+  );
 
   // ----- Edit food state -----
   const [editId, setEditId] = useState<string | null>(null);
@@ -600,11 +770,13 @@ export default function NutritionScreen() {
       sugar: Number(edit.sugar || 0),
       fiber: Number(edit.fiber || 0),
     };
-    const patch = {
+    const newScore = computeMealScore(scaled);
+    const patch: any = {
       name: (edit.name || "").trim(),
       qty: Number(edit.qty || 1),
       unit: edit.unit || "serving",
       ...scaled,
+      score: newScore,
     };
     const prev = foods;
     setFoods((curr) =>
@@ -613,6 +785,24 @@ export default function NutritionScreen() {
     setEditId(null);
     try {
       await updateFood(user.uid, editId, patch);
+      // Optionally: also upsert edited item to catalog to keep it fresh
+      try {
+        await upsertFoodToCatalog({
+          name: patch.name,
+          unit: patch.unit,
+          per: 1,
+          nutrients: {
+            calories: patch.calories,
+            protein: patch.protein,
+            carbs: patch.carbs,
+            fat: patch.fat,
+            sugar: patch.sugar || 0,
+            fiber: patch.fiber || 0,
+          },
+          brand: null,
+          fdcId: null,
+        } as any);
+      } catch {}
     } catch {
       setFoods(prev);
     }
@@ -632,7 +822,7 @@ export default function NutritionScreen() {
     }
   }
 
-  // ----- Exercise -----
+  // ----- Exercise (unchanged) -----
   const [exName, setExName] = useState("");
   const [exCalories, setExCalories] = useState("");
   async function addExerciseSubmit() {
@@ -641,13 +831,14 @@ export default function NutritionScreen() {
       date,
       name: exName.trim(),
       calories: Number(exCalories || 0),
-      createdAt: Date.now(),
+      createdAt: Date.now(), // numeric for service type compatibility
     };
     const tempId = "temp-x-" + Date.now();
     setExercise((prev) => [{ id: tempId, ...entry }, ...prev]);
     try {
-      await addExercise(user.uid, { ...entry, createdAt: undefined });
+      await addExercise(user.uid, entry);
     } finally {
+      // replace temp with actual list from stream or keep optimistic only if streams refresh automatically
       setExercise((prev) => prev.filter((x) => x.id !== tempId));
       setExName("");
       setExCalories("");
@@ -659,11 +850,19 @@ export default function NutritionScreen() {
     } catch {}
   }
 
+  const { colors: themeColors } = useTheme() as any;
   const cardBg = isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)";
-  const borderC = colors.border;
+  const borderC = themeColors.border;
+
+  // Day-level empty?
+  const dayIsEmpty =
+    !mealsMap.breakfast?.length &&
+    !mealsMap.lunch?.length &&
+    !mealsMap.dinner?.length &&
+    !mealsMap.snacks?.length;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={{ flex: 1, backgroundColor: themeColors.background }}>
       {/* Soft background tint */}
       <LinearGradient
         colors={[
@@ -688,6 +887,35 @@ export default function NutritionScreen() {
       >
         <Header date={date} onChangeDate={setDate} totals={totals} />
 
+        {/* Day empty suggestions */}
+        {dayIsEmpty && (
+          <EmptySuggestions
+            emoji="📅"
+            title="Nothing logged today"
+            subtitle="Stick to your streak! Add your first meal."
+            actions={[
+              {
+                icon: "cafe-outline",
+                label: "Add Breakfast",
+                onPress: () =>
+                  router.push({
+                    pathname: "/(modals)/add-meal",
+                    params: { meal: "breakfast", date },
+                  }),
+              },
+              {
+                icon: "search-outline",
+                label: "Search foods",
+                onPress: () =>
+                  router.push({
+                    pathname: "/(modals)/add-meal",
+                    params: { meal: selectedMeal, date },
+                  }),
+              },
+            ]}
+          />
+        )}
+
         {/* Add Food launcher */}
         <View
           style={{
@@ -706,7 +934,7 @@ export default function NutritionScreen() {
           <Text
             style={{
               fontWeight: "800",
-              color: colors.text,
+              color: themeColors.text,
               fontSize: 18,
               letterSpacing: 0.2,
             }}
@@ -722,7 +950,7 @@ export default function NutritionScreen() {
               borderColor: borderC,
               borderRadius: 999,
               padding: 6,
-              backgroundColor: colors.card,
+              backgroundColor: themeColors.card,
               gap: 8,
             }}
           >
@@ -740,10 +968,12 @@ export default function NutritionScreen() {
                     justifyContent: "center",
                     paddingVertical: 10,
                     backgroundColor: active
-                      ? colors.chipActiveBg
+                      ? themeColors.chipActiveBg
                       : "transparent",
                     borderWidth: active ? 1 : 0,
-                    borderColor: active ? colors.chipActiveBg : "transparent",
+                    borderColor: active
+                      ? themeColors.chipActiveBg
+                      : "transparent",
                     flexDirection: "row",
                     gap: 6,
                   }}
@@ -751,11 +981,15 @@ export default function NutritionScreen() {
                   <Ionicons
                     name={MEAL_ICONS[m]}
                     size={16}
-                    color={active ? colors.chipActiveText : colors.text}
+                    color={
+                      active ? themeColors.chipActiveText : themeColors.text
+                    }
                   />
                   <Text
                     style={{
-                      color: active ? colors.chipActiveText : colors.text,
+                      color: active
+                        ? themeColors.chipActiveText
+                        : themeColors.text,
                       fontWeight: active ? "800" : "600",
                       textTransform: "capitalize",
                       fontSize: 13,
@@ -802,11 +1036,11 @@ export default function NutritionScreen() {
               <Ionicons
                 name="add-circle-outline"
                 size={20}
-                color={colors.buttonText}
+                color={themeColors.buttonText}
               />
               <Text
                 style={{
-                  color: colors.buttonText,
+                  color: themeColors.buttonText,
                   fontWeight: "900",
                   letterSpacing: 0.3,
                 }}
@@ -817,7 +1051,7 @@ export default function NutritionScreen() {
           </SoftPressable>
         </View>
 
-        {/* Meals — hero panels with iOS blur headers */}
+        {/* Meals — hero panels */}
         {MEALS.map((m) => (
           <View
             key={m}
@@ -827,9 +1061,16 @@ export default function NutritionScreen() {
             collapsable={false}
           >
             <FancyMealPanel
-              key={m}
               meal={m}
-              items={(mealsMap[m] || []) as Array<Partial<MacroFields>>}
+              items={(mealsMap[m] || []).map((it: any) => ({
+                ...it,
+                score:
+                  typeof it.score === "number"
+                    ? it.score
+                    : typeof it.healthScore === "number"
+                    ? it.healthScore
+                    : computeMealScore(it),
+              }))}
               isDark={isDark}
               colors={colors}
               totalsColor={{ dayCalories: totals?.calories ?? 0 }}
@@ -859,18 +1100,20 @@ export default function NutritionScreen() {
               onCancelEdit={() => setEditId(null)}
               onSaveEdit={saveFoodEdit}
               onDeleteItem={deleteFoodItem}
-              pulse={pulseMeal === m}
+              itemRight={(it) => <ScoreBadge score={it.score ?? 0} />}
             />
           </View>
         ))}
 
-        {/* Exercise */}
+        {/* Exercise
         <View
           style={{
             borderRadius: 18,
-            backgroundColor: cardBg,
+            backgroundColor: isDark
+              ? "rgba(255,255,255,0.04)"
+              : "rgba(0,0,0,0.03)",
             borderWidth: 1,
-            borderColor: borderC,
+            borderColor: colors.border,
             padding: 6,
             paddingTop: 10,
           }}
@@ -911,10 +1154,18 @@ export default function NutritionScreen() {
             onAdd={addExerciseSubmit}
             onDelete={deleteExerciseItem}
           />
-        </View>
+        </View> */}
 
         <View style={{ height: 12 }} />
+        <BottomTapSpacer extra={16} />
       </ScrollView>
+
+      {/* Celebration modal */}
+      <BadgeCelebrate
+        ids={celebrateIds as any}
+        open={celebrateIds.length > 0}
+        onClose={() => setCelebrateIds([])}
+      />
     </View>
   );
 }

@@ -1,52 +1,85 @@
 // app/_layout.tsx
 import "react-native-reanimated";
 
-import React, { useEffect } from "react";
-import { ActivityIndicator, View, Text, StyleSheet } from "react-native";
+import React, { useEffect, useRef } from "react";
+import {
+  ActivityIndicator,
+  View,
+  Text,
+  StyleSheet,
+  Platform,
+} from "react-native";
 import { Stack, usePathname, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 import { AuthProvider, useAuth } from "@/content/AuthContext";
 import { ThemeProvider, useTheme } from "@/content/ThemeProvider";
 import { SettingsProvider } from "@/content/SettingsContext";
 
-// 🔽 ensure a /users/{uid} doc exists after login
 import { auth, db } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// 🔹 Tiny, theme-aware glossy header background
-function GlassHeaderBackground() {
+/* ---------- Tiny glossy header that's always present ---------- */
+function GlobalTopHeader() {
   const { isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+  const height = insets.top + 10; // safe-area + small buffer
+
   let BlurView: any = View;
   try {
     BlurView = require("expo-blur").BlurView;
-  } catch {}
+  } catch {
+    // if expo-blur is missing, we still render the spacer
+  }
 
   return (
-    <View style={StyleSheet.absoluteFill}>
-      {/* Soft gradient so the header blends with page backgrounds */}
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        height,
+        zIndex: 1000,
+        overflow: "hidden",
+      }}
+    >
       <View
         style={[
           StyleSheet.absoluteFill,
           {
             backgroundColor: isDark
-              ? "rgba(12,14,20,0.75)"
-              : "rgba(245,248,255,0.65)",
+              ? "rgba(12,14,20,0.62)"
+              : "rgba(245,248,255,0.58)",
           },
         ]}
       />
-      {/* Frosted blur layer */}
-      <BlurView
-        intensity={26}
-        tint={isDark ? "dark" : "light"}
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            borderBottomWidth: StyleSheet.hairlineWidth,
-            borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
-          },
-        ]}
+      {BlurView !== View && (
+        <BlurView
+          intensity={22}
+          tint={isDark ? "dark" : "light"}
+          style={StyleSheet.absoluteFill}
+        />
+      )}
+      {/* subtle bottom fade */}
+      <View
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 10,
+          backgroundColor: isDark
+            ? "rgba(0,0,0,0.18)"
+            : "rgba(255,255,255,0.18)",
+        }}
       />
     </View>
   );
@@ -54,18 +87,43 @@ function GlassHeaderBackground() {
 
 function Gate() {
   const { user, initializing } = useAuth();
-  const pathname = usePathname(); // e.g. "/(auth)/login"
+  const pathname = usePathname();
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+  const enforcedRef = useRef(false);
 
-  // ✅ Robust auth-route detection for Expo Router groups
   const inAuth =
     pathname?.startsWith("/(auth)") ||
     pathname === "/login" ||
     pathname === "/register" ||
     pathname === "/reset";
 
-  // 🔽 Create profile doc once per sign-in
+  // remember-me logic
+  useEffect(() => {
+    if (initializing || enforcedRef.current) return;
+    (async () => {
+      const remember = (await AsyncStorage.getItem("@rememberMe")) === "1";
+      if (!user) {
+        if (!inAuth) router.replace("/(auth)/login");
+        enforcedRef.current = true;
+        return;
+      }
+      if (!remember) {
+        try {
+          await signOut(auth);
+        } finally {
+          router.replace("/(auth)/login");
+          enforcedRef.current = true;
+        }
+      } else {
+        if (inAuth) router.replace("/(tabs)");
+        enforcedRef.current = true;
+      }
+    })();
+  }, [user, initializing, inAuth]);
+
+  // ensure user doc
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) return;
@@ -82,17 +140,6 @@ function Gate() {
     });
     return unsub;
   }, []);
-
-  useEffect(() => {
-    if (initializing) return;
-    console.log("[gate] user:", !!user, "path:", pathname, "inAuth:", inAuth);
-
-    if (user && inAuth) {
-      router.replace("/(tabs)");
-    } else if (!user && !inAuth) {
-      router.replace("/(auth)/login");
-    }
-  }, [user, initializing, pathname]);
 
   if (initializing) {
     return (
@@ -111,38 +158,43 @@ function Gate() {
     );
   }
 
-  // ⬇️ Use a Stack so we can set a global glossy header
+  const topHeaderHeight = insets.top + 10;
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Translucent so our header shows behind the system area */}
       <StatusBar
         style={isDark ? "light" : "dark"}
-        backgroundColor="transparent"
         translucent
+        backgroundColor="transparent"
       />
+
+      {/* Always-present glossy header spacer */}
+      {/* <GlobalTopHeader /> */}
+
       <Stack
         screenOptions={{
-          headerShadowVisible: false,
-          headerTitleStyle: { color: colors.text, fontWeight: "800" },
-          headerTintColor: colors.text,
-          headerBackground: () => <GlassHeaderBackground />,
-          // Allow content to slide under header a bit (nice with blur)
-          // presentation / animation can still be overridden per-screen
+          headerShown: false, // we’re using the global top header now
+          contentStyle: {
+            backgroundColor: colors.background,
+            // Push *every* screen content down so it starts below the global header
+            paddingTop: topHeaderHeight,
+          },
         }}
       >
-        {/* Tabs group usually provides its own header via (tabs)/_layout.tsx.
-            We can hide the root header for the tabs container if needed. */}
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        {/* Auth screens typically want no header */}
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        {/* Modals inherit the glossy header and can still be true modals */}
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="(auth)" />
         <Stack.Screen
           name="(modals)"
           options={{
-            presentation: "modal",
-            // Keep the glass header in modals too
+            presentation: "fullScreenModal",
+            contentStyle: {
+              backgroundColor: colors.background,
+              paddingTop: topHeaderHeight,
+            },
+            headerShown: false,
           }}
         />
-        {/* Fallback for any other top-level routes */}
         <Stack.Screen name="+not-found" />
       </Stack>
     </View>
@@ -153,11 +205,13 @@ export default function RootLayout() {
   return (
     <SettingsProvider>
       <ThemeProvider>
-        <View style={{ flex: 1 }}>
-          <AuthProvider>
-            <Gate />
-          </AuthProvider>
-        </View>
+        <SafeAreaProvider>
+          <View style={{ flex: 1 }}>
+            <AuthProvider>
+              <Gate />
+            </AuthProvider>
+          </View>
+        </SafeAreaProvider>
       </ThemeProvider>
     </SettingsProvider>
   );

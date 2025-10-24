@@ -16,6 +16,7 @@ export default function MealSection({
   onCancelEdit,
   onSaveEdit,
   onDeleteItem,
+  itemRight, // ✅ NEW: optional right-side accessory per row
 }: {
   meal: "breakfast" | "lunch" | "dinner" | "snacks";
   items: Array<any>;
@@ -26,6 +27,7 @@ export default function MealSection({
   onCancelEdit: () => void;
   onSaveEdit: () => void;
   onDeleteItem: (id: string) => void;
+  itemRight?: (it: any) => React.ReactNode; // ✅ NEW
 }) {
   const { colors, isDark } = useTheme();
 
@@ -68,6 +70,7 @@ export default function MealSection({
                   mealColor={dotForMeal(meal, colors)}
                   onStartEdit={() => !isTemp && onStartEdit(it)}
                   onDelete={() => onDeleteItem(it.id)}
+                  itemRight={itemRight} // ✅ NEW: pass down
                 />
               )}
             </View>
@@ -105,6 +108,7 @@ function ItemRow({
   mealColor,
   onStartEdit,
   onDelete,
+  itemRight,
 }: {
   it: any;
   isTemp: boolean;
@@ -112,6 +116,7 @@ function ItemRow({
   mealColor: string;
   onStartEdit: () => void;
   onDelete: () => void;
+  itemRight?: (it: any) => React.ReactNode; // ✅ NEW
 }) {
   const qty = Number(it.qty ?? 1);
   const unit = it.unit || "serving";
@@ -151,7 +156,12 @@ function ItemRow({
           </Text>
         </View>
 
-        <View style={{ flexDirection: "row", gap: 8 }}>
+        {/* Right area: optional badge + actions */}
+        <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+          {/* ✅ If provided, render accessory (e.g., Meal Score badge) */}
+          {itemRight ? (
+            <View style={{ marginRight: 2 }}>{itemRight(it)}</View>
+          ) : null}
           <IconButton
             icon="create-outline"
             onPress={onStartEdit}

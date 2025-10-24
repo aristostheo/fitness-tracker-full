@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { View, Text } from "react-native";
 import Card from "@/components/Card";
 import { useTheme } from "@/content/ThemeProvider";
@@ -7,6 +7,32 @@ import Field from "../ui/Field";
 import PctField from "../ui/PctField";
 import SummaryCard from "../ui/SummaryCard";
 import { Ionicons } from "@expo/vector-icons";
+
+const GlassBox = memo(function GlassBox({
+  children,
+  style,
+}: {
+  children: React.ReactNode;
+  style?: any;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View
+      style={[
+        {
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.card,
+          borderRadius: 16,
+          padding: 12,
+        },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+});
 
 export default function MacrosCard({
   macroMethod,
@@ -29,23 +55,6 @@ export default function MacrosCard({
 }: any) {
   const { colors } = useTheme();
 
-  const Glass = ({ children, style }: any) => (
-    <View
-      style={[
-        {
-          borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: colors.card,
-          borderRadius: 16,
-          padding: 12,
-        },
-        style,
-      ]}
-    >
-      {children}
-    </View>
-  );
-
   return (
     <Card
       style={{
@@ -57,6 +66,7 @@ export default function MacrosCard({
         gap: 12,
       }}
     >
+      {/* Header */}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
         <View
           style={{
@@ -84,64 +94,66 @@ export default function MacrosCard({
       </View>
 
       {macroMethod === "proteinPerKg" && (
-        <Glass>
+        <GlassBox>
           <Field
             label="Protein (g/kg)"
-            value={proteinPerKg}
+            value={proteinPerKg == null ? "" : String(proteinPerKg)}
             onChangeText={setProteinPerKg}
             placeholder="e.g., 1.8"
             inputMode="decimal"
+            style={{ width: "100%" }}
+            inputStyle={{ paddingVertical: 10 }}
           />
           <Text style={{ color: colors.muted, fontSize: 11, marginTop: 6 }}>
             A solid default is 1.6–2.2 g/kg.
           </Text>
-        </Glass>
+        </GlassBox>
       )}
 
       {macroMethod === "percent" && (
-        <Glass style={{ gap: 10 }}>
+        <GlassBox style={{ gap: 10 }}>
           <PctField
             label="Protein %"
-            value={proteinPct}
+            value={proteinPct ?? 0}
             onChange={(v) => setSplit("proteinPct", v)}
           />
           <PctField
             label="Carbs %"
-            value={carbPct}
+            value={carbPct ?? 0}
             onChange={(v) => setSplit("carbPct", v)}
           />
           <PctField
             label="Fat %"
-            value={fatPct}
+            value={fatPct ?? 0}
             onChange={(v) => setSplit("fatPct", v)}
           />
           <Text style={{ color: colors.muted, fontSize: 11 }}>
             Values auto-balance to 100%.
           </Text>
-        </Glass>
+        </GlassBox>
       )}
 
       {macroMethod === "cycling" && (
-        <Glass style={{ gap: 10 }}>
+        <GlassBox style={{ gap: 10 }}>
           <Text style={{ color: colors.muted, fontSize: 12 }}>
             Protein is fixed. Carbs vary; Fat fills the rest.
           </Text>
           <PctField
             label="Protein % (both days)"
-            value={proteinPct}
+            value={proteinPct ?? 0}
             onChange={(v) => setProteinPct(clamp01(v))}
           />
           <PctField
             label="Training day Carbs %"
-            value={trainCarbPct}
+            value={trainCarbPct ?? 0}
             onChange={(v) => setTrainCarbPct(clamp01(v))}
           />
           <PctField
             label="Rest day Carbs %"
-            value={restCarbPct}
+            value={restCarbPct ?? 0}
             onChange={(v) => setRestCarbPct(clamp01(v))}
           />
-        </Glass>
+        </GlassBox>
       )}
 
       {!!preview && (

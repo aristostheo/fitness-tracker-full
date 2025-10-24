@@ -1,239 +1,503 @@
 // app/(tabs)/account.tsx
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useLayoutEffect } from "react";
 import {
   ScrollView,
   View,
   Text,
-  TextInput,
   Pressable,
-  Alert,
   Platform,
+  Alert,
+  Linking,
+  Animated,
+  Easing,
 } from "react-native";
-import { useRouter } from "expo-router";
-import Card from "../../components/Card";
-import { useAuth } from "@/content/AuthContext";
-import { useTheme } from "@/content/ThemeProvider";
-import { auth } from "@/lib/firebase";
-import { updateProfile as updateAuthProfile } from "firebase/auth";
-import { updateProfile as updateProfileDoc } from "@/services/profile";
+import { useRouter, useNavigation } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 
-export default function AccountScreen() {
-  const { colors, isDark } = useTheme();
-  const { user } = useAuth();
-  const router = useRouter();
+import { useTheme } from "@/content/ThemeProvider";
+import { useAuth } from "@/content/AuthContext";
 
-  const [displayName, setDisplayName] = useState(user?.displayName || "");
-  const [saving, setSaving] = useState(false);
+import { useBadges } from "@/hooks/useBadges";
+import { BadgeGrid } from "@/components/badges/BadgeGrid";
+import BadgeCelebrate from "@/components/badges/BadgeCelebrate";
+import { BADGES } from "@/services/badges";
 
-  const created = user?.metadata?.creationTime
-    ? new Date(user.metadata.creationTime).toLocaleString()
-    : "—";
-  const lastSignIn = user?.metadata?.lastSignInTime
-    ? new Date(user.metadata.lastSignInTime).toLocaleString()
-    : "—";
-  const providers =
-    (user?.providerData || []).map((p) => p.providerId).join(", ") ||
-    "password";
+import { getAuth, sendEmailVerification } from "firebase/auth";
 
-  const grad = isDark
-    ? ["#0B1220", "#0E1526", "#0B1220"]
-    : ["#F7FAFF", "#EEF2FF", "#F7FAFF"];
+/* ────────────────────────── small UI helpers ────────────────────────── */
 
-  async function onSaveName() {
-    if (!user?.uid) return;
-    const name = displayName.trim();
-    setSaving(true);
-    try {
-      await updateAuthProfile(auth.currentUser!, {
-        displayName: name || (null as any),
-      });
-      await updateProfileDoc(user.uid, { displayName: name || null } as any);
-      Alert.alert("Saved", "Your display name was updated.");
-    } catch (e: any) {
-      Alert.alert("Update failed", e?.message || "Couldn't update name");
-    } finally {
-      setSaving(false);
-    }
-  }
+function Chevron({ open, color = "#999" }: { open: boolean; color?: string }) {
+  const a = React.useRef(new Animated.Value(open ? 1 : 0)).current;
+  React.useEffect(() => {
+    Animated.timing(a, {
+      toValue: open ? 1 : 0,
+      duration: 160,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+  }, [open]);
+  const rotate = a.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["-90deg", "0deg"],
+  });
+  return (
+    <Animated.View style={{ transform: [{ rotate }], marginLeft: 6 }}>
+      <Ionicons name="chevron-forward" size={16} color={color} />
+    </Animated.View>
+  );
+}
+
+function SectionHeader({
+  icon,
+  title,
+  right,
+  onPress,
+  collapsible = false,
+  open = true,
+}: {
+  icon?: keyof typeof Ionicons.glyphMap;
+  title: string;
+  right?: React.ReactNode;
+  onPress?: () => void;
+  collapsible?: boolean;
+  open?: boolean;
+}) {
+  const { colors } = useTheme() as any;
+  const content = (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+      }}
+    >
+      {!!icon && <Ionicons name={icon} size={14} color={colors.text + "99"} />}
+      <Text
+        style={{
+          fontSize: 12,
+          fontWeight: "700",
+          letterSpacing: 0.6,
+          textTransform: "uppercase",
+          color: colors.text + "99",
+          flex: 1,
+        }}
+      >
+        {title}
+      </Text>
+      {right}
+      {collapsible && <Chevron open={!!open} color={colors.muted} />}
+    </View>
+  );
+
+  if (!collapsible) return <View style={{ marginBottom: 8 }}>{content}</View>;
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ padding: 16, gap: 16 }}
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        marginBottom: 8,
+        opacity: pressed ? 0.7 : 1,
+      })}
+      accessibilityRole="button"
+      accessibilityLabel={`${title} section`}
     >
-      {/* Hero */}
-      <LinearGradient
-        colors={grad as [string, string, string]}
+      {content}
+    </Pressable>
+  );
+}
+
+function GlassPanel({
+  children,
+  pad = 12,
+}: React.PropsWithChildren<{ pad?: number }>) {
+  const { colors, isDark } = useTheme() as any;
+  if (Platform.OS === "ios") {
+    return (
+      <View
         style={{
-          borderRadius: 20,
+          borderRadius: 18,
           overflow: "hidden",
           borderWidth: 1,
           borderColor: colors.border,
         }}
       >
-        <View
-          style={{
-            padding: 16,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 14,
-          }}
+        <BlurView
+          tint={isDark ? "systemThinMaterialDark" : "systemThinMaterialLight"}
+          intensity={24}
+          style={{ padding: pad }}
         >
-          <View
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: 999,
-              backgroundColor: colors.card,
-              alignItems: "center",
-              justifyContent: "center",
-              borderWidth: 1,
-              borderColor: colors.border,
-            }}
-          >
-            <Ionicons
-              name="person-outline"
-              size={26}
-              color={colors.text as string}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.muted, marginBottom: 2 }}>
-              Account
-            </Text>
-            <Text
-              style={{ color: colors.text, fontSize: 20, fontWeight: "800" }}
-            >
-              {user?.email || "—"}
-            </Text>
-            <Text style={{ color: colors.muted, marginTop: 2 }}>
-              UID: {user?.uid?.slice(0, 6)}…{user?.uid?.slice(-4)}
-            </Text>
-          </View>
-          <Pressable onPress={() => router.back()}>
-            <View
-              style={{
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderRadius: 999,
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-              }}
-            >
-              <Text style={{ color: colors.text }}>Done</Text>
-            </View>
-          </Pressable>
-        </View>
-      </LinearGradient>
-
-      {/* Editable: Display name */}
-      <Card style={{ padding: 16, gap: 10 }}>
-        <Text style={{ fontWeight: "700", color: colors.text }}>
-          Profile name
-        </Text>
-        <TextInput
-          style={{
-            borderWidth: 1,
-            borderColor: colors.inputBorder,
-            borderRadius: 12,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            backgroundColor: colors.inputBg,
-            color: colors.text,
-          }}
-          placeholder="Your display name"
-          placeholderTextColor={colors.placeholder}
-          value={displayName}
-          onChangeText={setDisplayName}
-        />
-        <View style={{ alignItems: "flex-end" }}>
-          <Pressable
-            onPress={onSaveName}
-            disabled={saving}
-            style={{
-              backgroundColor: colors.buttonBg,
-              borderRadius: 12,
-              paddingVertical: 12,
-              paddingHorizontal: 16,
-              opacity: saving ? 0.85 : 1,
-            }}
-          >
-            <Text style={{ color: colors.buttonText, fontWeight: "700" }}>
-              {saving ? "Saving…" : "Save"}
-            </Text>
-          </Pressable>
-        </View>
-      </Card>
-
-      {/* Read-only: Email, providers, timestamps */}
-      <Card style={{ padding: 16, gap: 10 }}>
-        <Text style={{ fontWeight: "700", color: colors.text }}>
-          Account details
-        </Text>
-        <InfoRow label="Email" value={user?.email || "—"} />
-        <InfoRow label="Providers" value={providers} />
-        <InfoRow label="Created" value={created} />
-        <InfoRow label="Last sign-in" value={lastSignIn} />
-        <InfoRow label="UID" value={user?.uid || "—"} mono />
-        <View
-          style={{
-            marginTop: 8,
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderRadius: 12,
-            padding: 12,
-            backgroundColor: colors.card,
-          }}
-        >
-          <Text style={{ color: colors.muted }}>
-            Changing <Text style={{ fontWeight: "700" }}>email</Text> or{" "}
-            <Text style={{ fontWeight: "700" }}>password</Text> isn’t supported
-            here. Use your email provider’s verification/reset flow.
-          </Text>
-        </View>
-      </Card>
-    </ScrollView>
-  );
-}
-
-function InfoRow({
-  label,
-  value,
-  mono,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  const { colors } = useTheme();
+          {children}
+        </BlurView>
+      </View>
+    );
+  }
   return (
     <View
       style={{
-        flexDirection: "row",
-        gap: 10,
-        alignItems: "center",
-        paddingVertical: 8,
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.card,
+        padding: pad,
       }}
     >
-      <Text style={{ flex: 0.9, color: colors.muted }}>{label}</Text>
-      <Text
-        selectable
+      {children}
+    </View>
+  );
+}
+
+function RowButton({
+  label,
+  subtitle,
+  icon,
+  onPress,
+}: {
+  label: string;
+  subtitle?: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+}) {
+  const { colors } = useTheme() as any;
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: colors.border,
+        padding: 12,
+        backgroundColor: pressed ? colors.card : "transparent",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+      })}
+    >
+      <View
         style={{
-          flex: 2,
-          color: colors.text,
-          fontFamily: mono
-            ? Platform.OS === "ios"
-              ? "Menlo"
-              : "monospace"
-            : undefined,
+          width: 36,
+          height: 36,
+          borderRadius: 12,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: colors.card,
+          borderWidth: 1,
+          borderColor: colors.border,
         }}
       >
-        {value}
-      </Text>
+        <Ionicons name={icon} size={18} color={colors.text} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: colors.text, fontWeight: "800" }}>{label}</Text>
+        {!!subtitle && (
+          <Text style={{ color: colors.muted, fontSize: 12 }}>{subtitle}</Text>
+        )}
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+    </Pressable>
+  );
+}
+
+/* ───────────────────────────── screen ───────────────────────────── */
+
+export default function AccountScreen() {
+  const { colors, isDark } = useTheme() as any;
+  const { user } = useAuth();
+  const router = useRouter();
+  const navigation = useNavigation();
+
+  // Show native header with Done button (doesn't cover content)
+  useLayoutEffect(() => {
+    navigation.setOptions?.({
+      headerShown: true,
+      headerTitle: "Account",
+      headerLargeTitle: false,
+      headerRight: () => (
+        <Pressable
+          onPress={() => {
+            // If there's a back stack, go back; otherwise no-op
+            // @ts-ignore
+            if (navigation.canGoBack?.()) navigation.goBack();
+          }}
+          hitSlop={8}
+          style={{
+            paddingHorizontal: 10,
+            paddingVertical: 6,
+            borderRadius: 10,
+            backgroundColor: colors.buttonBg,
+          }}
+        >
+          <Text style={{ color: colors.buttonText, fontWeight: "900" }}>
+            Done
+          </Text>
+        </Pressable>
+      ),
+    });
+  }, [navigation, colors]);
+
+  // Earned badges live stream
+  const earned = useBadges(user?.uid);
+
+  // Celebration overlay (trigger by setting IDs)
+  const [celebrateIds, setCelebrateIds] = useState<string[]>([]);
+
+  const email = user?.email || "Signed-in user";
+  const verified = !!user?.emailVerified;
+
+  const name = useMemo(() => {
+    const at = email.indexOf("@");
+    return at > 0 ? email.slice(0, at) : email;
+  }, [email]);
+
+  async function onVerifyEmail() {
+    try {
+      const auth = getAuth();
+      const u = auth.currentUser;
+      if (!u) return;
+      await sendEmailVerification(u);
+      Alert.alert(
+        "Verification sent",
+        "Check your inbox for the verification email."
+      );
+    } catch (e: any) {
+      Alert.alert("Error", e?.message || "Could not send verification email.");
+    }
+  }
+
+  function onOpenPrivacy() {
+    Linking.openURL("https://example.com/privacy").catch(() => {});
+  }
+  function onOpenTerms() {
+    Linking.openURL("https://example.com/terms").catch(() => {});
+  }
+
+  // Collapsible sections
+  const [showEarned, setShowEarned] = useState(true);
+  const [showGlossary, setShowGlossary] = useState(true);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* soft background */}
+      <LinearGradient
+        colors={[
+          isDark ? "rgba(139,92,246,0.10)" : "rgba(59,130,246,0.10)",
+          "transparent",
+        ]}
+        style={{
+          position: "absolute",
+          top: -80,
+          left: -60,
+          right: -60,
+          height: 280,
+          transform: [{ rotate: "-6deg" }],
+        }}
+        pointerEvents="none"
+      />
+
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 28 }}
+      >
+        {/* Profile header */}
+        <GlassPanel pad={14}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 16,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: isDark
+                  ? "rgba(255,255,255,0.08)"
+                  : "rgba(0,0,0,0.05)",
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+            >
+              <Ionicons
+                name="person-circle-outline"
+                size={28}
+                color={colors.text}
+              />
+            </View>
+
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}
+              >
+                {name}
+              </Text>
+              <Text style={{ color: colors.muted, fontSize: 12 }}>{email}</Text>
+
+              <View
+                style={{
+                  marginTop: 6,
+                  alignSelf: "flex-start",
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: verified ? "#10b98155" : "#f59e0b55",
+                  backgroundColor: verified ? "#10b98122" : "#f59e0b22",
+                }}
+              >
+                <Text
+                  style={{
+                    color: verified ? "#10b981" : "#f59e0b",
+                    fontWeight: "900",
+                    fontSize: 12,
+                  }}
+                >
+                  {verified ? "Verified" : "Not verified"}
+                </Text>
+              </View>
+            </View>
+
+            {!verified && (
+              <Pressable
+                onPress={onVerifyEmail}
+                style={{
+                  borderRadius: 12,
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  backgroundColor: colors.buttonBg,
+                }}
+              >
+                <Text style={{ color: colors.buttonText, fontWeight: "900" }}>
+                  Verify
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        </GlassPanel>
+
+        {/* Earned badges (collapsible) */}
+        <GlassPanel>
+          <SectionHeader
+            icon="trophy-outline"
+            title="Earned badges"
+            collapsible
+            open={showEarned}
+            onPress={() => setShowEarned((v) => !v)}
+          />
+          {showEarned && (
+            <>
+              {earned.length === 0 ? (
+                <Text style={{ color: colors.muted }}>
+                  You haven’t earned any badges yet. Log meals or workouts to
+                  start.
+                </Text>
+              ) : (
+                <BadgeGrid earned={earned} />
+              )}
+            </>
+          )}
+        </GlassPanel>
+
+        {/* Glossary (collapsible) */}
+        <GlassPanel>
+          <SectionHeader
+            icon="information-circle-outline"
+            title="All badges"
+            collapsible
+            open={showGlossary}
+            onPress={() => setShowGlossary((v) => !v)}
+          />
+          {showGlossary && (
+            <View style={{ gap: 10 }}>
+              {Object.values(BADGES).map((b) => (
+                <View
+                  key={b.id}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    borderRadius: 12,
+                    padding: 10,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 12,
+                      backgroundColor: `${b.color}22`,
+                      borderWidth: 1,
+                      borderColor: `${b.color}55`,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Ionicons name={b.icon} size={18} color={b.color} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.text, fontWeight: "800" }}>
+                      {b.name}
+                    </Text>
+                    <Text style={{ color: colors.muted, fontSize: 12 }}>
+                      {b.desc}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </GlassPanel>
+
+        {/* Actions */}
+        <GlassPanel>
+          <SectionHeader icon="settings-outline" title="Account Info" />
+          <View style={{ gap: 10 }}>
+            <RowButton
+              icon="color-palette-outline"
+              label="Theme & Settings"
+              subtitle="Choose light/dark and accents"
+              onPress={() => router.push("/settings")}
+            />
+            <RowButton
+              icon="lock-closed-outline"
+              label="Privacy Policy"
+              onPress={onOpenPrivacy}
+            />
+            <RowButton
+              icon="document-text-outline"
+              label="Terms of Use"
+              onPress={onOpenTerms}
+            />
+            <RowButton
+              icon="log-out-outline"
+              label="Sign out"
+              onPress={() => {
+                Alert.alert("Sign out", "Are you sure you want to sign out?", [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Sign out",
+                    style: "destructive",
+                    onPress: async () => {
+                      try {
+                        await getAuth().signOut();
+                      } catch (e) {
+                        Alert.alert("Error", "Could not sign out. Try again.");
+                      }
+                    },
+                  },
+                ]);
+              }}
+            />
+          </View>
+        </GlassPanel>
+      </ScrollView>
+
+      {/* Celebration modal */}
+      <BadgeCelebrate
+        ids={celebrateIds as any}
+        open={celebrateIds.length > 0}
+        onClose={() => setCelebrateIds([])}
+      />
     </View>
   );
 }

@@ -1,3 +1,4 @@
+// app/(auth)/login.tsx
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -7,16 +8,17 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useTheme } from "@/content/ThemeProvider";
 import { useGoogleLogin, signInWithApple } from "@/lib/authSocial";
-import { onAuthStateChanged } from "firebase/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function Login() {
   const { colors, isDark } = useTheme();
@@ -28,10 +30,23 @@ export default function Login() {
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // NEW: remember me toggle (default ON; load last choice)
+  const [remember, setRemember] = useState(true);
+  useEffect(() => {
+    (async () => {
+      const flag = await AsyncStorage.getItem("@rememberMe");
+      if (flag === "0") setRemember(false);
+      if (flag === "1") setRemember(true);
+    })();
+  }, []);
+  const persistRemember = async (v: boolean) =>
+    AsyncStorage.setItem("@rememberMe", v ? "1" : "0");
+
   async function onLogin() {
     setErr("");
     setLoading(true);
     try {
+      await persistRemember(remember); // save the choice for Gate()
       await signInWithEmailAndPassword(auth, email.trim(), pass);
       router.replace("/(tabs)");
     } catch (e: any) {
@@ -45,8 +60,7 @@ export default function Login() {
 
   const { request, signInWithGoogle } = useGoogleLogin();
 
-  // After successful auth, your app likely already navigates in a gate,
-  // but we can push to tabs here too:
+  // If user already authenticated, go to app
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       if (u) router.replace("/(tabs)");
@@ -187,6 +201,37 @@ export default function Login() {
               onPressTrailing={() => setShowPass((s) => !s)}
             />
 
+            {/* NEW: Remember me row */}
+            <View
+              style={{
+                marginTop: 10,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+              >
+                <Ionicons
+                  name="lock-open-outline"
+                  size={16}
+                  color={colors.muted}
+                />
+                <Text style={{ color: colors.text, fontWeight: "700" }}>
+                  Remember me on this device
+                </Text>
+              </View>
+              <Switch
+                value={remember}
+                onValueChange={(v) => {
+                  setRemember(v);
+                  persistRemember(v); // write immediately
+                }}
+              />
+            </View>
+
             {!!err && (
               <Text
                 style={{
@@ -217,7 +262,7 @@ export default function Login() {
                 colors={
                   disabled
                     ? (["#9CA3AF", "#9CA3AF"] as const)
-                    : ([colors.primary, "#16a34a"] as const) // brand → success blend
+                    : ([colors.primary, "#16a34a"] as const)
                 }
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
@@ -276,8 +321,8 @@ export default function Login() {
                   try {
                     if (!request) throw new Error("Google auth not ready");
                     setLoading(true);
+                    await persistRemember(remember); // save choice
                     await signInWithGoogle();
-                    // router.replace("/(tabs)"); // gate/observer will handle
                   } catch (e: any) {
                     setErr(e?.message ?? "Google sign-in failed");
                   } finally {
@@ -292,6 +337,7 @@ export default function Login() {
                   setErr("");
                   try {
                     setLoading(true);
+                    await persistRemember(remember); // save choice
                     await signInWithApple();
                   } catch (e: any) {
                     setErr(e?.message ?? "Apple sign-in failed");

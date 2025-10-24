@@ -7,7 +7,9 @@ import {
   Platform,
   ScrollView,
   Modal,
+  StyleSheet, // <- add this
 } from "react-native";
+
 import Card from "@/components/Card";
 import { useTheme } from "@/content/ThemeProvider";
 import { withAlpha } from "./utils/withAlpha";
@@ -235,7 +237,7 @@ export default function AddWorkoutForm({
           ) : (
             <View style={{ width: 120 }}>
               <Field
-                icon="today-outline"
+                icon="calendar-outline"
                 placeholder="YYYY-MM-DD"
                 value={date}
                 onChangeText={setDate}
@@ -395,13 +397,7 @@ export default function AddWorkoutForm({
 
       {/* Submit */}
       <Row gap={8} style={{ marginTop: 2 }}>
-        <Pressable
-          onPress={!addDisabled ? onAdd : undefined}
-          disabled={addDisabled}
-          style={{ opacity: addDisabled ? 0.7 : 1 }}
-        >
-          <GradientButton label="Add" onPress={onAdd} disabled={addDisabled} />
-        </Pressable>
+        <GradientButton label="Add" onPress={onAdd} disabled={addDisabled} />
       </Row>
 
       {/* Date modal (never changes layout height) */}
@@ -523,8 +519,9 @@ function GlassPanel({ children }: React.PropsWithChildren) {
               withAlpha(colors.primary, 0.08),
               withAlpha(colors.primary, 0.14),
             ]}
-            style={{ position: "absolute", inset: 0 }}
+            style={StyleSheet.absoluteFillObject}
           />
+
           {content}
         </BlurView>
       </View>
@@ -788,7 +785,11 @@ function StepperTile({
         }}
       >
         <Text style={{ color: colors.muted, fontSize: 12 }}>{label}</Text>
-        <Text style={{ color: colors.text, fontSize: 22, fontWeight: "900" }}>
+        <Text
+          style={{ color: colors.text, fontSize: 22, fontWeight: "900" }}
+          numberOfLines={1}
+          ellipsizeMode="clip"
+        >
           {value || "0"}
         </Text>
       </View>

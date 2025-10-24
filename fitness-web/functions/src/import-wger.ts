@@ -1,7 +1,6 @@
-import fetch from "node-fetch";
-import slugify from "@sindresorhus/slugify";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { toSlug } from "./util/slug";
 
 const app = initializeApp();
 const db = getFirestore(app);
@@ -47,7 +46,7 @@ export async function importWger() {
     const batch = db.batch();
     for (const ex of exs.slice(i, i + BATCH)) {
       if (ex.language !== LANG_EN) continue;
-      const id = slugify(ex.name);
+      const id = toSlug(ex.name);
       const instructions =
         ex.description
           ?.replace(/<[^>]+>/g, " ")
@@ -61,12 +60,12 @@ export async function importWger() {
           name: ex.name,
           instructions,
           primaryMuscles: ex.muscles.map((id) =>
-            slugify(mById[id] || String(id))
+            toSlug(mById[id] || String(id))
           ),
           secondaryMuscles: ex.muscles_secondary.map((id) =>
-            slugify(mById[id] || String(id))
+            toSlug(mById[id] || String(id))
           ),
-          equipment: ex.equipment.map((id) => slugify(eById[id] || String(id))),
+          equipment: ex.equipment.map((id) => toSlug(eById[id] || String(id))),
           mechanics: null,
           force: null,
           stabilization: [],
