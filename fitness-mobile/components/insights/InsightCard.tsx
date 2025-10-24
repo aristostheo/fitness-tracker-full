@@ -1,15 +1,17 @@
-import React from "react";
-import { View, Text, Pressable, Platform } from "react-native";
+import React, { PropsWithChildren } from "react";
+import { View, Text, Pressable, Platform, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { useTheme } from "@/content/ThemeProvider";
 
-const palettes: Record<string, { a: string; b: string; ink: string }> = {
-  primary: { a: "#3B82F6", b: "#60A5FA", ink: "#0b0f18" },
-  violet: { a: "#8B5CF6", b: "#C084FC", ink: "#0b0f18" },
-  cyan: { a: "#06B6D4", b: "#22D3EE", ink: "#0b0f18" },
-  green: { a: "#22C55E", b: "#86EFAC", ink: "#0b0f18" },
+type Accent = "primary" | "violet" | "cyan" | "green";
+
+const palettes: Record<Accent, { a: string; b: string }> = {
+  primary: { a: "#3B82F6", b: "#60A5FA" },
+  violet: { a: "#8B5CF6", b: "#C084FC" },
+  cyan: { a: "#06B6D4", b: "#22D3EE" },
+  green: { a: "#22C55E", b: "#86EFAC" },
 };
 
 export default function InsightCard({
@@ -26,15 +28,15 @@ export default function InsightCard({
   icon: keyof typeof Ionicons.glyphMap;
   primary: string;
   secondary?: string;
-  accent?: keyof typeof palettes;
+  accent?: Accent;
   footer?: string;
   onPress?: () => void;
   children?: React.ReactNode;
 }) {
   const { colors, isDark } = useTheme();
-  const pal = palettes[accent];
+  const pal = palettes[accent] ?? palettes.primary;
 
-  const Container = ({ children: inner }: any) =>
+  const Container = ({ children }: PropsWithChildren) =>
     Platform.OS === "ios" ? (
       <BlurView
         intensity={20}
@@ -50,9 +52,9 @@ export default function InsightCard({
           colors={[pal.a + "22", pal.b + "22"]}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
-          style={{ position: "absolute", inset: 0 }}
+          style={StyleSheet.absoluteFillObject} // ✅ portable
         />
-        <View style={{ padding: 14, gap: 8 }}>{inner}</View>
+        <View style={{ padding: 14, gap: 8 }}>{children}</View>
       </BlurView>
     ) : (
       <LinearGradient
@@ -66,7 +68,7 @@ export default function InsightCard({
           padding: 14,
         }}
       >
-        {inner}
+        {children}
       </LinearGradient>
     );
 
@@ -109,15 +111,16 @@ export default function InsightCard({
     </Container>
   );
 
-  if (onPress) {
-    return (
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}
-      >
-        {content}
-      </Pressable>
-    );
-  }
-  return content;
+  return onPress ? (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      android_ripple={{ color: "#00000022", foreground: true }}
+      style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}
+    >
+      {content}
+    </Pressable>
+  ) : (
+    content
+  );
 }

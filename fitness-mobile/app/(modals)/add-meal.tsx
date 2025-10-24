@@ -1,3 +1,4 @@
+// app/(modals)/add-meal.tsx
 import React, {
   useEffect,
   useMemo,
@@ -29,18 +30,17 @@ import { useTheme } from "@/content/ThemeProvider";
 import { useAuth } from "@/content/AuthContext";
 import { getAuth } from "firebase/auth";
 
-// Firestore (history)
-import {
-  collection,
-  query,
-  orderBy,
-  limit as fbLimit,
-  onSnapshot,
-  getFirestore,
-  DocumentData,
-} from "firebase/firestore";
-import { app } from "@/lib/firebase";
-const db = getFirestore(app);
+import { computeMealScore } from "@/utils/mealScore";
+
+// Firestore (history) — removed (we're replacing with community catalog)
+// import { ... } from "firebase/firestore";
+// import { app } from "@/lib/firebase";
+// const db = getFirestore(app);
+
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+// ⬇️ Community Food Catalog
+import { searchCatalog, bumpUse } from "@/services/foodCatalog";
 
 // Types
 type Meal = "breakfast" | "lunch" | "dinner" | "snacks";
@@ -57,8 +57,9 @@ type AddPayload = {
   fat: number;
   sugar?: number;
   fiber?: number;
-  source: "history" | "fdc" | "manual" | "describe";
+  source: "catalog" | "fdc" | "manual" | "describe"; // history removed
   fdcId?: string | null;
+  healthScore?: number; // used by the feed page if present
 };
 
 // FDC search
@@ -92,7 +93,47 @@ async function searchFDC(queryStr: string): Promise<FdcItem[]> {
   }
 }
 
-// ─────────────── UI helpers ───────────────
+/* ───────────────── Healthy Meal Score helpers ───────────────── */
+
+function ScoreBar({ score }: { score: number }) {
+  const pct = Math.max(0, Math.min(100, Math.round(score)));
+  const color =
+    pct >= 80
+      ? "#16a34a"
+      : pct >= 60
+      ? "#22c55e"
+      : pct >= 40
+      ? "#f59e0b"
+      : pct >= 20
+      ? "#f97316"
+      : "#ef4444";
+  return (
+    <View style={{ gap: 8 }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+        <Text style={{ fontWeight: "800" }}>Healthy meal score</Text>
+        <Text style={{ fontWeight: "900", color }}>{pct}/100</Text>
+      </View>
+      <View
+        style={{ height: 12, borderRadius: 999, backgroundColor: "#00000014" }}
+      >
+        <View
+          style={{
+            width: `${pct}%`,
+            height: "100%",
+            backgroundColor: color,
+            borderRadius: 999,
+          }}
+        />
+      </View>
+      <Text style={{ fontSize: 12, color: "#6b7280" }}>
+        Higher is better. Balanced protein, reasonable calories, more fiber,
+        less added sugar.
+      </Text>
+    </View>
+  );
+}
+
+/* ───────────────── UI helpers ───────────────── */
 
 function GlassPanel({
   children,
@@ -401,7 +442,7 @@ function EmptyHint({ text }: { text: string }) {
   );
 }
 
-// ─────────────── Main screen ───────────────
+/* ───────────────────────────── Main ───────────────────────────── */
 
 export default function AddMealModal() {
   const { colors, isDark } = useTheme();
@@ -409,7 +450,7 @@ export default function AddMealModal() {
   const navigation = useNavigation();
   const { user } = useAuth();
 
-  // Kill default header (prevents white bar)
+  // Hide the default header (modal has its own)
   useLayoutEffect(() => {
     navigation.setOptions?.({ headerShown: false });
   }, [navigation]);
@@ -426,61 +467,151 @@ export default function AddMealModal() {
   // SEARCH
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
+
+  type CatalogItem = {
+    id?: string;
+    name: string;
+    unit?: string;
+    per?: number; // nutrients defined per this amount
+    nutrients?: {
+      calories?: number;
+      protein?: number;
+      carbs?: number;
+      fat?: number;
+      sugar?: number;
+      fiber?: number;
+    };
+    brand?: string | null;
+  };
+
+  const [catalogResults, setCatalogResults] = useState<CatalogItem[]>([]);
   const [fdcResults, setFdcResults] = useState<FdcItem[]>([]);
-  const [history, setHistory] = useState<
-    Array<
-      {
-        id: string;
-        name: string;
-        calories: number;
-        protein: number;
-        carbs: number;
-        fat: number;
-        sugar?: number;
-        fiber?: number;
-        unit?: string;
-        qty?: number;
-      } & DocumentData
-    >
-  >([]);
 
-  useEffect(() => {
-    if (!user?.uid) return;
-    const ref = collection(db, "users", user.uid, "nutritionEntries");
-    const unsub = onSnapshot(
-      query(ref, orderBy("createdAt", "desc"), fbLimit(100)),
-      (snap) => {
-        const arr: any[] = [];
-        snap.forEach((doc) => {
-          const d = doc.data();
-          if (d?.name && typeof d.calories === "number") {
-            arr.push({ id: doc.id, ...d });
-          }
-        });
-        setHistory(arr);
-      }
-    );
-    return unsub;
-  }, [user?.uid]);
-
+  // 🔎 Query Community Catalog (also when query is empty to show popular/top)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // helper: normalize various service return shapes to an array
+  function normalizeCatalogResponse(r: any): any[] {
+    if (!r) return [];
+    if (Array.isArray(r)) return r;
+    if (Array.isArray(r.items)) return r.items;
+    if (Array.isArray(r.top)) return r.top;
+    if (Array.isArray(r.results)) return r.results;
+    if (Array.isArray(r.data)) return r.data;
+    return [];
+  }
+
+  // OPTIONAL: if your SDK exposes getPopularCatalog, we'll use it
+  let getPopularCatalog:
+    | undefined
+    | ((limit?: number, opts?: any) => Promise<any>);
+  try {
+    // @ts-ignore
+    const fc = require("@/services/foodCatalog");
+    if (typeof fc.getPopularCatalog === "function")
+      getPopularCatalog = fc.getPopularCatalog;
+  } catch {}
+
+  // 👇 Use a uniquely named ref so there's no redeclare
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
-    if (!q.trim()) {
-      setFdcResults([]);
-      return;
-    }
     setLoading(true);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+
+    searchDebounceRef.current = setTimeout(async () => {
       try {
-        const res = await searchFDC(q.trim());
-        setFdcResults(res);
+        const queryText = q.trim();
+
+        // If your catalog needs auth, pass an ID token
+        let idToken: string | undefined;
+        try {
+          const auth = getAuth();
+          idToken = await auth.currentUser?.getIdToken?.(true);
+        } catch {}
+
+        const opts = idToken
+          ? { headers: { Authorization: `Bearer ${idToken}` } }
+          : undefined;
+
+        let cat: any[] = [];
+
+        if (queryText) {
+          try {
+            const res = await (searchCatalog as any)(queryText, 30, opts);
+            // after: const res = await (searchCatalog as any)(queryText, 30, opts);
+            console.log("[catalog] raw response:", res);
+
+            cat = normalizeCatalogResponse(res);
+          } catch (e) {
+            console.warn("[catalog] searchCatalog failed:", e);
+          }
+        } else {
+          // empty query → popular/top
+          let res: any = null;
+          if (getPopularCatalog) {
+            try {
+              res = await getPopularCatalog(30, opts);
+            } catch (e) {
+              console.warn("[catalog] getPopularCatalog failed:", e);
+            }
+          }
+          if (!res) {
+            try {
+              res = await (searchCatalog as any)("*", 30, opts); // wildcard fallback
+            } catch (e) {
+              console.warn("[catalog] wildcard searchCatalog failed:", e);
+            }
+          }
+          cat = normalizeCatalogResponse(res);
+        }
+
+        // USDA only when there’s a query
+        let fdc: any[] = [];
+        if (queryText) {
+          try {
+            fdc = await searchFDC(queryText);
+          } catch (e) {
+            console.warn("[fdc] searchFDC failed:", e);
+          }
+        }
+
+        // inside the effect that depends on [q], where we build `fixed`
+        const fixed = (cat || []).map((c: any) => {
+          const n = c?.nutrients || c?.nutrition || {};
+          return {
+            id: c?.id || c?.docId || c?._id,
+            name: String(c?.name || c?.title || "Food"),
+            unit: c?.unit || c?.servingUnit || "serving",
+            per: Number(c?.qty ?? c?.per ?? c?.servingSize ?? 1), // ← add this line (qty first)
+            nutrients: {
+              calories: Number(
+                n.calories ?? n.kcal ?? n.energy ?? c?.calories ?? 0
+              ),
+              protein: Number(n.protein ?? c?.protein ?? 0),
+              carbs: Number(n.carbs ?? n.carbohydrates ?? c?.carbs ?? 0),
+              fat: Number(n.fat ?? c?.fat ?? 0),
+              sugar: Number(n.sugar ?? n.sugars ?? c?.sugar ?? 0),
+              fiber: Number(n.fiber ?? c?.fiber ?? 0),
+            },
+            brand: c?.brand ?? c?.brandOwner ?? null,
+          };
+        });
+
+        console.log(
+          `[catalog] q="${queryText}" got ${fixed.length} items; [fdc] ${
+            fdc?.length || 0
+          } items`
+        );
+
+        setCatalogResults(fixed);
+        setFdcResults(Array.isArray(fdc) ? fdc : []);
       } finally {
         setLoading(false);
       }
-    }, 350);
+    }, 300);
+
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     };
   }, [q]);
 
@@ -497,9 +628,15 @@ export default function AddMealModal() {
   const [dFat, setDFat] = useState("");
   const [dSugar, setDSugar] = useState("");
   const [dFiber, setDFiber] = useState("");
+  const [dScore, setDScore] = useState(0);
   const [calcError, setCalcError] = useState("");
 
   const AI_URL = process.env.EXPO_PUBLIC_AI_DESCRIBE_URL; // optional
+
+  function numstr(x: any) {
+    const n = Number(x);
+    return Number.isFinite(n) ? String(n) : "";
+  }
 
   async function onCalculateMacros() {
     setCalcError("");
@@ -518,7 +655,7 @@ export default function AddMealModal() {
       }
 
       const payload = {
-        mode: "meal:v1",
+        mode: "meal:v2", // totals mode
         query: text,
         rawText: text,
         context: { meal, date },
@@ -540,42 +677,98 @@ export default function AddMealModal() {
 
       const data = await res.json();
 
-      // Try primary shape: { items: [...] }
-      let first =
-        Array.isArray(data?.items) && data.items.length > 0
-          ? data.items[0]
-          : null;
+      // v2 shape returns { name, quantity, unit, calories, protein, carbs, fat, sugar, fiber }
+      const got = data || {};
+      const nName = String(got.name || text);
+      const nQty = numstr(got.quantity ?? (dQty || "1"));
+      const nUnit = String(got.unit || dUnit || "serving");
 
-      // Fallbacks: some older handlers return a single object or different key
-      if (!first && data?.item) first = data.item;
-      if (!first && data?.result) first = data.result;
+      const nCalories = numstr(got.calories);
+      const nProtein = numstr(got.protein);
+      const nCarbs = numstr(got.carbs);
+      const nFat = numstr(got.fat);
+      const nSugar = numstr(got.sugar);
+      const nFiber = numstr(got.fiber);
 
-      if (!first) {
-        setCalcError(
-          "I couldn’t parse that. Try adding portion details (e.g., 1 cup, 150 g)."
-        );
-        return;
-      }
+      // Set all fields
+      setDName(nName);
+      setDQty(String(nQty || "1"));
+      setDUnit(nUnit);
 
-      const norm = normalizeMealItem(first, text);
+      setDCalories(nCalories);
+      setDProtein(nProtein);
+      setDCarbs(nCarbs);
+      setDFat(nFat);
+      setDSugar(nSugar);
+      setDFiber(nFiber);
 
-      setDName(norm.name);
-      setDQty(String(dQty || "1"));
-      setDUnit(String(norm.serving || dUnit || "serving"));
-
-      // Set every macro; keep empty string only when truly undefined
-      setDCalories(norm.calories !== undefined ? String(norm.calories) : "");
-      setDProtein(norm.protein !== undefined ? String(norm.protein) : "");
-      setDCarbs(norm.carbs !== undefined ? String(norm.carbs) : "");
-      setDFat(norm.fat !== undefined ? String(norm.fat) : "");
-      setDSugar(norm.sugar !== undefined ? String(norm.sugar) : "");
-      setDFiber(norm.fiber !== undefined ? String(norm.fiber) : "");
+      // Compute score
+      setDScore(
+        computeMealScore({
+          calories: Number(nCalories || 0),
+          protein: Number(nProtein || 0),
+          carbs: Number(nCarbs || 0),
+          fat: Number(nFat || 0),
+          sugar: Number(nSugar || 0),
+          fiber: Number(nFiber || 0),
+        })
+      );
     } catch (e) {
       setCalcError("Describe service unavailable. Please try again.");
     } finally {
       setCalcLoading(false);
     }
   }
+
+  // Recompute score if user tweaks describe fields
+  useEffect(() => {
+    setDScore(
+      computeMealScore({
+        calories: Number(dCalories || 0),
+        protein: Number(dProtein || 0),
+        carbs: Number(dCarbs || 0),
+        fat: Number(dFat || 0),
+        sugar: Number(dSugar || 0),
+        fiber: Number(dFiber || 0),
+      })
+    );
+  }, [dCalories, dProtein, dCarbs, dFat, dSugar, dFiber]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        // try popular/empty query, then wildcard as fallback
+        // @ts-ignore
+        const fc = require("@/services/foodCatalog");
+        const search = fc.searchCatalog || fc.search || fc.default;
+        const getPopular = fc.getPopularCatalog;
+        let res: any;
+
+        if (typeof getPopular === "function") {
+          res = await getPopular(5);
+        } else if (typeof search === "function") {
+          res = await search("", 5);
+          if (!res || (Array.isArray(res) && res.length === 0)) {
+            res = await search("*", 5); // some backends use "*" for “show top”
+          }
+        } else {
+          console.log(
+            "foodCatalog service not wired: no search function exported"
+          );
+          return;
+        }
+
+        console.log("CATALOG_PROBE raw:", res);
+        const items = Array.isArray(res)
+          ? res
+          : res?.items || res?.top || res?.results || res?.data || [];
+        console.log("CATALOG_PROBE count:", items.length);
+        if (items[0]) console.log("CATALOG_PROBE first item:", items[0]);
+      } catch (e) {
+        console.warn("CATALOG_PROBE error:", e);
+      }
+    })();
+  }, []);
 
   // MANUAL
   const [name, setName] = useState("");
@@ -587,10 +780,24 @@ export default function AddMealModal() {
   const [fat, setFat] = useState("");
   const [sugar, setSugar] = useState("");
   const [fiber, setFiber] = useState("");
+  const [mScore, setMScore] = useState(0);
 
-  // EDIT SHEET (History/FDC)
+  useEffect(() => {
+    setMScore(
+      computeMealScore({
+        calories: Number(calories || 0),
+        protein: Number(protein || 0),
+        carbs: Number(carbs || 0),
+        fat: Number(fat || 0),
+        sugar: Number(sugar || 0),
+        fiber: Number(fiber || 0),
+      })
+    );
+  }, [calories, protein, carbs, fat, sugar, fiber]);
+
+  // EDIT SHEET (Catalog & FDC)
   const [editOpen, setEditOpen] = useState(false);
-  const [editSource, setEditSource] = useState<"history" | "fdc" | null>(null);
+  const [editSource, setEditSource] = useState<"fdc" | "catalog" | null>(null);
   const [eName, setEName] = useState("");
   const [eQty, setEQty] = useState("1");
   const [eUnit, setEUnit] = useState("serving");
@@ -601,6 +808,20 @@ export default function AddMealModal() {
   const [eSugar, setESugar] = useState("");
   const [eFiber, setEFiber] = useState("");
   const [eFdcId, setEFdcId] = useState<string | null>(null);
+  const [eScore, setEScore] = useState(0);
+
+  useEffect(() => {
+    setEScore(
+      computeMealScore({
+        calories: Number(eCalories || 0),
+        protein: Number(eProtein || 0),
+        carbs: Number(eCarbs || 0),
+        fat: Number(eFat || 0),
+        sugar: Number(eSugar || 0),
+        fiber: Number(eFiber || 0),
+      })
+    );
+  }, [eCalories, eProtein, eCarbs, eFat, eSugar, eFiber]);
 
   // Animations
   const sheetProgress = useRef(new Animated.Value(0)).current; // 0 closed, 1 open
@@ -620,28 +841,10 @@ export default function AddMealModal() {
   function openEdit() {
     setEditOpen(true);
     requestAnimationFrame(() => animateSheet(1));
-    // If you install expo-haptics later, call it here.
   }
 
   function closeEdit() {
     animateSheet(0, () => setEditOpen(false));
-    // If you install expo-haptics later, call it here.
-  }
-
-  function startEditFromHistory(h: any) {
-    setEditSource("history");
-    setEName(h.name || "Food");
-    setEQty(String(h.qty ?? 1));
-    setEUnit(h.unit || "serving");
-    setECalories(String(h.calories ?? 0));
-    setEProtein(String(h.protein ?? 0));
-    setECarbs(String(h.carbs ?? 0));
-    setEFat(String(h.fat ?? 0));
-    setESugar(String(h.sugar ?? 0));
-    setEFiber(String(h.fiber ?? 0));
-    setEFdcId(null);
-    openEdit();
-    setTab("search");
   }
 
   function startEditFromFdc(item: FdcItem) {
@@ -661,16 +864,49 @@ export default function AddMealModal() {
     setTab("search");
   }
 
-  // back with payload
+  // Start edit from Community Catalog
+  function startEditFromCatalog(item: CatalogItem) {
+    if (item?.id) {
+      try {
+        bumpUse(item.id);
+      } catch {}
+    }
+    const n = item?.nutrients || {};
+    setEditSource("catalog");
+    setEName(item?.name || "Food");
+    setEQty(String(item?.per ?? 1)); // nutrients are "per" amount
+    setEUnit(item?.unit || "serving");
+    setECalories(String(Number(n.calories || 0)));
+    setEProtein(String(Number(n.protein || 0)));
+    setECarbs(String(Number(n.carbs || 0)));
+    setEFat(String(Number(n.fat || 0)));
+    setESugar(String(Number(n.sugar || 0)));
+    setEFiber(String(Number(n.fiber || 0)));
+    setEFdcId(null);
+    openEdit();
+    setTab("search");
+  }
+
+  // back with payload (pairs with nutrition.tsx AsyncStorage reader)
   function done(payload: AddPayload) {
-    router.replace({
-      pathname: "/(tabs)/nutrition",
-      params: { addFoodPayload: JSON.stringify(payload) },
-    });
+    AsyncStorage.setItem("@pending_add_meal", JSON.stringify(payload))
+      .catch(() => {})
+      .finally(() => {
+        router.back();
+      });
   }
 
   function addFromDescribe() {
     if (!dName.trim()) return;
+    const healthScore = computeMealScore({
+      calories: Number(dCalories || 0),
+      protein: Number(dProtein || 0),
+      carbs: Number(dCarbs || 0),
+      fat: Number(dFat || 0),
+      sugar: Number(dSugar || 0),
+      fiber: Number(dFiber || 0),
+    });
+
     done({
       date,
       meal,
@@ -685,11 +921,22 @@ export default function AddMealModal() {
       fiber: Number(dFiber || 0),
       source: "describe",
       fdcId: null,
+      healthScore,
     });
   }
 
   function addFromManual() {
     if (!name.trim()) return;
+
+    const healthScore = computeMealScore({
+      calories: Number(calories || 0),
+      protein: Number(protein || 0),
+      carbs: Number(carbs || 0),
+      fat: Number(fat || 0),
+      sugar: Number(sugar || 0),
+      fiber: Number(fiber || 0),
+    });
+
     done({
       date,
       meal,
@@ -704,11 +951,22 @@ export default function AddMealModal() {
       fiber: Number(fiber || 0),
       source: "manual",
       fdcId: null,
+      healthScore,
     });
   }
 
   function addFromEditDraft() {
     if (!eName.trim()) return;
+
+    const healthScore = computeMealScore({
+      calories: Number(eCalories || 0),
+      protein: Number(eProtein || 0),
+      carbs: Number(eCarbs || 0),
+      fat: Number(eFat || 0),
+      sugar: Number(eSugar || 0),
+      fiber: Number(eFiber || 0),
+    });
+
     done({
       date,
       meal,
@@ -721,68 +979,11 @@ export default function AddMealModal() {
       fat: Number(eFat || 0),
       sugar: Number(eSugar || 0),
       fiber: Number(eFiber || 0),
-      source: (editSource ?? "manual") as AddPayload["source"],
+      source: editSource ?? "catalog",
       fdcId: editSource === "fdc" ? eFdcId : null,
+      healthScore,
     });
   }
-  function normalizeMealItem(raw: any, fallbackName: string) {
-    // Flatten if macros are nested
-    const m = raw?.macros && typeof raw.macros === "object" ? raw.macros : raw;
-
-    const numFrom = (v: any): number | undefined => {
-      if (v == null) return undefined;
-      if (typeof v === "number" && Number.isFinite(v)) return v;
-      // Extract leading numeric part from strings like "120 kcal", "32g"
-      const s = String(v).trim().replace(",", ".");
-      const match = s.match(/-?\d+(\.\d+)?/);
-      if (!match) return undefined;
-      const n = Number(match[0]);
-      return Number.isFinite(n) ? n : undefined;
-    };
-
-    const pick = (obj: any, keys: string[]) => {
-      for (const k of keys) {
-        if (obj && obj[k] != null) return obj[k];
-      }
-      return undefined;
-    };
-
-    const name =
-      String(
-        raw?.name ??
-          raw?.food ??
-          raw?.title ??
-          (typeof raw === "string" ? raw : "") ??
-          fallbackName
-      ).trim() || fallbackName;
-
-    const serving = pick(raw, ["serving", "portion", "unit", "size"]);
-
-    const calories = numFrom(
-      pick(m, ["calories", "kcal", "energy", "energy_kcal", "calories_kcal"])
-    );
-    const protein = numFrom(
-      pick(m, ["protein", "protein_g", "proteins", "prot"])
-    );
-    const carbs = numFrom(
-      pick(m, ["carbs", "carbohydrates", "carbs_g", "carbohydrate_g"])
-    );
-    const fat = numFrom(pick(m, ["fat", "fats", "fat_g", "lipids"]));
-    const sugar = numFrom(pick(m, ["sugar", "sugars", "sugar_g"]));
-    const fiber = numFrom(pick(m, ["fiber", "fibre", "fiber_g"]));
-
-    return { name, serving, calories, protein, carbs, fat, sugar, fiber };
-  }
-
-  const filteredHistory = useMemo(() => {
-    if (!q.trim()) return history.slice(0, 10);
-    const low = q.toLowerCase();
-    return history.filter((h) =>
-      String(h.name || "")
-        .toLowerCase()
-        .includes(low)
-    );
-  }, [q, history]);
 
   // Derived animations
   const scrimOpacity = sheetProgress.interpolate({
@@ -791,7 +992,7 @@ export default function AddMealModal() {
   });
   const translateY = sheetProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: [Dimensions.get("window").height * 0.5, 0],
+    outputRange: [H * 0.5, 0],
   });
 
   return (
@@ -894,7 +1095,7 @@ export default function AddMealModal() {
                   <TextInput
                     value={q}
                     onChangeText={setQ}
-                    placeholder="Search your history & USDA…"
+                    placeholder="Search the community & USDA…"
                     placeholderTextColor={colors.placeholder}
                     style={{
                       flex: 1,
@@ -929,23 +1130,38 @@ export default function AddMealModal() {
                 </View>
               </GlassPanel>
 
+              {/* Community catalog (replaces History) */}
               <GlassPanel>
-                <SectionTitle>History</SectionTitle>
-                {filteredHistory.length === 0 ? (
-                  <EmptyHint text="No recent items. Try the Describe tab or search for USDA items." />
+                <SectionTitle>
+                  {q.trim()
+                    ? "Community catalog results"
+                    : "Popular in community"}
+                </SectionTitle>
+                {catalogResults.length === 0 ? (
+                  <EmptyHint
+                    text={
+                      loading
+                        ? "Searching…"
+                        : q.trim()
+                        ? "No matches yet."
+                        : "No community items yet."
+                    }
+                  />
                 ) : (
-                  filteredHistory
-                    .slice(0, 15)
-                    .map((h) => (
+                  catalogResults.map((c, idx) => {
+                    const n = c.nutrients || {};
+                    const macro =
+                      `per ${c.per ?? 1} ${c.unit || "serving"} • ` +
+                      `${Math.round(Number(n.calories || 0))} kcal • ` +
+                      `P${Math.round(Number(n.protein || 0))} ` +
+                      `C${Math.round(Number(n.carbs || 0))} ` +
+                      `F${Math.round(Number(n.fat || 0))}`;
+                    return (
                       <ListRow
-                        key={h.id}
-                        onPress={() => startEditFromHistory(h)}
-                        title={h.name}
-                        subtitle={`${Math.round(
-                          h.calories || 0
-                        )} kcal • P${Math.round(h.protein || 0)} C${Math.round(
-                          h.carbs || 0
-                        )} F${Math.round(h.fat || 0)}`}
+                        key={`cat-${idx}-${c.name}-${c.unit}`}
+                        onPress={() => startEditFromCatalog(c)}
+                        title={c.name}
+                        subtitle={macro}
                         right={
                           <Ionicons
                             name="create-outline"
@@ -954,10 +1170,12 @@ export default function AddMealModal() {
                           />
                         }
                       />
-                    ))
+                    );
+                  })
                 )}
               </GlassPanel>
 
+              {/* USDA */}
               <GlassPanel>
                 <SectionTitle>USDA FoodData Central</SectionTitle>
                 {!q.trim() ? (
@@ -1045,7 +1263,7 @@ export default function AddMealModal() {
                   />
                 </View>
 
-                <SectionTitle>Macros (per unit)</SectionTitle>
+                <SectionTitle>Macros (totals for the whole meal)</SectionTitle>
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   <Field
                     label="Calories"
@@ -1109,6 +1327,8 @@ export default function AddMealModal() {
                   />
                 </View>
 
+                <ScoreBar score={dScore} />
+
                 <PrimaryButton
                   label="Add"
                   onPress={addFromDescribe}
@@ -1153,7 +1373,7 @@ export default function AddMealModal() {
                   />
                 </View>
 
-                <SectionTitle>Macros (per unit)</SectionTitle>
+                <SectionTitle>Macros (totals for the whole meal)</SectionTitle>
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   <Field
                     label="Calories"
@@ -1215,6 +1435,8 @@ export default function AddMealModal() {
                   />
                 </View>
 
+                <ScoreBar score={mScore} />
+
                 <PrimaryButton
                   label="Add"
                   onPress={addFromManual}
@@ -1225,7 +1447,7 @@ export default function AddMealModal() {
           )}
         </ScrollView>
 
-        {/* Bottom Sheet Editor */}
+        {/* Bottom Sheet Editor (Catalog & FDC) */}
         {editOpen && (
           <>
             {/* Scrim */}
@@ -1301,7 +1523,9 @@ export default function AddMealModal() {
                     />
                   </View>
 
-                  <SectionTitle>Macros (per unit)</SectionTitle>
+                  <SectionTitle>
+                    Macros (totals for the whole meal)
+                  </SectionTitle>
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     <Field
                       label="Calories"
@@ -1348,6 +1572,8 @@ export default function AddMealModal() {
                       keyboardType="decimal-pad"
                     />
                   </View>
+
+                  <ScoreBar score={eScore} />
 
                   <PrimaryButton
                     label="Add"

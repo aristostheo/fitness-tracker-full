@@ -1,5 +1,5 @@
 // app/(tabs)/index.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   ScrollView,
   View,
@@ -17,7 +17,7 @@ import Card from "../../components/Card";
 import { useAuth } from "@/content/AuthContext";
 import {
   subscribeFoodsByDate,
-  subscribeExerciseByDate,
+  // subscribeExerciseByDate, // (we'll derive "today" from range for robustness)
   subscribeFoodsBetween,
   subscribeExerciseBetween,
   type FoodEntry,
@@ -33,6 +33,7 @@ import WeeklyCaloriesChart from "@/components/WeeklyCaloriesChart";
 import ProgressRing from "@/components/ProgressRing";
 import { useTheme } from "@/content/ThemeProvider";
 import BottomTabSpacer from "@/components/ui/BottomTapSpacer";
+import { getAuth } from "firebase/auth";
 
 /* ---------- utils ---------- */
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -75,18 +76,114 @@ function initialsOf(name?: string | null, email?: string | null) {
   return src.slice(0, 2).toUpperCase();
 }
 
-/* ───────────── NEW: simple PR detector from last 7 days workouts ───────────── */
-type Wo = {
-  exercise: string;
-  sets: number;
-  reps: number;
-  weight: number;
-  date: string;
+type SuggestionCard = {
+  icon: string;
+  title: string;
+  body: string;
+  ctaLabel: string;
+  href: Href;
+  tint: "workout" | "meal" | "recovery" | "ok";
 };
-function vol(s: number, r: number, w: number) {
-  return s * r * w;
+
+const AI_URL = process.env.EXPO_PUBLIC_AI_DESCRIBE_URL; // cloud function URL
+const AI_SUGGESTIONS_ENABLED =
+  (process.env.EXPO_PUBLIC_AI_SUGGESTIONS || "on") !== "off";
+
+/* ───────────── daily suggestion (rule-based fallback) ───────────── */
+function buildDailySuggestion(opts: {
+  isRestToday: boolean;
+  foodsToday: FoodEntry[];
+  exerciseToday: ExerciseEntry[];
+  kcalGoal: number;
+  proteinGoal: number;
+  greeting: string;
+}): SuggestionCard {
+  const {
+    isRestToday,
+    foodsToday,
+    exerciseToday,
+    kcalGoal,
+    proteinGoal,
+    greeting,
+  } = opts;
+  const hour = new Date().getHours();
+
+  const totals = foodsToday.reduce(
+    (a, f) => ({
+      calories: a.calories + (f.calories || 0),
+      protein: a.protein + (f.protein || 0),
+      carbs: a.carbs + (f.carbs || 0),
+      fat: a.fat + (f.fat || 0),
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0 }
+  );
+  const cRemaining = Math.max(0, Math.round(kcalGoal - totals.calories));
+  const pRemaining = Math.max(0, Math.round(proteinGoal - totals.protein));
+  const noWorkoutYet = exerciseToday.length === 0;
+
+  const mealSlot =
+    hour < 11
+      ? "breakfast"
+      : hour < 15
+      ? "lunch"
+      : hour < 19
+      ? "dinner"
+      : "snacks";
+
+  if (isRestToday) {
+    return {
+      icon: "leaf-outline" as const,
+      title: "Recovery day focus",
+      body:
+        pRemaining > 0
+          ? `Keep it light: aim for ${pRemaining}g protein left with mostly whole foods. Add a 20–30 min walk and 5–10 min mobility before bed. Hydrate!`
+          : "Keep it light: prioritize whole foods, 20–30 min easy walk, and 5–10 min mobility before bed. Hydrate!",
+      ctaLabel: "Log mobility / walk",
+      href: "/(tabs)/workouts" as Href,
+      tint: "recovery" as const,
+    };
+  }
+
+  if (noWorkoutYet) {
+    return {
+      icon: "barbell-outline" as const,
+      title: `${greeting.split(",")[0]} boost`,
+      body:
+        hour < 15
+          ? "Quick suggestion: 25–35 min full-body circuit (3 rounds, 6–8 reps) or 20 min zone-2 cardio. You'll feel great after."
+          : "Evening pick-me-up: 20–30 min full-body or 20 min zone-2 cardio. Keep RPE ~6–7.",
+      ctaLabel: "Start a workout",
+      href: "/(tabs)/workouts" as Href,
+      tint: "workout" as const,
+    };
+  }
+
+  if (cRemaining > 120 || pRemaining > 15) {
+    return {
+      icon: "fast-food-outline" as const,
+      title: `Dial in your ${mealSlot}`,
+      body: `Try a ${mealSlot} around ${Math.min(
+        cRemaining,
+        650
+      )} kcal with ≥${Math.min(
+        pRemaining || 25,
+        55
+      )}g protein. Example: chicken bowl (rice, greens, beans) or Greek yogurt + fruit + granola.`,
+      ctaLabel: "Add a meal",
+      href: "/(tabs)/nutrition" as Href,
+      tint: "meal" as const,
+    };
+  }
+
+  return {
+    icon: "thumbs-up-outline" as const,
+    title: "Nice pace today",
+    body: "You’re trending toward your targets. Keep meals balanced and finish strong with hydration and a walk.",
+    ctaLabel: "Review nutrition",
+    href: "/(tabs)/nutrition" as Href,
+    tint: "ok" as const,
+  };
 }
-// Provide a few fake PR badges from the last 7d if you pass workouts here later.
 
 export default function HomeScreen() {
   const { colors } = useTheme();
@@ -94,6 +191,14 @@ export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const { user } = useAuth();
   const [date] = useState(ymd(new Date()));
+
+  // provide a safe "success" tint even if ThemeColors doesn't define it
+  const successTint =
+    (colors as any).success ?? (colors as any).chartSecondary ?? colors.primary;
+
+  // responsive helpers
+  const isCompact = width < 390; // iPhone mini / compact
+  const headingSize = isCompact ? 24 : 28;
 
   // today
   const [foodsToday, setFoodsToday] = useState<FoodEntry[]>([]);
@@ -110,9 +215,21 @@ export default function HomeScreen() {
     if (!user?.uid) return;
     const unsubs: Array<() => void> = [];
 
-    unsubs.push(subscribeFoodsByDate(user.uid, date, setFoodsToday));
-    unsubs.push(subscribeExerciseByDate(user.uid, date, setExerciseToday));
+    console.log("[home] mount subs", {
+      uid: user.uid,
+      now: new Date().toISOString(),
+      dateParam: date,
+    });
 
+    // Foods for today + log
+    unsubs.push(
+      subscribeFoodsByDate(user.uid, date, (arr) => {
+        console.log("[home] foodsToday =>", { date, count: arr?.length ?? 0 });
+        setFoodsToday(arr);
+      })
+    );
+
+    // (We intentionally don't use subscribeExerciseByDate; some entries may rely on createdAt)
     (async () => {
       await ensureProfile(user.uid, user.email ? { email: user.email } : {});
       unsubs.push(subscribeProfile(user.uid, setProfile));
@@ -120,8 +237,8 @@ export default function HomeScreen() {
 
     const today = new Date();
     const start = addDays(today, -6);
-    const from = ymd(start),
-      to = ymd(today);
+    const from = ymd(start);
+    const to = ymd(today);
     unsubs.push(subscribeFoodsBetween(user.uid, from, to, setFoodsRange));
     unsubs.push(subscribeExerciseBetween(user.uid, from, to, setExerciseRange));
 
@@ -133,6 +250,56 @@ export default function HomeScreen() {
       });
     };
   }, [user?.uid, date]);
+
+  // Derive exerciseToday from range using either exact ymd or createdAt in local day
+  useEffect(() => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+
+    const toMillis = (v: any): number => {
+      if (!v) return 0;
+      if (typeof v === "number") return v;
+      if (typeof v?.toMillis === "function") return v.toMillis();
+      if (typeof v?.seconds === "number") return v.seconds * 1000;
+      return 0;
+    };
+
+    const todayStr = ymd(new Date());
+    const filtered = exerciseRange.filter((x) => {
+      if (x.date && x.date === todayStr) return true;
+      const ms = toMillis((x as any).createdAt);
+      return ms >= start.getTime() && ms <= end.getTime();
+    });
+
+    console.log("[home] derive exerciseToday from range =>", {
+      todayStr,
+      filteredCount: filtered.length,
+      sample: filtered.slice(0, 3).map((e) => ({
+        id: (e as any).id,
+        date: e.date,
+        createdAt: (e as any).createdAt,
+        calories: e.calories,
+      })),
+    });
+
+    setExerciseToday(filtered);
+  }, [exerciseRange]);
+
+  // Simple flag for "has workout"
+  const hasWorkoutToday = exerciseToday.length > 0;
+
+  // === Memo: effective "today workout" list used by AI fallback (stable deps) ===
+  const effectiveExerciseToday = useMemo<ExerciseEntry[]>(
+    () =>
+      hasWorkoutToday
+        ? exerciseToday
+        : exerciseToday.length
+        ? exerciseToday
+        : ([] as ExerciseEntry[]),
+    [hasWorkoutToday, exerciseToday.length]
+  );
 
   // today totals
   const totals = useMemo(() => {
@@ -146,14 +313,6 @@ export default function HomeScreen() {
     const burned = exerciseToday.reduce((s, e) => s + (e.calories || 0), 0);
     return { ...t, burned, net: t.calories - burned };
   }, [foodsToday, exerciseToday]);
-
-  // macro split today (for micro bars)
-  const macroSplit = useMemo(() => {
-    const sum = (totals.protein || 0) + (totals.carbs || 0) + (totals.fat || 0);
-    const pct = (n: number) =>
-      sum > 0 ? Math.max(2, Math.round((n / sum) * 100)) : 0;
-    return { p: pct(totals.protein), c: pct(totals.carbs), f: pct(totals.fat) };
-  }, [totals]);
 
   // weekly series
   const weekly = useMemo(() => {
@@ -232,6 +391,151 @@ export default function HomeScreen() {
     } catch {}
   };
 
+  // Build daily suggestion (state)
+  const [suggestion, setSuggestion] = useState<SuggestionCard>(
+    buildDailySuggestion({
+      isRestToday,
+      foodsToday,
+      exerciseToday,
+      kcalGoal,
+      proteinGoal,
+      greeting,
+    })
+  );
+
+  // Prevent redundant server calls for the same coarse bucket
+  const lastSugKeyRef = useRef<string | null>(null);
+
+  // === AI Suggestion (stable deps) ===
+  // === AI Suggestion (stable deps) — gated + bucketed ===
+  useEffect(() => {
+    let cancelled = false;
+
+    // 1) Always refresh instant local fallback
+    const fallback = buildDailySuggestion({
+      isRestToday,
+      foodsToday,
+      exerciseToday: effectiveExerciseToday,
+      kcalGoal,
+      proteinGoal,
+      greeting,
+    });
+
+    setSuggestion((prev) => {
+      if (
+        prev.title === fallback.title &&
+        prev.body === fallback.body &&
+        prev.ctaLabel === fallback.ctaLabel &&
+        prev.tint === fallback.tint
+      ) {
+        return prev;
+      }
+      return fallback;
+    });
+
+    // 2) Compute compact numbers & bucket key BEFORE any async work
+    const totalsNow = {
+      calories: Math.round(
+        foodsToday.reduce((s, f) => s + (f.calories || 0), 0)
+      ),
+      protein: Math.round(foodsToday.reduce((s, f) => s + (f.protein || 0), 0)),
+      burned: Math.round(
+        effectiveExerciseToday.reduce((s, e) => s + (e.calories || 0), 0)
+      ),
+    };
+
+    const cRem = Math.max(0, Math.round(kcalGoal - totalsNow.calories));
+    const pRem = Math.max(0, Math.round(proteinGoal - totalsNow.protein));
+
+    // Gate: only call if rest day, no workout yet, or meaningfully under targets
+    const interesting =
+      isRestToday || !hasWorkoutToday || cRem > 200 || pRem > 20;
+
+    const hour = new Date().getHours();
+    const tod =
+      hour < 11
+        ? "morning"
+        : hour < 15
+        ? "afternoon"
+        : hour < 19
+        ? "evening"
+        : "night";
+    const cB = cRem <= 200 ? "b0" : cRem <= 500 ? "b1" : "b2";
+    const pB = pRem <= 20 ? "b0" : pRem <= 40 ? "b1" : "b2";
+    const key = `${ymd(new Date())}|${tod}|R${isRestToday ? 1 : 0}|W${
+      hasWorkoutToday ? 1 : 0
+    }|C${cB}|P${pB}`;
+
+    // Skip network if not interesting or already fetched this bucket
+    if (!interesting || lastSugKeyRef.current === key) return;
+
+    (async () => {
+      if (!AI_SUGGESTIONS_ENABLED || !AI_URL || !user?.uid) return;
+
+      try {
+        const token = await getAuth().currentUser?.getIdToken(true);
+        const res = await fetch(AI_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            mode: "suggest:v1",
+            date: ymd(new Date()),
+            timeOfDay: hour,
+            isRestDay: isRestToday,
+            goals: { calories: kcalGoal, protein: proteinGoal },
+            // ⬇️ only the compact totals the server expects (no logs)
+            totals: {
+              calories: totalsNow.calories,
+              protein: totalsNow.protein,
+              burned: totalsNow.burned,
+            },
+          }),
+        });
+
+        if (!cancelled && res.ok) {
+          const raw = (await res.json()) as Partial<SuggestionCard> & {
+            href?: any;
+            tint?: string;
+          };
+          if (raw?.title && raw?.ctaLabel && raw?.href) {
+            const allowed = new Set(["workout", "meal", "recovery", "ok"]);
+            const safeTint = allowed.has(raw.tint || "")
+              ? (raw.tint as SuggestionCard["tint"])
+              : "ok";
+            setSuggestion((prev) => ({
+              icon: raw.icon || prev.icon || "sparkles-outline",
+              title: raw.title!,
+              body: raw.body || "",
+              ctaLabel: raw.ctaLabel!,
+              href: raw.href as Href,
+              tint: safeTint,
+            }));
+            // Mark this bucket as fetched to prevent redundant calls
+            lastSugKeyRef.current = key;
+          }
+        }
+      } catch {
+        // ignore; fallback already shown
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    user?.uid,
+    isRestToday,
+    hasWorkoutToday,
+    kcalGoal,
+    proteinGoal,
+    greeting,
+    foodsToday.length,
+    exerciseToday.length,
+  ]);
+
   /* ---------- UI ---------- */
   return (
     <ScrollView
@@ -265,19 +569,10 @@ export default function HomeScreen() {
           </View>
           <Text style={{ color: withAlpha(colors.text, 0.6) }}>{date}</Text>
         </View>
-        <View style={{ flexDirection: "row", gap: 12 }}>
-          {/* NEW: tiny Rest toggle on Home */}
-          <Pressable style={{ alignItems: "center", justifyContent: "center" }}>
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-            >
-              <Ionicons name="bed-outline" size={16} color={colors.text} />
-              <Text style={{ color: colors.text, fontWeight: "700" }}>
-                Rest
-              </Text>
-              <Switch value={isRestToday} onValueChange={toggleRest} />
-            </View>
-          </Pressable>
+        <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+          <Ionicons name="bed-outline" size={16} color={colors.text} />
+          <Text style={{ color: colors.text, fontWeight: "700" }}>Rest</Text>
+          <Switch value={isRestToday} onValueChange={toggleRest} />
           <IconBtn icon="notifications-outline" />
           <IconBtn
             icon="settings-outline"
@@ -286,7 +581,7 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* HERO / GLASS + GRADIENT */}
+      {/* HERO / GLASS + GRADIENT (legible + responsive) */}
       <MotiView
         from={{ opacity: 0, translateY: 8 }}
         animate={{ opacity: 1, translateY: 0 }}
@@ -295,7 +590,7 @@ export default function HomeScreen() {
         <LinearGradient
           colors={[
             withAlpha(colors.primary, 0.22),
-            withAlpha(colors.success, 0.22),
+            withAlpha(successTint, 0.22),
           ]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -306,6 +601,7 @@ export default function HomeScreen() {
               borderWidth: 1,
               borderColor: colors.border,
               overflow: "hidden",
+              position: "relative",
             },
             softShadow,
           ]}
@@ -326,7 +622,7 @@ export default function HomeScreen() {
             }}
           />
           <LinearGradient
-            colors={[withAlpha(colors.success, 0.14), "transparent"]}
+            colors={[withAlpha(successTint, 0.14), "transparent"]}
             start={{ x: 0.6, y: 0.6 }}
             end={{ x: 0, y: 1 }}
             style={{
@@ -340,39 +636,94 @@ export default function HomeScreen() {
             }}
           />
 
+          {/* scrim for guaranteed contrast */}
           <View
             style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
+              position: "absolute",
+              inset: 0,
+              backgroundColor: withAlpha(colors.card, 0.82),
+            }}
+          />
+
+          <View
+            style={{
+              flexDirection: isCompact ? "column" : "row",
+              justifyContent: isCompact ? "flex-start" : "space-between",
+              alignItems: isCompact ? "flex-start" : "center",
+              gap: isCompact ? 10 : 0,
             }}
           >
-            <View style={{ flex: 1, paddingRight: 12, minWidth: 0 }}>
-              <Text
-                style={{ color: withAlpha(colors.text, 0.6), fontSize: 12 }}
-              >
-                {isRestToday ? "Recovery day" : "Welcome"}
-              </Text>
-              <Text
+            {/* Greeting block */}
+            <View
+              style={{
+                flex: isCompact ? 0 : 1,
+                width: isCompact ? "100%" : undefined,
+                paddingRight: isCompact ? 0 : 12,
+                minWidth: 0,
+              }}
+            >
+              <View
                 style={{
-                  color: colors.text,
-                  fontSize: 26,
-                  fontWeight: "800",
-                  marginTop: 2,
+                  backgroundColor: withAlpha(colors.background, 0.08),
+                  borderRadius: 14,
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderWidth: 1,
+                  borderColor: withAlpha(colors.border, 0.8),
                 }}
-                numberOfLines={1}
               >
-                {greeting}
-              </Text>
-              <Text
-                style={{ color: withAlpha(colors.text, 0.6), marginTop: 4 }}
-              >
-                {isRestToday
-                  ? "Keep it light: steps, mobility, great sleep."
-                  : "Here’s your day at a glance."}
-              </Text>
+                <Text
+                  style={{
+                    color: withAlpha(colors.text, 0.75),
+                    fontSize: 12,
+                    letterSpacing: 0.2,
+                  }}
+                >
+                  {isRestToday ? "Recovery day" : "Welcome"}
+                </Text>
+
+                {/* allow wrap + autosize on compact */}
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontSize: headingSize,
+                    fontWeight: "900",
+                    marginTop: 2,
+                    letterSpacing: 0.2,
+                    textShadowColor: withAlpha("#000", 0.15),
+                    textShadowOffset: { width: 0, height: 1 },
+                    textShadowRadius: 2,
+                    lineHeight: headingSize + 4,
+                  }}
+                  allowFontScaling
+                  adjustsFontSizeToFit={isCompact}
+                  minimumFontScale={0.85}
+                  numberOfLines={isCompact ? 2 : undefined}
+                >
+                  {greeting}
+                </Text>
+
+                <Text
+                  style={{
+                    color: withAlpha(colors.text, 0.75),
+                    marginTop: 4,
+                    fontWeight: "600",
+                  }}
+                >
+                  {isRestToday
+                    ? "Keep it light: steps, mobility, great sleep."
+                    : "Here’s your day at a glance."}
+                </Text>
+              </View>
             </View>
-            <View style={{ alignItems: "center" }}>
+
+            {/* Progress ring */}
+            <View
+              style={{
+                alignItems: "center",
+                alignSelf: isCompact ? "stretch" : "auto",
+              }}
+            >
               <ProgressRing
                 label="Net"
                 value={Math.max(0, totals.net)}
@@ -383,7 +734,14 @@ export default function HomeScreen() {
           </View>
 
           {/* hero pills */}
-          <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 8,
+              marginTop: 12,
+              flexWrap: "wrap",
+            }}
+          >
             <Pill
               icon="flame-outline"
               label="Consumed"
@@ -394,7 +752,7 @@ export default function HomeScreen() {
               icon="walk-outline"
               label="Burned"
               value={`${Math.round(totals.burned)} kcal`}
-              tint={colors.chartSecondary}
+              tint={(colors as any).chartSecondary ?? successTint}
             />
             {isRestToday && (
               <View
@@ -405,16 +763,12 @@ export default function HomeScreen() {
                   paddingVertical: 8,
                   paddingHorizontal: 12,
                   borderRadius: 999,
-                  backgroundColor: withAlpha(colors.chartSecondary, 0.18),
+                  backgroundColor: withAlpha(successTint, 0.18),
                   borderWidth: 1,
-                  borderColor: withAlpha(colors.chartSecondary, 0.35),
+                  borderColor: withAlpha(successTint, 0.35),
                 }}
               >
-                <Ionicons
-                  name="bed-outline"
-                  size={16}
-                  color={colors.chartSecondary}
-                />
+                <Ionicons name="bed-outline" size={16} color={successTint} />
                 <Text style={{ color: colors.text, fontWeight: "600" }}>
                   Rest day
                 </Text>
@@ -422,6 +776,86 @@ export default function HomeScreen() {
             )}
           </View>
         </LinearGradient>
+      </MotiView>
+
+      {/* AI Suggestions card */}
+      <MotiView
+        from={{ opacity: 0, translateY: 8 }}
+        animate={{ opacity: 1, translateY: 0 }}
+        transition={{ type: "timing", duration: 460, delay: 60 }}
+      >
+        <Card
+          style={{
+            padding: 14,
+            borderWidth: 1,
+            borderColor: withAlpha(colors.primary, 0.35),
+            borderRadius: 18,
+            ...softShadow,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 10,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: withAlpha(colors.primary, 0.15),
+                borderWidth: 1,
+                borderColor: withAlpha(colors.border, 0.8),
+              }}
+            >
+              <Ionicons
+                name="sparkles-outline"
+                size={18}
+                color={colors.primary}
+              />
+            </View>
+            <Text
+              style={{ color: colors.text, fontWeight: "800", fontSize: 16 }}
+            >
+              AI Suggestions
+            </Text>
+          </View>
+
+          <View style={{ marginTop: 10, gap: 6 }}>
+            <Text
+              style={{ color: colors.text, fontWeight: "800", fontSize: 15 }}
+            >
+              {suggestion.title}
+            </Text>
+            <Text
+              style={{ color: withAlpha(colors.text, 0.75), lineHeight: 20 }}
+            >
+              {suggestion.body}
+            </Text>
+          </View>
+
+          <View style={{ marginTop: 12 }}>
+            <Link href={suggestion.href} asChild>
+              <Pressable
+                style={({ pressed }) => [
+                  {
+                    height: 44,
+                    borderRadius: 12,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor:
+                      suggestion.tint === "workout"
+                        ? (colors as any).chartSecondary ?? successTint
+                        : colors.primary,
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                <Text style={{ color: "#fff", fontWeight: "900" }}>
+                  {suggestion.ctaLabel}
+                </Text>
+              </Pressable>
+            </Link>
+          </View>
+        </Card>
       </MotiView>
 
       {/* QUICK STATS */}
@@ -561,7 +995,7 @@ export default function HomeScreen() {
             burned={totals.burned}
             target={kcalGoal}
             primary={colors.primary}
-            secondary={colors.chartSecondary}
+            secondary={(colors as any).chartSecondary ?? successTint}
             border={colors.border}
             textColor={colors.text}
             muted={withAlpha(colors.text, 0.6)}
@@ -581,7 +1015,7 @@ export default function HomeScreen() {
             title="Log Workout"
             desc="Add sets, reps, weight"
             to={"/(tabs)/workouts" as Href}
-            tint={colors.chartSecondary}
+            tint={(colors as any).chartSecondary ?? successTint}
           />
           <ActionTile
             icon="fast-food-outline"
@@ -595,16 +1029,17 @@ export default function HomeScreen() {
             title="Profile"
             desc="Account & preferences"
             to={"/(tabs)/profile" as Href}
-            tint={colors.success}
+            tint={(colors as any).success ?? colors.primary}
           />
         </View>
       </MotiView>
+
       <BottomTabSpacer extra={16} />
     </ScrollView>
   );
 }
 
-/* ---------- bits (unchanged helpers + a few) ---------- */
+/* ---------- bits (helpers) ---------- */
 
 function IconBtn({ icon, onPress }: { icon: any; onPress?: () => void }) {
   const { colors } = useTheme();
@@ -766,56 +1201,6 @@ function Pill({
   );
 }
 
-function MacroChip({
-  label,
-  grams,
-  pct,
-  tint,
-}: {
-  label: string;
-  grams: number;
-  pct: number;
-  tint: string;
-}) {
-  const { colors } = useTheme();
-  const widthPct = Math.max(10, Math.min(100, pct));
-  return (
-    <View
-      style={{
-        flex: 1,
-        minWidth: 90,
-        borderRadius: 14,
-        padding: 10,
-        backgroundColor: withAlpha(tint, 0.12),
-        borderWidth: 1,
-        borderColor: withAlpha(tint, 0.35),
-      }}
-    >
-      <Text style={{ color: withAlpha(colors.text, 0.6), fontSize: 12 }}>
-        {label}
-      </Text>
-      <Text style={{ color: colors.text, fontWeight: "800" }}>{grams} g</Text>
-      <View
-        style={{
-          height: 6,
-          borderRadius: 999,
-          backgroundColor: withAlpha(colors.card, 0.5),
-          marginTop: 6,
-          overflow: "hidden",
-        }}
-      >
-        <View
-          style={{
-            width: `${widthPct}%`,
-            height: "100%",
-            backgroundColor: tint,
-          }}
-        />
-      </View>
-    </View>
-  );
-}
-
 function Badge({ text, color }: { text: string; color: string }) {
   return (
     <View
@@ -949,7 +1334,6 @@ function TodayBar({
           overflow: "hidden",
         }}
       >
-        {/* consumed */}
         <View
           style={{
             width: `${pctConsumed}%`,
@@ -957,7 +1341,6 @@ function TodayBar({
             backgroundColor: withAlpha(primary, 0.9),
           }}
         >
-          {/* burned overlay */}
           <View
             style={{
               width: `${pctBurned}%`,

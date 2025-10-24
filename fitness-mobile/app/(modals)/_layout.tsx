@@ -25,7 +25,6 @@ export default function ModalLayout() {
             style={{ flex: 1 }}
           >
             <LinearGradient
-              // soft top sheen + subtle primary hue; keep neutral so it fits both screens
               colors={["rgba(255,255,255,0.12)", "rgba(0,0,0,0)"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
@@ -34,6 +33,8 @@ export default function ModalLayout() {
           </BlurView>
         ),
       }}
-    />
+    >
+      <Stack.Screen name="full-calendar" />
+    </Stack>
   );
 }

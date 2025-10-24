@@ -1,8 +1,10 @@
+// components/nutrition/Header.tsx
 import React from "react";
-import { View, Text } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
+import { Link } from "expo-router"; // ⬅️ NEW
 import { useTheme } from "@/content/ThemeProvider";
 import Card from "@/components/Card";
 import Field from "./ui/Field";
@@ -48,10 +50,11 @@ export default function Header({
         tint={isDark ? "dark" : "light"}
         style={{ padding: 14 }}
       >
+        {/* Top row: title + date + quick calendar */}
         <View
           style={{
             flexDirection: "row",
-            alignItems: "center",
+            alignItems: "flex-start",
             justifyContent: "space-between",
             marginBottom: 10,
           }}
@@ -83,7 +86,9 @@ export default function Header({
               </Text>
             </View>
           </View>
-          <View style={{ width: 160 }}>
+
+          {/* Date input + Calendar button column */}
+          <View style={{ width: 170 }}>
             <Field
               icon="calendar-outline"
               placeholder="YYYY-MM-DD"
@@ -91,6 +96,34 @@ export default function Header({
               onChangeText={onChangeDate}
               autoCapitalize="none"
             />
+            {/* NEW: small calendar link under the date field */}
+            <Link href="/(modals)/full-calendar" asChild>
+              <Pressable
+                hitSlop={8}
+                style={{
+                  alignSelf: "flex-end",
+                  marginTop: 6,
+                  paddingVertical: 6,
+                  paddingHorizontal: 10,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: withAlpha(colors.primary, 0.35),
+                  backgroundColor: withAlpha(colors.primary, 0.12),
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Ionicons
+                  name="calendar-outline"
+                  size={12}
+                  color={colors.primary}
+                />
+                <Text style={{ color: colors.primary, fontWeight: "800" }}>
+                  Calendar
+                </Text>
+              </Pressable>
+            </Link>
           </View>
         </View>
 

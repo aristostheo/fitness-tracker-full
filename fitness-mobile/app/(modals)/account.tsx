@@ -1,635 +1,503 @@
-import React, { useEffect, useMemo, useState, useLayoutEffect } from "react";
+// app/(tabs)/account.tsx
+import React, { useMemo, useState, useLayoutEffect } from "react";
 import {
   ScrollView,
   View,
   Text,
-  TextInput,
   Pressable,
-  Alert,
   Platform,
-  Switch,
+  Alert,
+  Linking,
+  Animated,
+  Easing,
 } from "react-native";
 import { useRouter, useNavigation } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import { useAuth } from "@/content/AuthContext";
 import { useTheme } from "@/content/ThemeProvider";
+import { useAuth } from "@/content/AuthContext";
 
-import { auth, db } from "@/lib/firebase";
-import {
-  signOut,
-  updateProfile as updateAuthProfile,
-  sendEmailVerification,
-  sendPasswordResetEmail,
-} from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { useBadges } from "@/hooks/useBadges";
+import { BadgeGrid } from "@/components/badges/BadgeGrid";
+import BadgeCelebrate from "@/components/badges/BadgeCelebrate";
+import { BADGES } from "@/services/badges";
 
-// Optional niceties (loaded only if available)
-let Clipboard: any = null;
-let Haptics: any = null;
-try {
-  Clipboard = require("expo-clipboard");
-} catch {}
-try {
-  Haptics = require("expo-haptics");
-} catch {}
+import { getAuth, sendEmailVerification } from "firebase/auth";
 
-export default function AccountScreen() {
-  const { colors, isDark, primary } = useTheme() as any;
-  const { user } = useAuth();
-  const router = useRouter();
-  const nav = useNavigation();
+/* ────────────────────────── small UI helpers ────────────────────────── */
 
-  // ── Header (pinned under Dynamic Island)
-  useLayoutEffect(() => {
-    nav.setOptions({
-      headerLargeTitle: Platform.OS === "ios",
-      headerTitle: () => (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <View
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 10,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: `${primary || colors.primary}20`,
-              borderWidth: 1,
-              borderColor: `${primary || colors.primary}55`,
-            }}
-          >
-            <Ionicons
-              name="person-outline"
-              size={18}
-              color={colors.text as string}
-            />
-          </View>
-          <View>
-            <Text
-              style={{ color: colors.text, fontSize: 18, fontWeight: "800" }}
-            >
-              Account
-            </Text>
-            {!!user?.email && (
-              <Text
-                numberOfLines={1}
-                style={{ color: colors.muted, fontSize: 12 }}
-              >
-                {user.email}
-              </Text>
-            )}
-          </View>
-        </View>
-      ),
-      headerRight: () => (
-        <Pressable
-          onPress={() => router.back()}
-          style={{ borderRadius: 999, overflow: "hidden" }}
-        >
-          <BlurView
-            intensity={16}
-            tint={isDark ? "systemThinMaterialDark" : "systemThinMaterialLight"}
-          >
-            <Text
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 14,
-                color: colors.text,
-                fontWeight: "800",
-              }}
-            >
-              Done
-            </Text>
-          </BlurView>
-        </Pressable>
-      ),
-    });
-  }, [nav, user?.email]);
-
-  // Profile editing
-  const [displayName, setDisplayName] = useState(user?.displayName || "");
-  const [saving, setSaving] = useState(false);
-
-  // “Remember me” device toggle
-  const [rememberMe, setRememberMe] = useState(true);
-  useEffect(() => {
-    (async () => {
-      const flag = await AsyncStorage.getItem("@rememberMe");
-      setRememberMe(flag !== "0");
-    })();
-  }, []);
-  async function onToggleRemember(v: boolean) {
-    setRememberMe(v);
-    await AsyncStorage.setItem("@rememberMe", v ? "1" : "0");
-  }
-
-  // extra profile info
-  const [profileDoc, setProfileDoc] = useState<any>(null);
-  useEffect(() => {
-    (async () => {
-      if (!user?.uid) return;
-      const snap = await getDoc(doc(db, "users", user.uid));
-      if (snap.exists()) setProfileDoc(snap.data());
-    })();
-  }, [user?.uid]);
-
-  const providers =
-    (user?.providerData || [])
-      .map((p) => p.providerId.replace(".com", ""))
-      .join(", ") || "password";
-
-  const createdUTC = user?.metadata?.creationTime || "";
-  const lastSignInUTC = user?.metadata?.lastSignInTime || "";
-
-  const createdLocal = createdUTC ? new Date(createdUTC).toLocaleString() : "—";
-  const lastSignInLocal = lastSignInUTC
-    ? new Date(lastSignInUTC).toLocaleString()
-    : "—";
-
-  const lastSeenAgo = useMemo(
-    () => (lastSignInUTC ? timeAgo(new Date(lastSignInUTC)) : "—"),
-    [lastSignInUTC]
-  );
-
-  async function onSaveName() {
-    if (!user?.uid) return;
-    const name = displayName.trim();
-    setSaving(true);
-    try {
-      await updateAuthProfile(auth.currentUser!, {
-        displayName: name || (null as any),
-      });
-      Haptics?.notificationAsync?.(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Saved", "Your display name was updated.");
-    } catch (e: any) {
-      Haptics?.notificationAsync?.(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Update failed", e?.message || "Couldn't update name");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function onSendVerify() {
-    if (!user) return;
-    try {
-      await sendEmailVerification(user);
-      Haptics?.selectionAsync?.();
-      Alert.alert(
-        "Verification sent",
-        "Check your inbox to verify your email."
-      );
-    } catch (e: any) {
-      Alert.alert("Couldn’t send", e?.message || "Please try again later.");
-    }
-  }
-
-  async function onResetPassword() {
-    if (!user?.email) {
-      Alert.alert("Email not found", "This account has no email address.");
-      return;
-    }
-    try {
-      await sendPasswordResetEmail(auth, user.email);
-      Haptics?.selectionAsync?.();
-      Alert.alert("Reset link sent", "Check your inbox to set a new password.");
-    } catch (e: any) {
-      Alert.alert("Couldn’t send", e?.message || "Please try again later.");
-    }
-  }
-
-  function confirmLogout() {
-    Alert.alert("Log out", "Are you sure you want to log out of this device?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Log out",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await signOut(auth);
-            router.dismissAll();
-            router.replace("/(auth)/login");
-          } catch (e: any) {
-            Alert.alert("Sign out failed", e?.message || "Please try again.");
-          }
-        },
-      },
-    ]);
-  }
-
+function Chevron({ open, color = "#999" }: { open: boolean; color?: string }) {
+  const a = React.useRef(new Animated.Value(open ? 1 : 0)).current;
+  React.useEffect(() => {
+    Animated.timing(a, {
+      toValue: open ? 1 : 0,
+      duration: 160,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+  }, [open]);
+  const rotate = a.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["-90deg", "0deg"],
+  });
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentInsetAdjustmentBehavior="automatic"
-      contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 40 }}
-    >
-      {/* PROFILE NAME / EDIT */}
-      <GlassPanel>
-        <SectionHeader icon="person-outline" title="Profile" />
-        <Text style={{ color: colors.muted }}>Display name</Text>
-        <TextInput
-          style={{
-            borderWidth: 1,
-            borderColor: colors.inputBorder,
-            borderRadius: 12,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            backgroundColor: colors.inputBg,
-            color: colors.text,
-            marginTop: 6,
-          }}
-          placeholder="Your display name"
-          placeholderTextColor={colors.placeholder}
-          value={displayName}
-          onChangeText={setDisplayName}
-        />
-        <Row style={{ justifyContent: "flex-end", marginTop: 10 }}>
-          <PrimaryButton
-            onPress={onSaveName}
-            disabled={saving}
-            label={saving ? "Saving…" : "Save"}
-          />
-        </Row>
-      </GlassPanel>
-
-      {/* SECURITY */}
-      <GlassPanel>
-        <SectionHeader icon="shield-checkmark-outline" title="Security" />
-        <ListRow
-          label="Email verification"
-          value={user?.emailVerified ? "Verified" : "Not verified"}
-          valueTone={user?.emailVerified ? "success" : "warning"}
-          trailing={
-            !user?.emailVerified ? (
-              <TinyButton
-                icon="mail-outline"
-                label="Verify"
-                onPress={onSendVerify}
-              />
-            ) : null
-          }
-        />
-        <ListRow
-          label="Password"
-          value={mask("•", 10)}
-          trailing={
-            <TinyButton
-              icon="key-outline"
-              label="Reset"
-              onPress={onResetPassword}
-            />
-          }
-        />
-        <ListRow
-          label="Stay signed in (this device)"
-          value=""
-          trailing={
-            <Switch value={rememberMe} onValueChange={onToggleRemember} />
-          }
-        />
-      </GlassPanel>
-
-      {/* ACCOUNT DETAILS */}
-      <GlassPanel>
-        <SectionHeader
-          icon="information-circle-outline"
-          title="Account details"
-        />
-        <ListRow label="Email" value={user?.email || "—"} />
-        <ListRow label="UID" value={user?.uid || "—"} mono />
-        <ListRow label="Auth providers" value={providers} />
-        <ListRow label="Created" value={createdLocal} />
-        <ListRow
-          label="Last sign-in"
-          value={`${lastSignInLocal} (${lastSeenAgo})`}
-        />
-      </GlassPanel>
-
-      {/* DEVICES / SESSIONS */}
-      <GlassPanel>
-        <SectionHeader
-          icon="phone-portrait-outline"
-          title="Device & sessions"
-        />
-        <Text style={{ color: colors.muted }}>
-          You’re signed in on this device. If you didn’t mean to stay signed in,
-          turn off <Text style={{ fontWeight: "800" }}>Stay signed in</Text>{" "}
-          above or tap <Text style={{ fontWeight: "800" }}>Log out</Text> below.
-        </Text>
-      </GlassPanel>
-
-      {/* LOG OUT */}
-      <View style={{ borderRadius: 16, overflow: "hidden" }}>
-        <Pressable onPress={confirmLogout}>
-          <BlurView
-            intensity={22}
-            tint={isDark ? "systemThinMaterialDark" : "systemThinMaterialLight"}
-            style={{
-              paddingVertical: 14,
-              paddingHorizontal: 16,
-              borderWidth: 1,
-              borderColor: "rgba(239, 68, 68, 0.35)",
-            }}
-          >
-            <Row gap={10}>
-              <IconBadge color="#ef4444">
-                <Ionicons name="log-out-outline" size={16} color="#ef4444" />
-              </IconBadge>
-              <Text style={{ color: "#ef4444", fontWeight: "900" }}>
-                Log out
-              </Text>
-            </Row>
-          </BlurView>
-        </Pressable>
-      </View>
-
-      {/* Small footer */}
-      <View style={{ alignItems: "center", marginTop: 6 }}>
-        <Text style={{ color: colors.muted, fontSize: 12 }}>
-          v{profileDoc?.appVersion ?? "—"} • {Platform.OS} {Platform.Version}
-        </Text>
-      </View>
-    </ScrollView>
-  );
-}
-
-/* ─────────────── Helpers & UI bits ─────────────── */
-function timeAgo(d: Date) {
-  const s = Math.floor((Date.now() - d.getTime()) / 1000);
-  const m = Math.floor(s / 60);
-  const h = Math.floor(m / 60);
-  const d2 = Math.floor(h / 24);
-  if (d2 > 0) return `${d2}d ago`;
-  if (h > 0) return `${h}h ago`;
-  if (m > 0) return `${m}m ago`;
-  return "just now";
-}
-function mask(ch: string, n: number) {
-  return Array.from({ length: n })
-    .map(() => ch)
-    .join("");
-}
-
-function StatusBadge({
-  label,
-  tone = "info",
-}: {
-  label: string;
-  tone?: "info" | "success" | "warning";
-}) {
-  const { isDark } = useTheme();
-  const palette =
-    tone === "success"
-      ? {
-          border: "rgba(34,197,94,0.35)",
-          bg: "rgba(34,197,94,0.12)",
-          text: "#22c55e",
-        }
-      : tone === "warning"
-      ? {
-          border: "rgba(234,179,8,0.35)",
-          bg: "rgba(234,179,8,0.12)",
-          text: "#eab308",
-        }
-      : {
-          border: "rgba(59,130,246,0.35)",
-          bg: "rgba(59,130,246,0.12)",
-          text: isDark ? "#dbeafe" : "#1f2937",
-        };
-  return (
-    <View
-      style={{
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: palette.border,
-        backgroundColor: palette.bg,
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-      }}
-    >
-      <Text style={{ color: palette.text, fontWeight: "800", fontSize: 12 }}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
-function IconBadge({
-  children,
-  color,
-}: {
-  children: React.ReactNode;
-  color: string;
-}) {
-  return (
-    <View
-      style={{
-        width: 28,
-        height: 28,
-        borderRadius: 8,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: `${color}20`,
-        borderWidth: 1,
-        borderColor: `${color}59`,
-      }}
-    >
-      {children}
-    </View>
-  );
-}
-
-function Row({
-  children,
-  gap = 0,
-  between = false,
-  style,
-}: React.PropsWithChildren<{ gap?: number; between?: boolean; style?: any }>) {
-  return (
-    <View
-      style={[
-        { flexDirection: "row", alignItems: "center", gap },
-        between && { justifyContent: "space-between" },
-        style,
-      ]}
-    >
-      {children}
-    </View>
-  );
-}
-
-function GlassPanel({ children }: React.PropsWithChildren) {
-  const { colors, isDark } = useTheme();
-  return (
-    <View
-      style={{
-        borderRadius: 16,
-        overflow: "hidden",
-        borderWidth: 1,
-        borderColor: colors.border,
-      }}
-    >
-      <BlurView
-        intensity={22}
-        tint={isDark ? "systemThinMaterialDark" : "systemThinMaterialLight"}
-        style={{ padding: 14 }}
-      >
-        {children}
-      </BlurView>
-    </View>
+    <Animated.View style={{ transform: [{ rotate }], marginLeft: 6 }}>
+      <Ionicons name="chevron-forward" size={16} color={color} />
+    </Animated.View>
   );
 }
 
 function SectionHeader({
   icon,
   title,
+  right,
+  onPress,
+  collapsible = false,
+  open = true,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon?: keyof typeof Ionicons.glyphMap;
   title: string;
+  right?: React.ReactNode;
+  onPress?: () => void;
+  collapsible?: boolean;
+  open?: boolean;
 }) {
-  const { colors } = useTheme();
+  const { colors } = useTheme() as any;
+  const content = (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+      }}
+    >
+      {!!icon && <Ionicons name={icon} size={14} color={colors.text + "99"} />}
+      <Text
+        style={{
+          fontSize: 12,
+          fontWeight: "700",
+          letterSpacing: 0.6,
+          textTransform: "uppercase",
+          color: colors.text + "99",
+          flex: 1,
+        }}
+      >
+        {title}
+      </Text>
+      {right}
+      {collapsible && <Chevron open={!!open} color={colors.muted} />}
+    </View>
+  );
+
+  if (!collapsible) return <View style={{ marginBottom: 8 }}>{content}</View>;
+
   return (
-    <Row gap={8} style={{ marginBottom: 8 }}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        marginBottom: 8,
+        opacity: pressed ? 0.7 : 1,
+      })}
+      accessibilityRole="button"
+      accessibilityLabel={`${title} section`}
+    >
+      {content}
+    </Pressable>
+  );
+}
+
+function GlassPanel({
+  children,
+  pad = 12,
+}: React.PropsWithChildren<{ pad?: number }>) {
+  const { colors, isDark } = useTheme() as any;
+  if (Platform.OS === "ios") {
+    return (
       <View
         style={{
-          width: 28,
-          height: 28,
-          borderRadius: 8,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "rgba(255,255,255,0.08)",
+          borderRadius: 18,
+          overflow: "hidden",
           borderWidth: 1,
           borderColor: colors.border,
         }}
       >
-        <Ionicons name={icon} size={16} color={colors.text as string} />
+        <BlurView
+          tint={isDark ? "systemThinMaterialDark" : "systemThinMaterialLight"}
+          intensity={24}
+          style={{ padding: pad }}
+        >
+          {children}
+        </BlurView>
       </View>
-      <Text style={{ color: colors.text, fontWeight: "900" }}>{title}</Text>
-    </Row>
-  );
-}
-
-function PrimaryButton({
-  label,
-  onPress,
-  disabled,
-}: {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-}) {
+    );
+  }
   return (
-    <Pressable
-      onPress={!disabled ? onPress : undefined}
+    <View
       style={{
-        borderRadius: 12,
-        overflow: "hidden",
-        opacity: disabled ? 0.8 : 1,
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.card,
+        padding: pad,
       }}
     >
-      <LinearGradient
-        colors={["#6366F1", "#8B5CF6"]}
-        start={{ x: 0, y: 0.5 }}
-        end={{ x: 1, y: 0.5 }}
-        style={{
-          paddingVertical: 12,
-          paddingHorizontal: 16,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Text style={{ color: "#fff", fontWeight: "900" }}>{label}</Text>
-      </LinearGradient>
-    </Pressable>
+      {children}
+    </View>
   );
 }
 
-function TinyButton({
-  icon,
+function RowButton({
   label,
+  subtitle,
+  icon,
   onPress,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
   label: string;
+  subtitle?: string;
+  icon: keyof typeof Ionicons.glyphMap;
   onPress: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors } = useTheme() as any;
   return (
     <Pressable
       onPress={onPress}
-      style={{ borderRadius: 999, overflow: "hidden" }}
+      style={({ pressed }) => ({
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: colors.border,
+        padding: 12,
+        backgroundColor: pressed ? colors.card : "transparent",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+      })}
     >
-      <BlurView intensity={16} tint="light">
-        <Row
-          style={{
-            paddingVertical: 6,
-            paddingHorizontal: 10,
-            borderRadius: 999,
-          }}
-          gap={6}
-        >
-          <Ionicons name={icon} size={12} color={colors.text as string} />
-          <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>
-            {label}
-          </Text>
-        </Row>
-      </BlurView>
+      <View
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 12,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: colors.card,
+          borderWidth: 1,
+          borderColor: colors.border,
+        }}
+      >
+        <Ionicons name={icon} size={18} color={colors.text} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: colors.text, fontWeight: "800" }}>{label}</Text>
+        {!!subtitle && (
+          <Text style={{ color: colors.muted, fontSize: 12 }}>{subtitle}</Text>
+        )}
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={colors.muted} />
     </Pressable>
   );
 }
 
-function ListRow({
-  label,
-  value,
-  mono,
-  trailing,
-  valueTone,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-  trailing?: React.ReactNode;
-  valueTone?: "success" | "warning";
-}) {
-  const { colors } = useTheme();
-  const toneColor =
-    valueTone === "success"
-      ? "#22c55e"
-      : valueTone === "warning"
-      ? "#eab308"
-      : (colors.text as string);
-  return (
-    <Row
-      style={{
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
-        paddingVertical: 10,
-        alignItems: "center",
-      }}
-      between
-    >
-      <Text style={{ color: colors.muted, flex: 1.2 }}>{label}</Text>
-      <View style={{ flex: 2, alignItems: "flex-end", gap: 6 }}>
-        {!!value && (
-          <Text
-            selectable
-            style={{
-              color: toneColor,
-              textAlign: "right",
-              fontFamily: mono
-                ? Platform.OS === "ios"
-                  ? "Menlo"
-                  : "monospace"
-                : undefined,
-            }}
-          >
-            {value}
+/* ───────────────────────────── screen ───────────────────────────── */
+
+export default function AccountScreen() {
+  const { colors, isDark } = useTheme() as any;
+  const { user } = useAuth();
+  const router = useRouter();
+  const navigation = useNavigation();
+
+  // Show native header with Done button (doesn't cover content)
+  useLayoutEffect(() => {
+    navigation.setOptions?.({
+      headerShown: true,
+      headerTitle: "Account",
+      headerLargeTitle: false,
+      headerRight: () => (
+        <Pressable
+          onPress={() => {
+            // If there's a back stack, go back; otherwise no-op
+            // @ts-ignore
+            if (navigation.canGoBack?.()) navigation.goBack();
+          }}
+          hitSlop={8}
+          style={{
+            paddingHorizontal: 10,
+            paddingVertical: 6,
+            borderRadius: 10,
+            backgroundColor: colors.buttonBg,
+          }}
+        >
+          <Text style={{ color: colors.buttonText, fontWeight: "900" }}>
+            Done
           </Text>
-        )}
-        {trailing}
-      </View>
-    </Row>
+        </Pressable>
+      ),
+    });
+  }, [navigation, colors]);
+
+  // Earned badges live stream
+  const earned = useBadges(user?.uid);
+
+  // Celebration overlay (trigger by setting IDs)
+  const [celebrateIds, setCelebrateIds] = useState<string[]>([]);
+
+  const email = user?.email || "Signed-in user";
+  const verified = !!user?.emailVerified;
+
+  const name = useMemo(() => {
+    const at = email.indexOf("@");
+    return at > 0 ? email.slice(0, at) : email;
+  }, [email]);
+
+  async function onVerifyEmail() {
+    try {
+      const auth = getAuth();
+      const u = auth.currentUser;
+      if (!u) return;
+      await sendEmailVerification(u);
+      Alert.alert(
+        "Verification sent",
+        "Check your inbox for the verification email."
+      );
+    } catch (e: any) {
+      Alert.alert("Error", e?.message || "Could not send verification email.");
+    }
+  }
+
+  function onOpenPrivacy() {
+    Linking.openURL("https://example.com/privacy").catch(() => {});
+  }
+  function onOpenTerms() {
+    Linking.openURL("https://example.com/terms").catch(() => {});
+  }
+
+  // Collapsible sections
+  const [showEarned, setShowEarned] = useState(true);
+  const [showGlossary, setShowGlossary] = useState(true);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* soft background */}
+      <LinearGradient
+        colors={[
+          isDark ? "rgba(139,92,246,0.10)" : "rgba(59,130,246,0.10)",
+          "transparent",
+        ]}
+        style={{
+          position: "absolute",
+          top: -80,
+          left: -60,
+          right: -60,
+          height: 280,
+          transform: [{ rotate: "-6deg" }],
+        }}
+        pointerEvents="none"
+      />
+
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 28 }}
+      >
+        {/* Profile header */}
+        <GlassPanel pad={14}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 16,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: isDark
+                  ? "rgba(255,255,255,0.08)"
+                  : "rgba(0,0,0,0.05)",
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+            >
+              <Ionicons
+                name="person-circle-outline"
+                size={28}
+                color={colors.text}
+              />
+            </View>
+
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}
+              >
+                {name}
+              </Text>
+              <Text style={{ color: colors.muted, fontSize: 12 }}>{email}</Text>
+
+              <View
+                style={{
+                  marginTop: 6,
+                  alignSelf: "flex-start",
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: verified ? "#10b98155" : "#f59e0b55",
+                  backgroundColor: verified ? "#10b98122" : "#f59e0b22",
+                }}
+              >
+                <Text
+                  style={{
+                    color: verified ? "#10b981" : "#f59e0b",
+                    fontWeight: "900",
+                    fontSize: 12,
+                  }}
+                >
+                  {verified ? "Verified" : "Not verified"}
+                </Text>
+              </View>
+            </View>
+
+            {!verified && (
+              <Pressable
+                onPress={onVerifyEmail}
+                style={{
+                  borderRadius: 12,
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  backgroundColor: colors.buttonBg,
+                }}
+              >
+                <Text style={{ color: colors.buttonText, fontWeight: "900" }}>
+                  Verify
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        </GlassPanel>
+
+        {/* Earned badges (collapsible) */}
+        <GlassPanel>
+          <SectionHeader
+            icon="trophy-outline"
+            title="Earned badges"
+            collapsible
+            open={showEarned}
+            onPress={() => setShowEarned((v) => !v)}
+          />
+          {showEarned && (
+            <>
+              {earned.length === 0 ? (
+                <Text style={{ color: colors.muted }}>
+                  You haven’t earned any badges yet. Log meals or workouts to
+                  start.
+                </Text>
+              ) : (
+                <BadgeGrid earned={earned} />
+              )}
+            </>
+          )}
+        </GlassPanel>
+
+        {/* Glossary (collapsible) */}
+        <GlassPanel>
+          <SectionHeader
+            icon="information-circle-outline"
+            title="All badges"
+            collapsible
+            open={showGlossary}
+            onPress={() => setShowGlossary((v) => !v)}
+          />
+          {showGlossary && (
+            <View style={{ gap: 10 }}>
+              {Object.values(BADGES).map((b) => (
+                <View
+                  key={b.id}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    borderRadius: 12,
+                    padding: 10,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 12,
+                      backgroundColor: `${b.color}22`,
+                      borderWidth: 1,
+                      borderColor: `${b.color}55`,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Ionicons name={b.icon} size={18} color={b.color} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.text, fontWeight: "800" }}>
+                      {b.name}
+                    </Text>
+                    <Text style={{ color: colors.muted, fontSize: 12 }}>
+                      {b.desc}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </GlassPanel>
+
+        {/* Actions */}
+        <GlassPanel>
+          <SectionHeader icon="settings-outline" title="Account Info" />
+          <View style={{ gap: 10 }}>
+            <RowButton
+              icon="color-palette-outline"
+              label="Theme & Settings"
+              subtitle="Choose light/dark and accents"
+              onPress={() => router.push("/settings")}
+            />
+            <RowButton
+              icon="lock-closed-outline"
+              label="Privacy Policy"
+              onPress={onOpenPrivacy}
+            />
+            <RowButton
+              icon="document-text-outline"
+              label="Terms of Use"
+              onPress={onOpenTerms}
+            />
+            <RowButton
+              icon="log-out-outline"
+              label="Sign out"
+              onPress={() => {
+                Alert.alert("Sign out", "Are you sure you want to sign out?", [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Sign out",
+                    style: "destructive",
+                    onPress: async () => {
+                      try {
+                        await getAuth().signOut();
+                      } catch (e) {
+                        Alert.alert("Error", "Could not sign out. Try again.");
+                      }
+                    },
+                  },
+                ]);
+              }}
+            />
+          </View>
+        </GlassPanel>
+      </ScrollView>
+
+      {/* Celebration modal */}
+      <BadgeCelebrate
+        ids={celebrateIds as any}
+        open={celebrateIds.length > 0}
+        onClose={() => setCelebrateIds([])}
+      />
+    </View>
   );
 }

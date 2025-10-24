@@ -10,6 +10,7 @@ import {
   Switch,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Link, useRouter } from "expo-router";
 import { useAuth } from "@/content/AuthContext";
 import { useTheme } from "@/content/ThemeProvider";
 import Card from "@/components/Card";
@@ -31,6 +32,17 @@ import {
   addWorkoutPreset,
   type WorkoutPreset,
 } from "@/services/presets";
+
+import {
+  addExerciseBurn,
+  deleteExerciseBurn,
+  type ExerciseBurnEntry,
+} from "@/services/exerciseBurn";
+
+import {
+  subscribeExerciseBetween,
+  type ExerciseEntry,
+} from "@/services/nutrition";
 import { kgToLb, lbToKg } from "@/utils/units";
 import { fmt, startOfMonth, startOfWeek, endOfToday } from "@/utils/date";
 import { auth } from "@/lib/firebase";
@@ -51,6 +63,20 @@ import GroupedWorkouts from "@/components/workouts/GroupedWorkouts";
 import ExerciseSearchSheet from "@/components/workouts/ExerciseSearchSheet";
 import BottomTabSpacer from "@/components/ui/BottomTapSpacer";
 import WorkoutGenerator from "@/components/workouts/WorkoutGenerator";
+
+/* 🔰 Badges */
+import BadgeCelebrate from "@/components/badges/BadgeCelebrate";
+import { evaluateBadges } from "@/services/badges";
+
+/* Firestore helpers for badge counts */
+import {
+  getFirestore,
+  collection,
+  getCountFromServer,
+} from "firebase/firestore";
+import ExerciseCard from "@/components/nutrition/ExerciseCard";
+
+const db = getFirestore();
 
 /* ────────────────────────────────────────────────────────────── */
 /* Types & helpers                                                */
@@ -142,6 +168,98 @@ const EXERCISES: Ex[] = [
     place: ["home", "gym"],
   },
 ];
+// Session cache for exercise estimates (avoid extra network calls)
+const exEstimateCache = new Map<string, { name: string; calories: number }>();
+
+function normalizeDesc(s: string) {
+  return s.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+// bucket profile a bit so “close enough” doesn’t miss cache
+function profileBucket(p?: Profile | null) {
+  if (!p) return "";
+  const age = (p as any)?.age;
+  const height = (p as any)?.heightCm ?? (p as any)?.height_cm ?? undefined;
+  const weight = (p as any)?.weightKg ?? (p as any)?.weight_kg ?? undefined;
+  const sex = (p as any)?.sex || (p as any)?.gender || "";
+
+  const ageB = Number.isFinite(Number(age))
+    ? Math.round(Number(age) / 5) * 5
+    : "";
+  const hB = Number.isFinite(Number(height))
+    ? Math.round(Number(height) / 5) * 5
+    : "";
+  const wB = Number.isFinite(Number(weight))
+    ? Math.round(Number(weight) / 2) * 2
+    : "";
+
+  return `${sex}|${ageB}|${hB}|${wB}`;
+}
+
+function isGenericName(s: string) {
+  const x = (s || "").trim().toLowerCase();
+  return (
+    !x ||
+    x === "exercise" ||
+    x === "session" ||
+    x === "exercise session" ||
+    x === "workout"
+  );
+}
+
+function deriveNameFromDesc(rawText: string) {
+  // normalize and keep original for casing later
+  const raw = rawText || "";
+  let s = raw.toLowerCase();
+
+  // strip leading duration like "20 min", "45mins", "1h", "for 30 minutes"
+  s = s.replace(
+    /^\s*(for\s*)?(\d+(\.\d+)?)\s*(min|mins|minutes|h|hr|hrs|hour|hours)\b\s*/i,
+    ""
+  );
+
+  // remove trailing qualifiers that aren’t core to the name
+  s = s.replace(/\s+at\s+(easy|moderate|hard|tempo|fast|slow)\s+pace\b/i, "");
+  s = s.replace(/\s*\b(rpe|intensity)\s*\d+(\.\d+)?\b/i, "");
+
+  // trim punctuation/clutter
+  s = s.replace(/^[\s:,\-–—]+|[\s:,\-–—]+$/g, "");
+  s = s.replace(/\s{2,}/g, " ").trim();
+
+  // common corrections / pluralizations
+  const corrections: Record<string, string> = {
+    pilate: "pilates",
+    tredmill: "treadmill",
+    tredmil: "treadmill",
+    streching: "stretching",
+  };
+  s = s
+    .split(" ")
+    .map((w) => corrections[w] ?? w)
+    .join(" ");
+
+  // Title-case but preserve common fitness acronyms
+  const keepUpper = new Set([
+    "HIIT",
+    "EMOM",
+    "AMRAP",
+    "LISS",
+    "VO2",
+    "FTP",
+    "RPE",
+  ]);
+  const titled = s
+    .split(" ")
+    .map((w) => {
+      const ww = w.toUpperCase();
+      if (keepUpper.has(ww)) return ww;
+      return w.replace(/^\w/, (c) => c.toUpperCase());
+    })
+    .join(" ");
+
+  // If we ended up with something too short, give a safe fallback
+  return titled.length >= 4 ? titled : "Exercise";
+}
 
 /* ─────────────────── PR helpers ─────────────────── */
 function volumeKgOf(w: Workout) {
@@ -151,14 +269,23 @@ function volumeKgOf(w: Workout) {
   return s * r * wt;
 }
 
+function createdAtMs(x: Workout | { createdAt?: any }) {
+  const t = (x as any)?.createdAt;
+  if (!t) return 0;
+  if (typeof t === "number") return t;
+  if (typeof t?.toMillis === "function") return t.toMillis();
+  return 0;
+}
+
 function computePrFlags(all: Workout[]) {
   const list = all
     .slice()
     .sort(
       (a, b) =>
         (a.date || "").localeCompare(b.date || "") ||
-        Number(a.createdAt || 0) - Number(b.createdAt || 0)
+        createdAtMs(a) - createdAtMs(b)
     );
+
   const bestByExercise = new Map<string, { weight: number; volume: number }>();
   const flags: Record<string, { prWeight: boolean; prVolume: boolean }> = {};
   for (const w of list) {
@@ -210,6 +337,7 @@ async function generatePlanWithOpenAI(args: {
   dayText: string;
   profile: any;
   recent: any[];
+  regenToken?: string | number;
 }) {
   const url = process.env.EXPO_PUBLIC_AI_DESCRIBE_URL;
   if (!url) throw new Error("Missing EXPO_PUBLIC_AI_DESCRIBE_URL");
@@ -222,8 +350,8 @@ async function generatePlanWithOpenAI(args: {
     today: args.dayText,
     profile: args.profile ?? {},
     recent: args.recent ?? [],
-    system:
-      "You are a concise strength coach. Return ONLY JSON with keys: items (array of {exercise, sets, reps, weight_kg?, notes?}) and rationale (string, optional). Keep items 4–7. Prefer available equipment. Avoid injuries. Omit weight_kg if unknown. Use short exercise names.",
+    regenToken: args.regenToken ?? Date.now(),
+    system: undefined,
   };
 
   const res = await fetch(url, {
@@ -260,10 +388,38 @@ async function generatePlanWithOpenAI(args: {
   return plan ?? { items: [], rationale: "" };
 }
 
+/* ──────────────── Badge helpers (counts & streak) ──────────────── */
+async function getWorkoutsAllTime(uid: string): Promise<number> {
+  const collRef = collection(db, "users", uid, "workouts"); // ✅ correct collection
+  const snap = await getCountFromServer(collRef);
+  return Number(snap.data().count || 0);
+}
+
+function computeDaysStreakFromDates(dates: string[], refISO: string): number {
+  const set = new Set(dates.filter(Boolean));
+  let streak = 0;
+  let cur = new Date(refISO);
+  // Normalize to YYYY-MM-DD just in case
+  const iso = (d: Date) => fmt(d);
+  while (true) {
+    const key = iso(cur);
+    if (!set.has(key)) break;
+    streak += 1;
+    cur.setDate(cur.getDate() - 1);
+  }
+  return streak;
+}
+
+/* ────────────────────────── screen ────────────────────────── */
 export default function WorkoutsScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
+  const router = useRouter();
+
   const { user } = useAuth();
   const uid = user?.uid ?? "__demo__";
+
+  /* 🎉 celebration modal */
+  const [celebrateIds, setCelebrateIds] = useState<string[]>([]);
 
   /* Profile + units */
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -382,10 +538,13 @@ export default function WorkoutsScreen() {
 
   /* Workouts stream */
   const [workouts, setWorkouts] = useState<Workout[]>([]);
-  useEffect(
-    () => subscribeWorkouts(uid, setWorkouts, { from, to }),
-    [uid, from, to]
-  );
+  useEffect(() => {
+    if (!user?.uid) {
+      setWorkouts([]);
+      return;
+    }
+    return subscribeWorkouts(user.uid, setWorkouts, { from, to });
+  }, [user?.uid, from, to]);
 
   /* Workout presets */
   const [presets, setPresets] = useState<WorkoutPreset[]>([]);
@@ -414,6 +573,250 @@ export default function WorkoutsScreen() {
 
   const [searchOpen, setSearchOpen] = useState(false);
 
+  // ───── Exercise burn card state (moved from Nutrition screen) ─────
+  type ExerciseBurn = {
+    id: string;
+    name: string;
+    calories: number;
+    persistedId?: string;
+  };
+  const [exItems, setExItems] = useState<ExerciseBurn[]>([]);
+  const [exName, setExName] = useState<string>("");
+  const [exCalories, setExCalories] = useState<string>("");
+
+  useEffect(() => {
+    if (!user?.uid || !date) return;
+
+    // use the range API with from==to (works with createdAt too)
+    return subscribeExerciseBetween(
+      user.uid,
+      date,
+      date,
+      (arr: ExerciseEntry[]) => {
+        setExItems(
+          (arr || []).map((e: any) => ({
+            id: e.id, // Firestore doc id
+            persistedId: e.id,
+            name: e.name || e.title || "Exercise",
+            calories: Number(e.calories || 0),
+          }))
+        );
+      }
+    );
+  }, [user?.uid, date]);
+  // replace the whole function
+  async function addExerciseSubmit() {
+    const rawName = (exName || "").trim();
+    const finalName = isGenericName(rawName)
+      ? deriveNameFromDesc(exDesc || rawName)
+      : rawName;
+
+    const calsRaw = Number(exCalories);
+    const cals = Math.max(
+      0,
+      Math.round(Number.isFinite(calsRaw) ? calsRaw : 0)
+    );
+
+    if (!finalName || cals <= 0) {
+      alert("Add a descriptive name and positive calories.");
+      return;
+    }
+    if (!user?.uid) {
+      alert("Sign in required");
+      return;
+    }
+
+    // optimistic local insert
+    const tempId = `ex-${Date.now()}`;
+    const optimistic: {
+      id: string;
+      name: string;
+      calories: number;
+      persistedId?: string;
+    } = {
+      id: tempId,
+      name: finalName,
+      calories: cals,
+    };
+    setExItems((prev) => [optimistic, ...prev]);
+
+    try {
+      const ref = await addExerciseBurn(user.uid, {
+        date, // same date as your workout form
+        name: finalName, // normalized / descriptive
+        calories: cals, // integer kcal
+        createdAt: Date.now(),
+      });
+
+      // swap temp with persisted id
+      setExItems((prev) =>
+        prev.map((it) =>
+          it.id === tempId ? { ...it, id: ref.id, persistedId: ref.id } : it
+        )
+      );
+
+      // clear inputs
+      setExName("");
+      setExCalories("");
+    } catch (e: any) {
+      // revert optimistic insert if write failed
+      setExItems((prev) => prev.filter((it) => it.id !== tempId));
+      alert(e?.message || "Couldn't save exercise");
+    }
+  }
+
+  async function deleteExerciseItem(id: string) {
+    const item = exItems.find((x) => x.id === id);
+    setExItems((prev) => prev.filter((it) => it.id !== id));
+    try {
+      if (item?.persistedId && user?.uid) {
+        await deleteExerciseBurn(user.uid, item.persistedId);
+      }
+    } catch (e) {
+      // If delete fails, we won't restore locally to avoid duping,
+      // but you can optionally re-add item to state.
+      console.warn("delete exercise burn failed", e);
+    }
+  }
+
+  // ───── NEW: "Describe exercise" inputs + stubbed estimator ─────
+  const [exDesc, setExDesc] = useState<string>("");
+  const [estimating, setEstimating] = useState<boolean>(false);
+
+  // replace the entire function with this:
+  async function estimateCaloriesFromDescription() {
+    const raw = exDesc || "";
+    const norm = normalizeDesc(raw);
+    if (!norm) return;
+
+    // 0) Check in-memory cache first
+    const cacheKey = `${norm}|${profileBucket(profile)}`;
+    const cached = exEstimateCache.get(cacheKey);
+    if (cached) {
+      setExName(cached.name);
+      setExCalories(String(Math.round(cached.calories)));
+      return;
+    }
+
+    const url = process.env.EXPO_PUBLIC_AI_DESCRIBE_URL;
+    if (!url) {
+      alert("Missing EXPO_PUBLIC_AI_DESCRIBE_URL");
+      return;
+    }
+
+    // tiny helpers
+    const toNum = (v: any) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+    const pick = <T extends unknown>(...vals: T[]) =>
+      vals.find((v) => v !== undefined && v !== null);
+
+    try {
+      setEstimating(true);
+      const idToken = await auth.currentUser?.getIdToken(true);
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
+        body: JSON.stringify({
+          mode: "exercise:v1",
+          query: raw, // send original text (server normalizes too)
+          // optional: pass light profile; server also looks it up
+          profile: profile
+            ? {
+                sex:
+                  (profile as any)?.sex ||
+                  (profile as any)?.gender ||
+                  undefined,
+                age: (profile as any)?.age,
+                heightCm:
+                  (profile as any)?.heightCm ??
+                  (profile as any)?.height_cm ??
+                  undefined,
+                weightKg:
+                  (profile as any)?.weightKg ??
+                  (profile as any)?.weight_kg ??
+                  undefined,
+                fitnessLevel:
+                  (profile as any)?.fitnessLevel ||
+                  (profile as any)?.activityLevel ||
+                  undefined,
+              }
+            : undefined,
+        }),
+      });
+
+      const ct = res.headers.get("content-type") || "";
+      const rawOut = ct.includes("application/json")
+        ? await res.json()
+        : await res.text();
+      const data =
+        typeof rawOut === "string"
+          ? (() => {
+              try {
+                return JSON.parse(rawOut);
+              } catch {
+                return {};
+              }
+            })()
+          : rawOut ?? {};
+
+      // Name candidates
+      const nameCand = pick<string>(
+        data?.name,
+        data?.shortName,
+        data?.title,
+        data?.exercise,
+        data?.label
+      );
+
+      // Calories candidates
+      const calCand = pick<any>(
+        data?.calories,
+        data?.calories_burned,
+        data?.caloriesBurned,
+        data?.kcal,
+        data?.burn,
+        data?.estimate?.calories,
+        data?.data?.calories
+      );
+      const cals = toNum(calCand);
+
+      // Fallback name if model didn’t give one
+      // prefer server name if it's non-generic; otherwise derive from description
+      let finalName =
+        (typeof nameCand === "string" ? nameCand.trim() : "") || "";
+      if (isGenericName(finalName)) {
+        finalName = deriveNameFromDesc(raw);
+      }
+
+      if (cals !== null && cals > 0) {
+        // write to UI
+        setExName(finalName);
+        setExCalories(String(Math.round(cals)));
+
+        // write to session cache
+        exEstimateCache.set(cacheKey, { name: finalName, calories: cals });
+      } else {
+        console.warn("[exercise:v1] could not parse calories from", data);
+        // still set name to help the user, but ask them to enter kcal manually
+        setExName(finalName);
+        alert(
+          "I couldn’t read the calories from the response. You can type them manually."
+        );
+      }
+    } catch (e: any) {
+      console.warn(e);
+      alert(e?.message || "Could not estimate calories");
+    } finally {
+      setEstimating(false);
+    }
+  }
+
   function suggestScheme(g: "maintain" | "lose" | "gain") {
     switch (g) {
       case "gain":
@@ -441,8 +844,8 @@ export default function WorkoutsScreen() {
         latest = w;
         continue;
       }
-      const a = (w.createdAt as number | undefined) ?? 0;
-      const b = (latest.createdAt as number | undefined) ?? 0;
+      const a = createdAtMs(w);
+      const b = createdAtMs(latest);
       if (a > b) latest = w;
       else if (a === 0 && b === 0) {
         if ((w.date || "") > (latest.date || "")) latest = w;
@@ -519,15 +922,60 @@ export default function WorkoutsScreen() {
         ...entry,
         createdAt: undefined,
       });
+
+      // replace temp id
       setWorkouts((prev) =>
         prev.map((w) => (w.id === tempId ? { ...w, id: ref.id } : w))
       );
+
+      // clear form
       setExercise("");
       setSets("");
       setReps("");
       setWeight("");
       setNotes("");
       setDate(todayISO);
+
+      /* ────────────── BADGES: evaluate after add ────────────── */
+      try {
+        // Array including the brand-new doc (with final id)
+        const updated = [{ id: ref.id, ...entry }, ...workouts];
+
+        // PR calculation: did this entry set any PR?
+        const flags = computePrFlags(updated);
+        const newFlags = flags[ref.id] || { prWeight: false, prVolume: false };
+        const prGained = !!(newFlags.prWeight || newFlags.prVolume);
+
+        // Total number of PR entries (weight OR volume)
+        const prTotal = Object.values(flags).reduce(
+          (n, f) => n + (f.prWeight || f.prVolume ? 1 : 0),
+          0
+        );
+
+        // Lifetime workout count
+        const workoutsAllTime = await getWorkoutsAllTime(user.uid);
+
+        // Streak: consecutive days including today (based on local + new)
+        const dates = updated.map((w) => w.date).filter(Boolean) as string[];
+        const daysStreak = computeDaysStreakFromDates(dates, fmt(new Date()));
+
+        const newly = await evaluateBadges(user.uid, {
+          type: "workout:add",
+          counts: { workoutsAllTime, daysStreak },
+          prGained,
+          prTotal,
+        });
+
+        if (newly.length) {
+          setCelebrateIds((prev) => {
+            const s = new Set(prev);
+            newly.forEach((id) => s.add(id));
+            return Array.from(s);
+          });
+        }
+      } catch (err) {
+        console.warn("badge eval failed", err);
+      }
     } catch (e) {
       console.warn(e);
       setWorkouts((prev) => prev.filter((w) => w.id !== tempId));
@@ -702,6 +1150,7 @@ export default function WorkoutsScreen() {
         dayText: genDay.trim(),
         profile: profileContext(profile),
         recent: recentHistory(workouts, 12),
+        regenToken: Date.now(),
       });
       setGenPlan(plan);
     } catch (e) {
@@ -713,14 +1162,11 @@ export default function WorkoutsScreen() {
   }
 
   function handleRegenerate() {
-    // reuse the same input
     void handleGenerate();
   }
 
   function handleClear() {
     setGenPlan(null);
-    // keep what user typed; if you prefer to reset the prompt too, uncomment:
-    // setGenDay("");
   }
 
   function insertItemToForm(it: {
@@ -748,7 +1194,10 @@ export default function WorkoutsScreen() {
       keyboardVerticalOffset={0}
     >
       <ScrollView
-        style={{ flex: 1, backgroundColor: colors.background }}
+        style={{
+          flex: 1,
+          backgroundColor: (colors as any).bg ?? colors.background,
+        }}
         contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 28 }}
         keyboardShouldPersistTaps="handled"
       >
@@ -884,7 +1333,31 @@ export default function WorkoutsScreen() {
           }}
           onOpenSearch={() => setSearchOpen(true)}
         />
-
+        {/* View full calendar button */}
+        <View style={{ paddingHorizontal: 16 }}>
+          <Link href="/(modals)/full-calendar" asChild>
+            <Pressable
+              style={{
+                marginTop: 8,
+                alignSelf: "flex-start",
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: withAlpha(colors.text, 0.05),
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <Ionicons name="calendar-outline" size={16} color={colors.text} />
+              <Text style={{ color: colors.text, fontWeight: "700" }}>
+                View full calendar
+              </Text>
+            </Pressable>
+          </Link>
+        </View>
         <ExerciseSearchSheet
           open={searchOpen}
           onClose={() => setSearchOpen(false)}
@@ -925,8 +1398,102 @@ export default function WorkoutsScreen() {
             prFlags={prFlags}
           />
         )}
+        {/* Exercise */}
+        <View
+          style={{
+            borderRadius: 18,
+            backgroundColor: isDark
+              ? "rgba(255,255,255,0.04)"
+              : "rgba(0,0,0,0.03)",
+            borderWidth: 1,
+            borderColor: colors.border,
+            padding: 6,
+            paddingTop: 10,
+          }}
+        >
+          {/* Header */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              paddingHorizontal: 8,
+              paddingBottom: 6,
+            }}
+          >
+            <Ionicons
+              name="flame-outline"
+              size={14}
+              color={colors.text + "99"}
+            />
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "700",
+                letterSpacing: 0.6,
+                textTransform: "uppercase",
+                color: colors.text + "99",
+              }}
+            >
+              Exercise
+            </Text>
+          </View>
+
+          {/* NEW: Describe + estimate row */}
+          <View style={{ paddingHorizontal: 8, gap: 8, marginBottom: 8 }}>
+            {/* Small label above the input since Field doesn't support a label prop */}
+            <Text style={{ fontWeight: "700", color: colors.text }}>
+              Describe your activity
+            </Text>
+
+            <Field
+              icon="create-outline"
+              placeholder='e.g., "30 min jog at easy pace" or "45 min strength: squats, bench, rows"'
+              value={exDesc}
+              onChangeText={setExDesc}
+              multiline
+            />
+
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                justifyContent: "flex-start",
+              }}
+            >
+              <GradientButton
+                label={estimating ? "Estimating..." : "Estimate calories"}
+                onPress={estimateCaloriesFromDescription}
+                disabled={!exDesc.trim() || estimating}
+              />
+              <Text style={{ color: colors.muted }}>
+                or enter calories manually below
+              </Text>
+            </View>
+          </View>
+
+          {/* Existing card (manual entry still works) */}
+          <ExerciseCard
+            items={exItems}
+            exName={exName}
+            setExName={setExName}
+            exCalories={exCalories}
+            setExCalories={setExCalories}
+            onAdd={addExerciseSubmit}
+            onDelete={deleteExerciseItem}
+          />
+        </View>
+
         <BottomTabSpacer extra={16} />
       </ScrollView>
+
+      {/* 🎉 Badge celebration modal */}
+      <BadgeCelebrate
+        ids={celebrateIds as any}
+        open={celebrateIds.length > 0}
+        onClose={() => setCelebrateIds([])}
+      />
     </KeyboardAvoidingView>
   );
 }
