@@ -49,12 +49,8 @@ import { auth } from "@/lib/firebase";
 
 import { withAlpha } from "@/components/workouts/utils/withAlpha";
 import { Field } from "@/components/workouts/ui/Field";
-import { Metric } from "@/components/workouts/ui/Metric";
 import { EmptyState } from "@/components/workouts/ui/EmptyState";
-import { IconButton } from "@/components/workouts/ui/IconButton";
 import { GradientButton } from "@/components/workouts/ui/GradientButton";
-import { SoftButton } from "@/components/workouts/ui/SoftButton";
-import { Badge } from "@/components/workouts/ui/Badge";
 
 import Hero from "@/components/workouts/Hero";
 import Filters from "@/components/workouts/Filters";
@@ -555,12 +551,10 @@ export default function WorkoutsScreen() {
   }, [user?.uid]);
 
   const safePresets = useMemo(() => {
-    if (!presets?.length) return [];
-    const names = new Set(
-      profileFriendlyExercises.map((e) => e.name.toLowerCase())
-    );
-    return presets.filter((p) => names.has(p.name.toLowerCase()));
-  }, [presets, profileFriendlyExercises]);
+    return (presets ?? [])
+      .slice()
+      .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  }, [presets]);
 
   /* Add form state */
   const todayISO = useMemo(() => fmt(new Date()), []);

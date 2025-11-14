@@ -8,6 +8,7 @@ import {
   Animated,
   Easing,
   Platform,
+  TextInput,
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -38,6 +39,15 @@ import EmptySuggestions from "@/components/ui/EmptySuggestions";
 import BottomTapSpacer from "@/components/ui/BottomTapSpacer";
 import { computeMealScore } from "@/utils/mealScore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+// NEW: profile + goals + auth
+import { auth } from "@/lib/firebase";
+import {
+  ensureProfile,
+  subscribeProfile,
+  type Profile,
+} from "@/services/profile";
+import { computeTargets } from "@/utils/macros";
 
 /** Badges */
 import BadgeCelebrate from "@/components/badges/BadgeCelebrate";
@@ -298,6 +308,7 @@ type FancyMealPanelProps = {
   onDeleteItem: (id: string) => void;
   onQuickAdd?: () => void;
   itemRight?: (it: Partial<MacroFields>) => React.ReactNode;
+  onSuggest?: () => void;
 };
 
 /** Collapsible, themed panel that wraps MealSection */
@@ -315,6 +326,7 @@ function FancyMealPanel({
   onSaveEdit,
   onDeleteItem,
   onQuickAdd,
+  onSuggest,
 }: FancyMealPanelProps) {
   const [open, setOpen] = useState(true);
   const rotate = useRef(new Animated.Value(1)).current;
@@ -478,6 +490,33 @@ function FancyMealPanel({
   function HeaderContent() {
     return (
       <View style={{ position: "relative" }}>
+        {/* Per-meal AI wand (top-right) */}
+        {onSuggest ? (
+          <Pressable
+            onPress={onSuggest}
+            accessibilityLabel={`Suggest ${meal} ideas to fit today's macros`}
+            style={{
+              position: "absolute",
+              right: 6,
+              top: 6,
+              zIndex: 10,
+              borderRadius: 999,
+              paddingVertical: 6,
+              paddingHorizontal: 10,
+              backgroundColor: "rgba(255,255,255,0.18)",
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.35)",
+              flexDirection: "row",
+              gap: 6,
+              alignItems: "center",
+            }}
+          >
+            <Ionicons name="sparkles-outline" size={14} color={"#fff"} />
+            <Text style={{ color: "#fff", fontWeight: "800", fontSize: 11 }}>
+              Ideas
+            </Text>
+          </Pressable>
+        ) : null}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
           <View
             style={{
@@ -586,6 +625,7 @@ async function getDaysStreak(uid: string, todayIso: string) {
 /* -------------------- main screen -------------------- */
 export default function NutritionScreen() {
   const { colors, isDark } = useTheme() as any;
+  const { colors: themeColors } = useTheme() as any;
   const { user } = useAuth();
   const router = useRouter();
 
@@ -599,6 +639,153 @@ export default function NutritionScreen() {
 
   // celebration
   const [celebrateIds, setCelebrateIds] = useState<string[]>([]);
+
+  /* ===== Profile + daily macro goals (for AI context) ===== */
+  const [profile, setProfile] = useState<Profile | null>(null);
+  useEffect(() => {
+    if (!user?.uid) return;
+    let unsub: undefined | (() => void);
+    (async () => {
+      await ensureProfile(user.uid, user?.email ? { email: user.email } : {});
+      unsub = subscribeProfile(user.uid, setProfile);
+    })();
+    return () => {
+      try {
+        unsub && unsub();
+      } catch {}
+    };
+  }, [user?.uid]);
+
+  const goals = React.useMemo(() => {
+    try {
+      // 👇 supply the required cfg argument (empty {} is fine if you don't have custom cfg)
+      const t = computeTargets(profile as any, {} as any) as any;
+      return {
+        calories: Number(t?.calories ?? 2200),
+        protein: Number(t?.protein ?? 140),
+        carbs: Number(t?.carbs ?? 220),
+        fat: Number(t?.fat ?? 70),
+      };
+    } catch {
+      return { calories: 2200, protein: 140, carbs: 220, fat: 70 };
+    }
+  }, [profile]);
+
+  /* ===== Inline AI meal ideas (like WorkoutGenerator) ===== */
+  const [genNotes, setGenNotes] = useState<string>("");
+  const [genLoading, setGenLoading] = useState<boolean>(false);
+  const [genIdeas, setGenIdeas] = useState<
+    {
+      name: string;
+      meal?: "breakfast" | "lunch" | "dinner" | "snacks";
+      calories: number;
+      protein: number;
+      carbs: number;
+      fat: number;
+      sugar?: number;
+      fiber?: number;
+      prep_min?: number;
+      difficulty?: string;
+      notes?: string;
+    }[]
+  >([]);
+
+  async function generateMealIdeas(mealOverride?: Meal) {
+    const url =
+      process.env.EXPO_PUBLIC_AI_DESCRIBE_URL ||
+      process.env.EXPO_PUBLIC_DESCRIBE_URL;
+    if (!url) {
+      alert("Missing AI describe URL");
+      return;
+    }
+    const idToken = await auth.currentUser?.getIdToken(true);
+    if (!idToken) {
+      alert("Sign in required");
+      return;
+    }
+
+    // Current day totals as context
+    const t = {
+      calories: Number(totals?.calories ?? 0),
+      protein: Number(totals?.protein ?? 0),
+      carbs: Number(totals?.carbs ?? 0),
+      fat: Number(totals?.fat ?? 0),
+    };
+
+    const payload = {
+      mode: "meal_suggest:v1",
+      date,
+      meal: (mealOverride || selectedMeal) as any,
+      goals,
+      totals: t,
+      notes: (genNotes || "").trim(),
+      profile: profile
+        ? {
+            dietType: (profile as any)?.dietType ?? undefined,
+            dislikes: (profile as any)?.dislikes ?? undefined,
+          }
+        : undefined,
+    };
+
+    try {
+      setGenLoading(true);
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+      const out = await ((res.headers.get("content-type") || "").includes(
+        "application/json"
+      )
+        ? res.json()
+        : res.text());
+
+      // keep the same error handling, now `out` is the resolved value
+      if (!res.ok) {
+        const msg =
+          typeof out === "string" ? out : (out as any)?.error || "AI error";
+        throw new Error(msg);
+      }
+
+      const ideas = Array.isArray((out as any)?.meals)
+        ? (out as any).meals
+        : Array.isArray(out)
+        ? out
+        : [];
+      setGenIdeas(ideas);
+    } catch (e: any) {
+      console.warn(e);
+      alert(e?.message || "Could not generate meal ideas");
+    } finally {
+      setGenLoading(false);
+    }
+  }
+
+  async function addIdeaToMeal(it: any) {
+    await AsyncStorage.setItem(
+      "@pending_add_meal",
+      JSON.stringify({
+        date,
+        meal: selectedMeal,
+        name: it?.name || "Meal",
+        qty: 1,
+        unit: "serving",
+        calories: Number(it?.calories || 0),
+        protein: Number(it?.protein || 0),
+        carbs: Number(it?.carbs || 0),
+        fat: Number(it?.fat || 0),
+        sugar: Number(it?.sugar || 0),
+        fiber: Number(it?.fiber || 0),
+      })
+    );
+    router.push({
+      pathname: "/(modals)/add-meal",
+      params: { meal: selectedMeal, date },
+    });
+  }
 
   /* ============================================================ */
   // Scroll + anchors
@@ -785,22 +972,19 @@ export default function NutritionScreen() {
     setEditId(null);
     try {
       await updateFood(user.uid, editId, patch);
-      // Optionally: also upsert edited item to catalog to keep it fresh
+      // Optional: also upsert edited item to catalog
       try {
         await upsertFoodToCatalog({
           name: patch.name,
           unit: patch.unit,
-          per: 1,
-          nutrients: {
-            calories: patch.calories,
-            protein: patch.protein,
-            carbs: patch.carbs,
-            fat: patch.fat,
-            sugar: patch.sugar || 0,
-            fiber: patch.fiber || 0,
-          },
-          brand: null,
-          fdcId: null,
+          qty: 1,
+          calories: patch.calories,
+          protein: patch.protein,
+          carbs: patch.carbs,
+          fat: patch.fat,
+          sugar: patch.sugar || 0,
+          fiber: patch.fiber || 0,
+          submitterUid: user.uid,
         } as any);
       } catch {}
     } catch {
@@ -831,14 +1015,13 @@ export default function NutritionScreen() {
       date,
       name: exName.trim(),
       calories: Number(exCalories || 0),
-      createdAt: Date.now(), // numeric for service type compatibility
+      createdAt: Date.now(),
     };
     const tempId = "temp-x-" + Date.now();
     setExercise((prev) => [{ id: tempId, ...entry }, ...prev]);
     try {
       await addExercise(user.uid, entry);
     } finally {
-      // replace temp with actual list from stream or keep optimistic only if streams refresh automatically
       setExercise((prev) => prev.filter((x) => x.id !== tempId));
       setExName("");
       setExCalories("");
@@ -850,7 +1033,6 @@ export default function NutritionScreen() {
     } catch {}
   }
 
-  const { colors: themeColors } = useTheme() as any;
   const cardBg = isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)";
   const borderC = themeColors.border;
 
@@ -887,6 +1069,43 @@ export default function NutritionScreen() {
       >
         <Header date={date} onChangeDate={setDate} totals={totals} />
 
+        {/* Header action: day-level “complete my macros” */}
+        <Pressable
+          onPress={() =>
+            router.push({
+              pathname: "/(modals)/ai-meal-suggestions",
+              params: { date }, // no meal => suggest across the day
+            })
+          }
+          accessibilityLabel="Suggest meals to complete today's macros"
+          style={{
+            alignSelf: "flex-start",
+            marginTop: 4,
+            borderRadius: 999,
+            paddingVertical: 8,
+            paddingHorizontal: 12,
+            backgroundColor: isDark
+              ? "rgba(255,255,255,0.06)"
+              : "rgba(0,0,0,0.04)",
+            borderWidth: 1,
+            borderColor: borderC,
+            flexDirection: "row",
+            gap: 6,
+            alignItems: "center",
+          }}
+        >
+          <Ionicons
+            name="sparkles-outline"
+            size={16}
+            color={themeColors.text}
+          />
+          <Text
+            style={{ color: themeColors.text, fontWeight: "800", fontSize: 12 }}
+          >
+            Complete my macros
+          </Text>
+        </Pressable>
+
         {/* Day empty suggestions */}
         {dayIsEmpty && (
           <EmptySuggestions
@@ -910,6 +1129,15 @@ export default function NutritionScreen() {
                   router.push({
                     pathname: "/(modals)/add-meal",
                     params: { meal: selectedMeal, date },
+                  }),
+              },
+              {
+                icon: "sparkles-outline",
+                label: "Generate a plan for today",
+                onPress: () =>
+                  router.push({
+                    pathname: "/(modals)/ai-meal-suggestions",
+                    params: { date },
                   }),
               },
             ]}
@@ -1002,7 +1230,7 @@ export default function NutritionScreen() {
             })}
           </View>
 
-          {/* CTA */}
+          {/* CTA: add meal */}
           <SoftPressable
             onPress={() =>
               router.push({
@@ -1049,6 +1277,218 @@ export default function NutritionScreen() {
               </Text>
             </LinearGradient>
           </SoftPressable>
+
+          {/* Secondary CTA: AI meal ideas (scoped to selected tab – opens modal) */}
+          <SoftPressable
+            onPress={() =>
+              router.push({
+                pathname: "/(modals)/ai-meal-suggestions",
+                params: { date, meal: selectedMeal },
+              })
+            }
+            accessibilityLabel="Generate meal ideas for this meal"
+            style={{
+              borderRadius: 14,
+              overflow: "hidden",
+              shadowColor: "#000",
+              shadowOpacity: isDark ? 0.2 : 0.06,
+              shadowRadius: 12,
+              shadowOffset: { width: 0, height: 6 },
+            }}
+          >
+            <LinearGradient
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              colors={isDark ? ["#a78bfa", "#8b5cf6"] : ["#22c55e", "#16a34a"]}
+              style={{
+                height: 44,
+                alignItems: "center",
+                justifyContent: "center",
+                paddingHorizontal: 14,
+                flexDirection: "row",
+                gap: 8,
+              }}
+            >
+              <Ionicons
+                name="sparkles-outline"
+                size={18}
+                color={themeColors.buttonText}
+              />
+              <Text
+                style={{
+                  color: themeColors.buttonText,
+                  fontWeight: "900",
+                  letterSpacing: 0.3,
+                }}
+              >
+                AI meal ideas
+              </Text>
+            </LinearGradient>
+          </SoftPressable>
+
+          {/* ───────── Inline AI Meal Ideas (calls Cloud Function directly) ───────── */}
+          <View
+            style={{
+              borderRadius: 20,
+              padding: 12,
+              backgroundColor: cardBg,
+              borderWidth: 1,
+              borderColor: borderC,
+              gap: 10,
+            }}
+          >
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
+              <Ionicons
+                name="sparkles-outline"
+                size={16}
+                color={themeColors.text}
+              />
+              <Text style={{ fontWeight: "800", color: themeColors.text }}>
+                AI meal ideas for {selectedMeal}
+              </Text>
+            </View>
+
+            {/* Notes / restrictions */}
+            <View
+              style={{
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: borderC,
+                backgroundColor: isDark
+                  ? "rgba(255,255,255,0.03)"
+                  : "rgba(0,0,0,0.02)",
+                padding: 10,
+                gap: 6,
+              }}
+            >
+              <Text
+                style={{
+                  fontWeight: "700",
+                  color: themeColors.text,
+                  fontSize: 12,
+                }}
+              >
+                Notes / restrictions (optional)
+              </Text>
+              <TextInput
+                placeholder='e.g., "no pork, microwave only, under 15 min, Greek style"'
+                placeholderTextColor={themeColors.muted}
+                value={genNotes}
+                onChangeText={setGenNotes}
+                multiline
+                style={{ color: themeColors.text, minHeight: 56 }}
+              />
+            </View>
+
+            <SoftPressable
+              onPress={() => generateMealIdeas()}
+              disabled={genLoading}
+              accessibilityLabel="Generate meal ideas to complete today's macros"
+              style={{
+                borderRadius: 14,
+                overflow: "hidden",
+                opacity: genLoading ? 0.75 : 1,
+                shadowColor: "#000",
+                shadowOpacity: isDark ? 0.2 : 0.06,
+                shadowRadius: 12,
+                shadowOffset: { width: 0, height: 6 },
+              }}
+            >
+              <LinearGradient
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                colors={
+                  isDark ? ["#a78bfa", "#8b5cf6"] : ["#22c55e", "#16a34a"]
+                }
+                style={{
+                  height: 44,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  paddingHorizontal: 14,
+                  flexDirection: "row",
+                  gap: 8,
+                }}
+              >
+                <Ionicons
+                  name="sparkles-outline"
+                  size={18}
+                  color={themeColors.buttonText}
+                />
+                <Text
+                  style={{
+                    color: themeColors.buttonText,
+                    fontWeight: "900",
+                    letterSpacing: 0.3,
+                  }}
+                >
+                  {genLoading ? "Generating..." : "Generate meal ideas"}
+                </Text>
+              </LinearGradient>
+            </SoftPressable>
+
+            {/* Results */}
+            {genIdeas.length > 0 && (
+              <View style={{ gap: 10 }}>
+                {genIdeas.map((it, idx) => (
+                  <View
+                    key={idx}
+                    style={{
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      borderColor: borderC,
+                      backgroundColor: isDark
+                        ? "rgba(255,255,255,0.03)"
+                        : "rgba(0,0,0,0.02)",
+                      padding: 12,
+                      gap: 6,
+                    }}
+                  >
+                    <Text
+                      style={{ color: themeColors.text, fontWeight: "900" }}
+                    >
+                      {it.name}
+                    </Text>
+                    <Text style={{ color: themeColors.muted }}>
+                      {Math.round(it.calories)} kcal • P{" "}
+                      {Math.round(it.protein)}g • C {Math.round(it.carbs)}g • F{" "}
+                      {Math.round(it.fat)}g
+                      {typeof it.sugar === "number"
+                        ? ` • S ${Math.round(it.sugar)}g`
+                        : ""}
+                      {typeof it.fiber === "number"
+                        ? ` • Fi ${Math.round(it.fiber)}g`
+                        : ""}
+                      {it.prep_min ? ` • ~${it.prep_min} min` : ""}
+                    </Text>
+                    {it.notes ? (
+                      <Text style={{ color: themeColors.muted, fontSize: 12 }}>
+                        {it.notes}
+                      </Text>
+                    ) : null}
+                    <Pressable
+                      onPress={() => addIdeaToMeal(it)}
+                      style={{
+                        alignSelf: "flex-start",
+                        borderRadius: 999,
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        borderWidth: 1,
+                        borderColor: borderC,
+                      }}
+                    >
+                      <Text
+                        style={{ color: themeColors.text, fontWeight: "800" }}
+                      >
+                        Add to {selectedMeal}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Meals — hero panels */}
@@ -1071,6 +1511,7 @@ export default function NutritionScreen() {
                     ? it.healthScore
                     : computeMealScore(it),
               }))}
+              onSuggest={() => generateMealIdeas(m)}
               isDark={isDark}
               colors={colors}
               totalsColor={{ dayCalories: totals?.calories ?? 0 }}
@@ -1105,7 +1546,7 @@ export default function NutritionScreen() {
           </View>
         ))}
 
-        {/* Exercise
+        {/* Exercise (optional section retained but commented previously)
         <View
           style={{
             borderRadius: 18,

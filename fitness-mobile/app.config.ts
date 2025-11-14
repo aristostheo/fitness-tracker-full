@@ -1,31 +1,6 @@
 // fitness-mobile/app.config.ts
 import "dotenv/config";
 import type { ExpoConfig } from "expo/config";
-import fs from "fs";
-import path from "path";
-
-function has(pkg: string) {
-  try {
-    // Resolve from the app directory
-    require.resolve(pkg, { paths: [__dirname] });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const plugins: ExpoConfig["plugins"] = [
-  // Add Health Connect plugin only if installed
-  ...(has("expo-health-connect") ? (["expo-health-connect"] as any) : []),
-
-  [
-    "expo-build-properties",
-    {
-      android: { minSdkVersion: 28 },
-      ios: { useFrameworks: "static" },
-    },
-  ],
-];
 
 const config: ExpoConfig = {
   name: "fitness-mobile",
@@ -35,23 +10,26 @@ const config: ExpoConfig = {
   orientation: "portrait",
   platforms: ["ios", "android"],
 
+  // Needed so your custom dev client works smoothly after prebuild
+  plugins: ["expo-dev-client"],
+
   ios: {
-    bundleIdentifier: "com.anonymous.fitness-mobile",
+    // For local dev this can be anything unique; change to your real id later.
+    bundleIdentifier: "com.aristos.fitnessmobile",
     infoPlist: {
       NSHealthShareUsageDescription:
-        "We read your step count from the Health app to track your daily activity.",
+        "We use Apple Health data (steps, energy, weight) to personalize goals and insights.",
       NSHealthUpdateUsageDescription:
-        "We may write activity data you log in the app to the Health app (if you allow).",
+        "We may write workouts or body metrics you choose to log to Apple Health.",
+      NSCameraUsageDescription:
+        "We use the camera to scan food barcodes to auto-fill nutrition.",
     },
-    entitlements: { "com.apple.developer.healthkit": true },
   },
 
-  android: {
-    package: "com.anonymous.fitness_mobile",
-  },
-
-  plugins,
-
+  /**
+   * EXPO_PUBLIC_* envs are auto-inlined at build time.
+   * Keeping them in `extra` is fine for debugging / EAS.
+   */
   extra: {
     EXPO_PUBLIC_FDC_API_KEY: process.env.EXPO_PUBLIC_FDC_API_KEY,
     EXPO_PUBLIC_AI_DESCRIBE_URL: process.env.EXPO_PUBLIC_AI_DESCRIBE_URL,

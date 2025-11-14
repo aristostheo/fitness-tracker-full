@@ -1,13 +1,27 @@
 // functions/src/describe.ts
 import * as admin from "firebase-admin";
 import { onRequest } from "firebase-functions/v2/https";
-import * as crypto from "crypto"; // ⬅️ add this next to other imports
+import * as crypto from "crypto"; // keep
+import { defineSecret } from "firebase-functions/params";
 
 // Node 18/20 has global fetch
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
+// 🔑 Declare the secret (name must match what you'll set in CLI)
+const OPENAI_SECRET = defineSecret("OPENAI_API_KEY");
+
+// Local dev fallback is okay; production will use OPENAI_SECRET
+function getOpenAIKey(): string {
+  // When deployed, .value() returns the secret. Locally, use env.
+  const fromSecret = (OPENAI_SECRET as any)?.value?.();
+  const fromEnv = process.env.OPENAI_API_KEY;
+  const key = fromSecret || fromEnv || "";
+  if (!key) throw new Error("Missing OPENAI_API_KEY");
+  return key;
+}
+
+// const OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
 
 /* ───────────────────────────── Types ───────────────────────────── */
 type PlanItem = {
@@ -45,6 +59,25 @@ type MealItemV1 = {
 };
 type MealResultV1 = { items: MealItemV1[]; rationale?: string };
 
+type MealIdea = {
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  sugar?: number;
+  fiber?: number;
+  meal?: "breakfast" | "lunch" | "dinner" | "snacks";
+  prep_min?: number;
+  difficulty?: "easy" | "moderate" | "advanced";
+  notes?: string;
+};
+
+type MealIdeasResponse = {
+  meals: MealIdea[];
+  rationale?: string;
+};
+
 /** Suggestion card returned to the client */
 type SuggestionCard = {
   icon: string; // Ionicons name (e.g., "barbell-outline")
@@ -55,8 +88,23 @@ type SuggestionCard = {
   tint: "workout" | "meal" | "recovery" | "ok";
 };
 
-/** Cache document shape */
-type SuggestionDoc = {
+type MealSlot = "breakfast" | "lunch" | "dinner" | "snacks";
+type GoalMacros = {
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+};
+type TotalMacros = {
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  burned?: number;
+};
+
+/** Cache document shapes (kept for suggest:v1) */
+type SuggestionDocV1 = {
   createdAt?:
     | admin.firestore.FieldValue
     | admin.firestore.Timestamp
@@ -65,17 +113,27 @@ type SuggestionDoc = {
   key: string;
   card: SuggestionCard;
 };
+type SuggestionDocV2 = {
+  createdAt?:
+    | admin.firestore.FieldValue
+    | admin.firestore.Timestamp
+    | FirebaseFirestore.FieldValue
+    | FirebaseFirestore.Timestamp;
+  key: string;
+  cards: SuggestionCard[];
+};
 
 type ExerciseEstimate = {
-  name: string; // short generated name e.g. "Easy Run"
-  calories: number; // estimated kcal burned for the described session
-  minutes?: number; // parsed/estimated duration (optional)
-  mets?: number; // assumed MET value (optional)
-  rationale?: string; // one short sentence (optional)
+  name: string;
+  calories: number;
+  minutes?: number;
+  mets?: number;
+  rationale?: string;
 };
+
 /* ─────────────────────────── HTTPS endpoint ─────────────────────────── */
 export const describe = onRequest(
-  { cors: true },
+  { cors: true, secrets: [OPENAI_SECRET] },
   async (req, res): Promise<void> => {
     try {
       if (req.method !== "POST") {
@@ -117,35 +175,49 @@ export const describe = onRequest(
         date?: string; // YYYY-MM-DD (local to client)
         timeOfDay?: number; // 0-23
         isRestDay?: boolean;
-        goals?: { calories?: number; protein?: number };
-        totals?: {
-          calories?: number;
-          protein?: number;
-          carbs?: number;
-          fat?: number;
-          burned?: number; // >0 implies a workout logged
-        };
+        goals?: GoalMacros;
+        totals?: TotalMacros;
+
+        // meal_suggest:v1 additions
+        meal?: MealSlot;
+        notes?: string;
 
         system?: string;
         regenToken?: string | number;
+
+        // suggest:v1 / meal_suggest:v1 control
+        count?: number; // 3..5
+        seed?: string;
+        forceNew?: boolean;
       };
 
       const mode = (body.mode || "").trim();
 
       if (mode === "workout_plan:v1") {
-        const prompt = buildWorkoutPrompt({
-          today: body.today || "",
-          profile: body.profile ?? {},
-          recent: body.recent ?? [],
-          system: body.system,
-          regenToken: body.regenToken,
-        });
-        const plan = (await callOpenAIForJson(prompt, "workout")) as Plan;
-        res.status(200).json(plan);
-        return;
+        try {
+          const prompt = buildWorkoutPrompt({
+            today: body.today || "",
+            profile: body.profile ?? {},
+            recent: body.recent ?? [],
+            system: body.system,
+            regenToken: body.regenToken,
+          });
+          const plan = (await callOpenAIForJson(prompt, "workout")) as Plan;
+          res.set("Cache-Control", "no-store");
+          res.status(200).json(plan); // ✅ return the plan
+          return;
+        } catch (e: any) {
+          console.error("[workout_plan:v1] OpenAI failed", e);
+          res.status(502).json({
+            error: "ai-failed",
+            detail: String(e?.message ?? e),
+            hint: "Ensure OPENAI_API_KEY secret is set and model access is enabled.",
+          });
+          return;
+        }
       }
 
-      // ───────────── AI suggestion card with gating + caching ─────────────
+      // ───────────── AI suggestion card(s) (kept for your other UI) ─────────────
       if (mode === "suggest:v1") {
         const date = (body.date || new Date().toISOString().slice(0, 10)).slice(
           0,
@@ -167,10 +239,10 @@ export const describe = onRequest(
         const pRem = Math.max(0, Math.round(proteinGoal - protein));
         const hasWorkout = burned > 0;
 
-        // A) GATE: only call OpenAI if "interesting"
+        // Gating
         const interesting = isRestDay || !hasWorkout || cRem > 200 || pRem > 20;
 
-        // B) Coarse bucket key to maximize cache hits
+        // Cache key (no seed)
         const key = buildBucketKey({
           date,
           hour,
@@ -186,88 +258,328 @@ export const describe = onRequest(
           .collection("days")
           .doc(docId);
 
-        // Read cache
-        try {
-          const snap = await cacheRef.get();
-          if (snap.exists) {
-            const cached = snap.data() as SuggestionDoc;
-            if (cached?.card && typeof cached.card.title === "string") {
-              res.status(200).json(cached.card);
-              return;
+        const desiredCount = clampCount(body.count ?? 5);
+        const forceNew = !!body.forceNew;
+        const seed = String(body.seed || body.regenToken || "");
+
+        // Cache read
+        if (!forceNew) {
+          try {
+            const snap = await cacheRef.get();
+            if (snap.exists) {
+              const cached = snap.data() as SuggestionDocV2 | SuggestionDocV1;
+              const arr =
+                (cached as SuggestionDocV2)?.cards ??
+                ((cached as SuggestionDocV1)?.card
+                  ? [(cached as SuggestionDocV1).card]
+                  : []);
+              if (Array.isArray(arr) && arr.length) {
+                res.set("Cache-Control", "no-store");
+                res.status(200).json(arr.slice(0, desiredCount));
+                return;
+              }
             }
+          } catch (e: any) {
+            console.warn("[suggest] cache read error", e);
           }
-        } catch (e) {
-          console.warn("[suggest] cache read error", e);
         }
 
-        // Not interesting? Serve rule-based and cache it
+        // Rule fallback if not interesting
         if (!interesting) {
-          const card = ruleBasedSuggestion({
-            isRestDay,
-            calories,
-            protein,
-            burned,
-            kcalGoal,
-            proteinGoal,
-            hour,
+          const cards = ruleBasedSuggestions({
+            count: desiredCount,
+            context: {
+              isRestDay,
+              calories,
+              protein,
+              burned,
+              kcalGoal,
+              proteinGoal,
+              hour,
+            },
           });
           try {
             await cacheRef.set({
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
               key,
-              card,
-            });
-          } catch (e) {
+              cards,
+            } as SuggestionDocV2);
+          } catch (e: any) {
             console.warn("[suggest] cache write error", e);
           }
-          res.status(200).json(card);
+          res.set("Cache-Control", "no-store");
+          res.status(200).json(cards.slice(0, desiredCount));
           return;
         }
 
-        // C) Trim + compact prompt payload (no logs)
-        const sugPrompt = buildSuggestionPrompt({
+        // Model path
+        const listPrompt = buildSuggestionListPrompt({
           date,
           timeOfDay: hour,
           isRestDay,
           goals: { calories: kcalGoal, protein: proteinGoal },
           totals: { calories, protein, burned },
+          count: desiredCount,
           system: body.system,
         });
 
-        let card: SuggestionCard | null = null;
+        let cards: SuggestionCard[] = [];
         try {
-          // D) Tight prompt + schema for short output
-          card = await callOpenAIForSuggestion(sugPrompt);
-        } catch (e) {
+          cards = await callOpenAIForSuggestionList(listPrompt, seed);
+        } catch (e: any) {
           console.warn("[suggest] OpenAI failed, using rule fallback", e);
-          card = null;
+          cards = [];
         }
 
-        if (!card) {
-          card = ruleBasedSuggestion({
-            isRestDay,
-            calories,
-            protein,
-            burned,
-            kcalGoal,
-            proteinGoal,
-            hour,
+        if (!cards.length) {
+          cards = ruleBasedSuggestions({
+            count: desiredCount,
+            context: {
+              isRestDay,
+              calories,
+              protein,
+              burned,
+              kcalGoal,
+              proteinGoal,
+              hour,
+            },
           });
         }
 
-        // Cache result
         try {
           await cacheRef.set({
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             key,
-            card,
-          });
-        } catch (e) {
+            cards: cards.slice(0, 5),
+          } as SuggestionDocV2);
+        } catch (e: any) {
           console.warn("[suggest] cache write error", e);
         }
 
-        res.status(200).json(card);
+        res.set("Cache-Control", "no-store");
+        res.status(200).json(cards.slice(0, desiredCount));
         return;
+      }
+
+      // ───────────── MEAL IDEAS ONLY (for your AI Meal Suggestions page) ─────────────
+      if (mode === "meal_suggest:v1") {
+        // Inputs
+        const meal = (String(
+          body?.context?.meal || body?.meal || ""
+        ).toLowerCase() || "") as MealIdea["meal"];
+        const goals = body?.goals || {};
+        const totals = body?.totals || {};
+        const notes = String(body?.notes || body?.context?.notes || "").trim();
+        const n = clampCount(body?.count ?? 5);
+        const forceNew = body?.forceNew ?? true; // default TRUE ➜ always bypass cache
+        const seed = String(body.seed || body.regenToken || Date.now());
+
+        // Optional profile fetch
+        let profile: any = body?.profile ?? null;
+        if (!profile) {
+          try {
+            const snap = await db.collection("users").doc(uid).get();
+            if (snap.exists) profile = snap.data();
+          } catch {}
+        }
+
+        // Remaining + buckets
+        const remaining = {
+          k: Math.max(0, num(goals?.calories, 2200) - num(totals?.calories, 0)),
+          p: Math.max(0, num(goals?.protein, 120) - num(totals?.protein, 0)),
+          c: Math.max(0, num(goals?.carbs, 220) - num(totals?.carbs, 0)),
+          f: Math.max(0, num(goals?.fat, 75) - num(totals?.fat, 0)),
+        };
+        const buckets = {
+          k: bucket(remaining.k, [200, 500, 900]),
+          p: bucket(remaining.p, [20, 40, 70]),
+          c: bucket(remaining.c, [30, 80, 140]),
+          f: bucket(remaining.f, [10, 25, 45]),
+        };
+        const notesHash = notes
+          ? hashKey({ v: 2, n: notes.toLowerCase().slice(0, 160) })
+          : "no-notes";
+        const m = meal || "any";
+        const key = `v2|${m}|K${buckets.k}|P${buckets.p}|C${buckets.c}|F${buckets.f}|${notesHash}|N${n}`;
+        const cacheRef = db.collection("aiMealIdeas").doc(key);
+
+        // 1) cache (skip on forceNew)
+        if (!forceNew) {
+          try {
+            const snap = await cacheRef.get();
+            if (snap.exists) {
+              res.set("Cache-Control", "no-store");
+              res.status(200).json(snap.data());
+              return;
+            }
+          } catch (e: any) {
+            console.warn("[meal_suggest] cache read error", e);
+          }
+        }
+
+        // 2) quick daily quota (per user)
+        const dayId = new Date().toISOString().slice(0, 10);
+        const quotaRef = db.collection("aiQuota").doc(`${uid}_${dayId}_meals`);
+        let count = 0;
+        try {
+          const q = await quotaRef.get();
+          count = (q.exists ? q.data()?.count || 0 : 0) as number;
+        } catch {}
+
+        if (count >= 12) {
+          const fallback: MealIdeasResponse = {
+            meals: [
+              {
+                name: "Greek yogurt + whey + berries",
+                meal: (meal as any) || "snacks",
+                calories: Math.min(remaining.k || 350, 450),
+                protein: Math.min(remaining.p || 35, 45),
+                carbs: 35,
+                fat: 5,
+                sugar: 18,
+                fiber: 3,
+                prep_min: 3,
+                difficulty: "easy",
+                notes: "High-protein snack; adjust scoop to hit protein.",
+              },
+              {
+                name: "Chicken wrap (tortilla, 150g chicken, veg, light sauce)",
+                meal: (meal as any) || "lunch",
+                calories: Math.min(remaining.k || 500, 650),
+                protein: Math.min(remaining.p || 40, 55),
+                carbs: 45,
+                fat: 15,
+                sugar: 6,
+                fiber: 6,
+                prep_min: 10,
+                difficulty: "easy",
+                notes: "Balance with yogurt/fruit if carbs still low.",
+              },
+            ],
+            rationale: "Quota fallback used; simple high-protein ideas.",
+          };
+          res.set("Cache-Control", "no-store");
+          res.status(200).json(fallback);
+          return;
+        }
+
+        // 3) prompt + call OpenAI
+        const prompt = buildMealSuggestPrompt({
+          meal,
+          goals,
+          totals,
+          notes,
+          n,
+          profile,
+          system: body.system,
+        });
+
+        // 3) prompt + call OpenAI
+        try {
+          const out = await callOpenAIForMealIdeas(prompt, { n, seed });
+
+          // Defensive: if model returned shape but empty array, don't treat as failure.
+          if (!out || !Array.isArray(out.meals)) {
+            console.error("[meal_suggest] bad-shape", out);
+            throw new Error("bad-shape");
+          }
+
+          // ✅ cache ONLY when NOT forceNew
+          if (!forceNew) {
+            try {
+              await cacheRef.set({
+                ...out,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                key,
+              });
+            } catch (e: any) {
+              console.warn("[meal_suggest] cache write error", e);
+            }
+          }
+
+          // ✅ always bump quota
+          try {
+            await quotaRef.set({ count: count + 1 }, { merge: true });
+          } catch (e: any) {
+            console.warn("[meal_suggest] quota write error", e);
+          }
+
+          res.set("Cache-Control", "no-store");
+          res.status(200).json(out);
+          return;
+        } catch (e: any) {
+          console.error(
+            "[meal_suggest] OpenAI failed => using fallback",
+            e?.message || e
+          );
+
+          const fallback: MealIdeasResponse = {
+            meals: [
+              {
+                name: "Greek yogurt + whey + berries",
+                meal: (meal as any) || "snacks",
+                calories: Math.min(remaining.k || 350, 500),
+                protein: Math.max(25, Math.min(remaining.p || 35, 50)),
+                carbs: 30,
+                fat: 6,
+                sugar: 18,
+                fiber: 3,
+                prep_min: 3,
+                difficulty: "easy",
+                notes: "Protein-forward; scale scoop to hit target.",
+              },
+              {
+                name: "Chicken wrap (150g chicken, tortilla, veg, light sauce)",
+                meal: (meal as any) || "lunch",
+                calories: Math.min(remaining.k || 550, 700),
+                protein: Math.max(35, Math.min(remaining.p || 45, 55)),
+                carbs: 45,
+                fat: 12,
+                sugar: 6,
+                fiber: 6,
+                prep_min: 10,
+                difficulty: "easy",
+                notes: "Add fruit if carbs still low.",
+              },
+              {
+                name: "Egg white omelet + toast + low-fat cheese",
+                meal: (meal as any) || "dinner",
+                calories: Math.min(remaining.k || 450, 600),
+                protein: Math.max(30, Math.min(remaining.p || 40, 50)),
+                carbs: 35,
+                fat: 10,
+                sugar: 5,
+                fiber: 4,
+                prep_min: 12,
+                difficulty: "easy",
+              },
+            ],
+            rationale:
+              "Model unavailable; served rule-based, high-protein ideas.",
+          };
+
+          if (!forceNew) {
+            try {
+              await cacheRef.set({
+                ...fallback,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                key,
+              });
+            } catch (w: any) {
+              console.warn("[meal_suggest] fallback cache write error", w);
+            }
+          }
+
+          try {
+            await quotaRef.set({ count: count + 1 }, { merge: true });
+          } catch (e2: any) {
+            console.warn("[meal_suggest] quota write error (fallback)", e2);
+          }
+
+          res.set("Cache-Control", "no-store");
+          res.status(200).json(fallback);
+          return;
+        }
       }
 
       // ───────────── v2 meal (flat totals) ─────────────
@@ -280,7 +592,6 @@ export const describe = onRequest(
 
         const v2 = (await callOpenAIForMealV2(prompt)) as MealV2;
 
-        // Back-compat mirror for existing clients expecting items[]
         const v1Mirror: MealResultV1 = {
           items: [
             {
@@ -299,57 +610,54 @@ export const describe = onRequest(
           rationale: undefined,
         };
 
+        res.set("Cache-Control", "no-store");
         res.status(200).json({ ...v2, ...v1Mirror });
         return;
       }
 
       // ───────────── exercise describe (name + calories) ─────────────
-      // ───────────── exercise describe (name + calories) ─────────────
       if (mode === "exercise:v1") {
         const text = String(body.query || body.rawText || "").trim();
         if (!text) {
+          res.set("Cache-Control", "no-store");
           res.status(400).json({ error: "missing-text" });
           return;
         }
 
-        // Try to use provided profile; fallback to server fetch of user doc
         let profileInput = body.profile ?? null;
         if (!profileInput) {
           try {
             const snap = await db.collection("users").doc(uid).get();
             if (snap.exists) profileInput = snap.data();
-          } catch (e) {
+          } catch (e: any) {
             console.warn("[exercise:v1] profile fetch failed", e);
           }
         }
 
-        // Normalize to a compact shape for energy estimation
         const p = profileEnergyShape(profileInput);
 
-        // 🔑 Build a bucketed cache key (reduces cardinality → more hits)
         const cachePayload = {
           v: 1,
-          text: text.toLowerCase(), // normalize
+          text: text.toLowerCase(),
           sex: p?.sex || "",
-          ageB: p?.age ? Math.round(p.age / 5) * 5 : null, // bucket age by 5y
-          hB: p?.height_cm ? Math.round(p.height_cm / 5) * 5 : null, // bucket height 5 cm
-          wB: p?.weight_kg ? Math.round(p.weight_kg / 2) * 2 : null, // bucket weight 2 kg
+          ageB: p?.age ? Math.round(p.age / 5) * 5 : null,
+          hB: p?.height_cm ? Math.round(p.height_cm / 5) * 5 : null,
+          wB: p?.weight_kg ? Math.round(p.weight_kg / 2) * 2 : null,
         };
         const key = hashKey(cachePayload);
         const cacheRef = db.collection("aiExerciseEstimates").doc(key);
 
-        // 1) Try cache
         try {
           const snap = await cacheRef.get();
           if (snap.exists) {
+            res.set("Cache-Control", "no-store");
             res.status(200).json(snap.data());
             return;
           }
-        } catch (e) {
+        } catch (e: any) {
           console.warn("[exercise:v1] cache read error", e);
         }
 
-        // 2) (Optional) per-user daily cap to limit spend
         const dayId = new Date().toISOString().slice(0, 10);
         const quotaRef = db.collection("aiQuota").doc(`${uid}_${dayId}`);
         let count = 0;
@@ -359,13 +667,12 @@ export const describe = onRequest(
         } catch {}
 
         if (count >= 10) {
-          // Over the cap: return heuristic to avoid a paid call
           const h = heuristicCaloriesEstimate(text, p || undefined);
+          res.set("Cache-Control", "no-store");
           res.status(200).json(h);
           return;
         }
 
-        // 3) Call OpenAI once
         const prompt = buildExerciseDescribePrompt({
           text,
           profile: p,
@@ -375,14 +682,12 @@ export const describe = onRequest(
         try {
           const est = await callOpenAIForExerciseEstimate(prompt);
 
-          // 3a) If the model somehow returns 0/NaN, use heuristic instead
           const calories = Number(est?.calories);
           const finalEst =
             Number.isFinite(calories) && calories > 0
               ? est
               : heuristicCaloriesEstimate(text, p || undefined);
 
-          // 4) Write-through cache + bump quota
           try {
             await cacheRef.set({
               ...finalEst,
@@ -390,16 +695,17 @@ export const describe = onRequest(
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
             });
             await quotaRef.set({ count: count + 1 }, { merge: true });
-          } catch (e) {
+          } catch (e: any) {
             console.warn("[exercise:v1] cache/quota write error", e);
           }
 
+          res.set("Cache-Control", "no-store");
           res.status(200).json(finalEst);
           return;
         } catch (e: any) {
           console.warn("[exercise:v1] OpenAI failed", e?.message || e);
-          // Final conservative fallback
           const h = heuristicCaloriesEstimate(text, p || undefined);
+          res.set("Cache-Control", "no-store");
           res.status(200).json(h);
           return;
         }
@@ -416,10 +722,12 @@ export const describe = onRequest(
           prompt,
           "meal"
         )) as MealResultV1;
+        res.set("Cache-Control", "no-store");
         res.status(200).json(resultV1);
         return;
       }
 
+      res.set("Cache-Control", "no-store");
       res.status(400).json({ error: "unknown-mode" });
     } catch (err: any) {
       console.error("describe error", err);
@@ -494,7 +802,66 @@ function buildMealPromptV1(args: {
   return { system: sys, user };
 }
 
-/** v2 prompt — one flat, *totalled* meal object (+ few-shots) */
+/** prompt for meal_suggest:v1 — ONLY MEAL IDEAS (adds n) */
+function buildMealSuggestPrompt(args: {
+  meal?: "breakfast" | "lunch" | "dinner" | "snacks";
+  goals: { calories?: number; protein?: number; carbs?: number; fat?: number };
+  totals: { calories?: number; protein?: number; carbs?: number; fat?: number };
+  notes?: string; // dislikes, dietary rules, appliances/pantry, time, cuisine, budget
+  profile?: any; // optional server-fetched user profile
+  n: number; // 3..5
+  system?: string;
+}) {
+  const sys =
+    args.system ||
+    [
+      "You are a concise nutrition planner.",
+      "Task: Generate ONLY MEAL IDEAS (no tips) that help the user reach TODAY'S REMAINING macros.",
+      "Output MUST be strictly JSON with { meals: [...] } where meals is an array of 3–5 items.",
+      "Rules:",
+      "- Each idea must be a concrete meal (food combination), not generic advice.",
+      "- Respect notes when feasible (dietary rules, disliked foods, time, cuisine, appliances).",
+      "- Prioritize protein-forward options; keep sugar modest unless notes say otherwise.",
+      "- Include macros for each idea: calories, protein, carbs, fat (sugar/fiber if helpful).",
+      "- Tailor portion sizes to the REMAINING macros (not the daily goal).",
+      "- Keep names short (≤60 chars). No null/undefined; numbers must be numbers.",
+      "- No workout, sleep, water, or habit suggestions. Only meals.",
+    ].join(" ");
+
+  const goals = {
+    k: num(args.goals?.calories, 2200),
+    p: num(args.goals?.protein, 120),
+    c: num(args.goals?.carbs, 220),
+    f: num(args.goals?.fat, 75),
+  };
+  const totals = {
+    k: num(args.totals?.calories, 0),
+    p: num(args.totals?.protein, 0),
+    c: num(args.totals?.carbs, 0),
+    f: num(args.totals?.fat, 0),
+  };
+  const remaining = {
+    k: Math.max(0, goals.k - totals.k),
+    p: Math.max(0, goals.p - totals.p),
+    c: Math.max(0, goals.c - totals.c),
+    f: Math.max(0, goals.f - totals.f),
+  };
+
+  const user = [
+    `Meal slot: ${args.meal || "any"}`,
+    `Goals (kcal/P/C/F): ${goals.k}/${goals.p}/${goals.c}/${goals.f}`,
+    `Current totals: ${totals.k}/${totals.p}/${totals.c}/${totals.f}`,
+    `Remaining target: ${remaining.k}/${remaining.p}/${remaining.c}/${remaining.f}`,
+    `Notes: ${args.notes || "(none)"}`,
+    `Profile (optional): ${JSON.stringify(args.profile || {})}`,
+    `n: ${args.n}`,
+    "Return JSON only.",
+  ].join("\n");
+
+  return { system: sys, user };
+}
+
+/** v2 prompt — one flat, totalled meal object (+ few-shots) */
 function buildMealPromptV2(args: {
   text: string;
   context: any;
@@ -562,30 +929,35 @@ function buildMealPromptV2(args: {
   return { system: sys, user, _messages: messages as any };
 }
 
-/** prompt for suggest:v1 (compact, bucketed) */
-function buildSuggestionPrompt(args: {
+/** prompt for suggest:v1 — MULTI-card list (unchanged) */
+function buildSuggestionListPrompt(args: {
   date: string;
   timeOfDay: number; // 0-23
   isRestDay: boolean;
   goals: { calories?: number; protein?: number };
   totals: { calories?: number; protein?: number; burned?: number };
+  count: number; // 3..5
   system?: string;
 }) {
   const sys =
     args.system ||
     [
       "You are a health coach who writes SHORT, actionable daily suggestions.",
-      "Return ONLY JSON with keys: {icon, title, body, ctaLabel, href, tint}.",
+      "Return ONLY JSON as an ARRAY of card objects: [{icon,title,body,ctaLabel,href,tint}, ...].",
       "Icons: Ionicons names like 'barbell-outline', 'fast-food-outline', 'leaf-outline', 'thumbs-up-outline'.",
       "href: app route string like '/(tabs)/workouts' or '/(tabs)/nutrition'.",
       "tint: 'workout' | 'meal' | 'recovery' | 'ok'.",
       "STRICT OUTPUT LENGTHS:",
       "- title: <= 40 chars.",
       "- body: <= 120 chars. No emojis. Actionable, specific.",
-      "Rules: prefer recovery if rest day; else if no workout yet suggest 20–35 min full-body or 20 min zone-2; else if calories/protein notably below targets, propose a meal idea for the next meal slot; else positive reinforcement.",
+      "Rules:",
+      "• Prioritize recovery ideas on rest days.",
+      "• If no workout yet, include at least 1 training suggestion.",
+      "• If calories/protein below target, include at least 1 meal suggestion.",
+      "• Otherwise include positive reinforcement or habit tips.",
+      "• All cards must be diverse and non-duplicative.",
     ].join(" ");
 
-  // Compact, integers only
   const payload = {
     d: args.date,
     tod: clampInt(args.timeOfDay, 0, 23),
@@ -599,14 +971,17 @@ function buildSuggestionPrompt(args: {
       p: num(args.totals?.protein, 0),
       b: num(args.totals?.burned, 0),
     },
+    n: clampCount(args.count),
   };
 
-  const user = `Context: ${JSON.stringify(payload)}\nReturn JSON only.`;
+  const user = `Context: ${JSON.stringify(payload)}\nReturn a JSON ARRAY of ${
+    payload.n
+  } cards only.`;
 
   return { system: sys, user };
 }
 
-// ⬇️ Put alongside buildMealPromptV2 / buildSuggestionPrompt
+// ⬇️ exercise prompt (kept)
 function buildExerciseDescribePrompt(args: {
   text: string;
   profile?: {
@@ -650,7 +1025,7 @@ async function callOpenAIForJson(
   prompt: { system: string; user: string },
   kind: "workout" | "meal"
 ): Promise<Plan | MealResultV1> {
-  if (!OPENAI_API_KEY) throw new Error("Missing OPENAI_API_KEY");
+  const key = getOpenAIKey(); // <-- add this
 
   const base: any = {
     model: "gpt-4o-mini",
@@ -706,7 +1081,7 @@ async function callOpenAIForJson(
   const rsp = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
@@ -714,6 +1089,10 @@ async function callOpenAIForJson(
 
   if (!rsp.ok) {
     const t = await safeText(rsp);
+    console.error("[meal_suggest] openai_http_error", {
+      status: rsp.status,
+      body: t.slice(0, 1000),
+    });
     throw new Error(`OpenAI ${rsp.status}: ${t}`);
   }
 
@@ -733,12 +1112,137 @@ async function callOpenAIForJson(
   }
 }
 
+/** OpenAI caller for meal_suggest:v1 — exact n (3..5) + optional seed */
+async function callOpenAIForMealIdeas(
+  prompt: { system: string; user: string },
+  opts: { n: number; seed?: string }
+): Promise<MealIdeasResponse> {
+  const key = getOpenAIKey();
+  const n = Math.max(3, Math.min(5, Number(opts.n) || 5));
+
+  const body: any = {
+    model: "gpt-4o-mini",
+    temperature: 0.7, // more novelty
+    presence_penalty: 0.3,
+    frequency_penalty: 0.2,
+    messages: [
+      { role: "system", content: prompt.system },
+      { role: "user", content: prompt.user },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "MealIdeasResponse",
+        strict: true,
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          required: ["meals"],
+          properties: {
+            meals: {
+              type: "array",
+              minItems: n,
+              maxItems: n,
+              items: {
+                type: "object",
+                additionalProperties: false,
+                required: ["name", "calories", "protein", "carbs", "fat"],
+                properties: {
+                  name: { type: "string", maxLength: 60 },
+                  meal: {
+                    type: "string",
+                    enum: ["breakfast", "lunch", "dinner", "snacks"],
+                  },
+                  calories: { type: "number", minimum: 0 },
+                  protein: { type: "number", minimum: 0 },
+                  carbs: { type: "number", minimum: 0 },
+                  fat: { type: "number", minimum: 0 },
+                  sugar: { type: "number", minimum: 0 },
+                  fiber: { type: "number", minimum: 0 },
+                  prep_min: { type: "number", minimum: 0 },
+                  difficulty: {
+                    type: "string",
+                    enum: ["easy", "moderate", "advanced"],
+                  },
+                  notes: { type: "string", maxLength: 160 },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+
+  // Stable randomness per request (so regen differs); optional but helpful
+  if (opts.seed) body.seed = stringToSeed(String(opts.seed));
+
+  let rsp: Response | null = null;
+  try {
+    rsp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (netErr: any) {
+    console.error(
+      "[openai meal_suggest] network error",
+      netErr?.message || netErr
+    );
+    throw netErr;
+  }
+
+  if (!rsp.ok) {
+    const t = await safeText(rsp);
+    console.error("[openai meal_suggest] HTTP", rsp.status, t);
+    throw new Error(`OpenAI ${rsp.status}: ${t}`);
+  }
+
+  const data: any = await rsp.json();
+  const text =
+    data?.choices?.[0]?.message?.content ??
+    data?.choices?.[0]?.message ??
+    data?.choices?.[0]?.text ??
+    "{}";
+
+  // Log the raw model content once (helps when schema mismatches)
+  try {
+    // Keep short to avoid noisy logs
+    console.log("[openai meal_suggest] raw", String(text).slice(0, 400));
+  } catch {}
+
+  let out: MealIdeasResponse = { meals: [] };
+  try {
+    const parsed = JSON.parse(typeof text === "string" ? text : String(text));
+    if (parsed && Array.isArray(parsed.meals)) {
+      out = parsed as MealIdeasResponse;
+    } else {
+      console.error("[openai meal_suggest] parsed but missing 'meals'", parsed);
+      // Return shape anyway; let caller decide if it's acceptable
+      return { meals: [] };
+    }
+  } catch (e: any) {
+    console.error(
+      "[openai meal_suggest] JSON parse error",
+      e?.message || e,
+      "from text:",
+      text
+    );
+    throw e;
+  }
+
+  return out;
+}
+
 async function callOpenAIForMealV2(prompt: {
   system: string;
   user: string;
   _messages?: any[];
 }): Promise<MealV2> {
-  if (!OPENAI_API_KEY) throw new Error("Missing OPENAI_API_KEY");
+  const key = getOpenAIKey(); // <-- add this
 
   const messages = prompt._messages ?? [
     { role: "system", content: prompt.system },
@@ -787,7 +1291,7 @@ async function callOpenAIForMealV2(prompt: {
   const rsp = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
@@ -830,19 +1334,91 @@ async function callOpenAIForMealV2(prompt: {
       sugar: num(parsed?.sugar, 0),
       fiber: num(parsed?.fiber, 0),
     };
-  } catch {
-    // keep defaults
-  }
-
+  } catch {}
   return out;
 }
 
-/** OpenAI caller for suggest:v1 (tight schema) */
+/** OpenAI caller for suggest:v1 — returns ARRAY of cards */
+async function callOpenAIForSuggestionList(
+  prompt: { system: string; user: string },
+  seed?: string
+): Promise<SuggestionCard[]> {
+  const key = getOpenAIKey(); // <-- add this
+
+  const body: any = {
+    model: "gpt-4o-mini",
+    temperature: 0.35,
+    messages: [
+      { role: "system", content: prompt.system },
+      { role: "user", content: prompt.user },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "SuggestionList",
+        strict: true,
+        schema: {
+          type: "array",
+          minItems: 3,
+          maxItems: 6,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["icon", "title", "body", "ctaLabel", "href", "tint"],
+            properties: {
+              icon: { type: "string" },
+              title: { type: "string", maxLength: 40 },
+              body: { type: "string", maxLength: 120 },
+              ctaLabel: { type: "string", maxLength: 30 },
+              href: { type: "string" },
+              tint: {
+                type: "string",
+                enum: ["workout", "meal", "recovery", "ok"],
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+  if (seed) body.seed = stringToSeed(seed);
+
+  const rsp = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!rsp.ok) {
+    const t = await safeText(rsp);
+    throw new Error(`OpenAI ${rsp.status}: ${t}`);
+  }
+
+  const data: any = await rsp.json();
+  const text =
+    data?.choices?.[0]?.message?.content ??
+    data?.choices?.[0]?.message ??
+    data?.choices?.[0]?.text ??
+    "[]";
+
+  try {
+    const arr = JSON.parse(typeof text === "string" ? text : String(text));
+    if (Array.isArray(arr) && arr.length) {
+      return arr as SuggestionCard[];
+    }
+  } catch {}
+  return [];
+}
+
+/** (kept for backward compat in case you still need a single card) */
 async function callOpenAIForSuggestion(prompt: {
   system: string;
   user: string;
 }): Promise<SuggestionCard> {
-  if (!OPENAI_API_KEY) throw new Error("Missing OPENAI_API_KEY");
+  const key = getOpenAIKey(); // <-- add this
 
   const body = {
     model: "gpt-4o-mini",
@@ -879,7 +1455,7 @@ async function callOpenAIForSuggestion(prompt: {
   const rsp = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
@@ -912,17 +1488,17 @@ async function callOpenAIForSuggestion(prompt: {
   throw new Error("bad-suggestion-json");
 }
 
-// ⬇️ Put after callOpenAIForMealV2 / callOpenAIForSuggestion
+// ⬇️ exercise estimate caller (kept)
 async function callOpenAIForExerciseEstimate(prompt: {
   system: string;
   user: string;
 }): Promise<ExerciseEstimate> {
-  if (!OPENAI_API_KEY) throw new Error("Missing OPENAI_API_KEY");
+  const key = getOpenAIKey(); // <-- add this
 
   const body = {
     model: "gpt-4o-mini",
     temperature: 0.2,
-    max_tokens: 120, // keep output tiny/cheap
+    max_tokens: 120,
     messages: [
       { role: "system", content: prompt.system },
       { role: "user", content: prompt.user },
@@ -951,7 +1527,7 @@ async function callOpenAIForExerciseEstimate(prompt: {
   const rsp = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
@@ -980,14 +1556,11 @@ async function callOpenAIForExerciseEstimate(prompt: {
       rationale:
         typeof parsed?.rationale === "string" ? parsed.rationale : undefined,
     };
-  } catch {
-    // keep defaults
-  }
+  } catch {}
   return out;
 }
 
 /* ───────────────────────── Helpers ───────────────────────── */
-
 function num(v: unknown, fallback = 0): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
@@ -997,8 +1570,11 @@ function clampInt(n: number, lo: number, hi: number) {
   if (!Number.isFinite(x)) return lo;
   return Math.max(lo, Math.min(hi, x));
 }
+function clampCount(n: any) {
+  const x = Number(n ?? 3);
+  return Math.min(5, Math.max(3, Number.isFinite(x) ? x : 3));
+}
 function bucket(val: number, stops: number[]): string {
-  // returns index bucket label "b0","b1",...,"bN"
   let i = 0;
   while (i < stops.length && val > stops[i]) i++;
   return `b${i}`;
@@ -1017,22 +1593,22 @@ function buildBucketKey(args: {
   cRem: number;
   pRem: number;
 }): string {
-  // Coarse buckets to maximize cache hits
   const t = todBucket(args.hour);
-  const cB = bucket(args.cRem, [200, 500]); // ≤200, 201–500, >500
-  const pB = bucket(args.pRem, [20, 40]); // ≤20, 21–40, >40
+  const cB = bucket(args.cRem, [200, 500]);
+  const pB = bucket(args.pRem, [20, 40]);
   const r = args.isRestDay ? "R1" : "R0";
   const w = args.hasWorkout ? "W1" : "W0";
   return `${args.date}|${t}|${r}|${w}|C${cB}|P${pB}`;
 }
 
-async function safeText(r: Response): Promise<string> {
+async function safeText(r: any): Promise<string> {
   try {
     return await r.text();
   } catch {
     return "";
   }
 }
+
 function hashKey(payload: any) {
   return crypto
     .createHash("sha256")
@@ -1047,7 +1623,7 @@ function heuristicCaloriesEstimate(
   p?: { weight_kg?: number }
 ): { name: string; calories: number; rationale: string } {
   const t = text.toLowerCase();
-  let basePer30 = 120; // very light
+  let basePer30 = 120;
   if (/\b(run|jog|sprint|treadmill)\b/.test(t)) basePer30 = 350;
   else if (/\b(hiit|interval|burpee|metcon|circuit)\b/.test(t)) basePer30 = 320;
   else if (/\b(cycle|bike|spin)\b/.test(t)) basePer30 = 280;
@@ -1062,7 +1638,6 @@ function heuristicCaloriesEstimate(
   )
     basePer30 = 220;
 
-  // duration
   const minMatch = t.match(/(\d{1,3})\s?(min|mins|minutes)/);
   const hrMatch = t.match(/(\d(?:\.\d)?)\s?(h|hr|hrs|hour|hours)/);
   let mins = 30;
@@ -1070,7 +1645,6 @@ function heuristicCaloriesEstimate(
   else if (hrMatch)
     mins = Math.max(10, Math.min(180, Math.round(Number(hrMatch[1]) * 60)));
 
-  // light scaling by body mass if present
   const w = Number(p?.weight_kg || 0);
   const massScale = w ? Math.min(1.3, Math.max(0.7, w / 70)) : 1;
 
@@ -1082,14 +1656,12 @@ function heuristicCaloriesEstimate(
   };
 }
 
-// ⬇️ Put near other small helpers
 function profileEnergyShape(src: any | null) {
   if (!src) return null;
 
   const toNum = (v: any) =>
     Number.isFinite(Number(v)) ? Number(v) : undefined;
 
-  // Try multiple common key names to be resilient to schema variations
   const heightCm =
     toNum(src?.heightCm) ??
     toNum(src?.height_cm) ??
@@ -1116,15 +1688,15 @@ function profileEnergyShape(src: any | null) {
   const fitnessLevel = src?.fitnessLevel || src?.activityLevel || undefined;
 
   return {
-    sex, // "male" | "female" | etc (freeform; model will handle)
-    age, // years
+    sex,
+    age,
     height_cm: heightCm,
     weight_kg: weightKg,
-    fitnessLevel, // optional hint
+    fitnessLevel,
   };
 }
 
-/** Server-side rule fallback (mirrors client behavior) */
+/** Server-side rule fallback (single) */
 function ruleBasedSuggestion(args: {
   isRestDay: boolean;
   calories: number;
@@ -1190,4 +1762,66 @@ function ruleBasedSuggestion(args: {
     href: "/(tabs)/nutrition",
     tint: "ok",
   };
+}
+
+/** Rule fallback ARRAY (3–5 diverse cards) */
+function ruleBasedSuggestions(args: {
+  count: number;
+  context: {
+    isRestDay: boolean;
+    calories: number;
+    protein: number;
+    burned: number;
+    kcalGoal: number;
+    proteinGoal: number;
+    hour: number;
+  };
+}): SuggestionCard[] {
+  const n = clampCount(args.count);
+  const first = ruleBasedSuggestion(args.context);
+  const extras: SuggestionCard[] = [
+    {
+      icon: "water-outline",
+      title: "Hydration check",
+      body: "Have a glass of water now; aim for steady sips through the day.",
+      ctaLabel: "Log water",
+      href: "/(tabs)/nutrition",
+      tint: "ok",
+    },
+    {
+      icon: "walk-outline",
+      title: "10-minute walk",
+      body: "Quick post-meal walk improves glucose control and recovery.",
+      ctaLabel: "Log activity",
+      href: "/(tabs)/workouts",
+      tint: args.context.isRestDay ? "recovery" : "ok",
+    },
+    {
+      icon: "fast-food-outline",
+      title: "Protein anchor",
+      body: "Add 25–35g protein to your next meal. Yogurt, chicken, tuna, or tofu.",
+      ctaLabel: "Add a meal",
+      href: "/(tabs)/nutrition",
+      tint: "meal",
+    },
+    {
+      icon: "bed-outline",
+      title: "Wind-down tonight",
+      body: "Aim for 7–9h sleep. Dim lights 60 min before bed; phone away.",
+      ctaLabel: "Plan recovery",
+      href: "/(tabs)/workouts",
+      tint: "recovery",
+    },
+  ];
+  const pool = [first, ...extras];
+  return pool.slice(0, n);
+}
+
+function stringToSeed(s: string) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
 }
