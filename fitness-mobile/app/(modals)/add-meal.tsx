@@ -1,11 +1,5 @@
 // app/(modals)/add-meal.tsx
-import React, {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useLayoutEffect,
-} from "react";
+import React, { useEffect, useRef, useState, useLayoutEffect } from "react";
 import {
   View,
   Text,
@@ -18,6 +12,7 @@ import {
   Animated,
   Easing,
   Dimensions,
+  Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -25,24 +20,29 @@ import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  CameraView,
+  useCameraPermissions,
+  type BarcodeScanningResult,
+  type BarcodeType,
+} from "expo-camera";
 
 import { useTheme } from "@/content/ThemeProvider";
 import { useAuth } from "@/content/AuthContext";
 import { getAuth } from "firebase/auth";
 
 import { computeMealScore } from "@/utils/mealScore";
-
-// Firestore (history) — removed (we're replacing with community catalog)
-// import { ... } from "firebase/firestore";
-// import { app } from "@/lib/firebase";
-// const db = getFirestore(app);
-
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// ⬇️ Community Food Catalog
-import { searchCatalog, bumpUse } from "@/services/foodCatalog";
+// Community Food Catalog
+// add to Community Food Catalog imports
+import {
+  searchCatalog,
+  submitSuggestionFromScan,
+  bumpUse,
+} from "@/services/foodCatalog";
 
-// Types
+/* ───────────── Types ───────────── */
 type Meal = "breakfast" | "lunch" | "dinner" | "snacks";
 
 type AddPayload = {
@@ -57,17 +57,19 @@ type AddPayload = {
   fat: number;
   sugar?: number;
   fiber?: number;
-  source: "catalog" | "fdc" | "manual" | "describe"; // history removed
+  source: "catalog" | "fdc" | "manual" | "describe" | "barcode";
   fdcId?: string | null;
-  healthScore?: number; // used by the feed page if present
+  healthScore?: number;
 };
 
-// FDC search
-const FDC_API_KEY = process.env.EXPO_PUBLIC_FDC_API_KEY;
+const FDC_API_KEY = process.env.EXPO_PUBLIC_FDC_API_KEY as string;
+
 type FdcItem = {
   fdcId: string;
   description: string;
   brandOwner?: string;
+  dataType?: string;
+  gtinUpc?: string;
   labelNutrients?: {
     calories?: { value: number };
     protein?: { value: number };
@@ -83,7 +85,7 @@ async function searchFDC(queryStr: string): Promise<FdcItem[]> {
   try {
     const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${encodeURIComponent(
       FDC_API_KEY
-    )}&query=${encodeURIComponent(queryStr)}&pageSize=25`;
+    )}&query=${encodeURIComponent(queryStr)}&dataType=Branded&pageSize=10`;
     const r = await fetch(url);
     if (!r.ok) return [];
     const j = await r.json();
@@ -93,8 +95,200 @@ async function searchFDC(queryStr: string): Promise<FdcItem[]> {
   }
 }
 
-/* ───────────────── Healthy Meal Score helpers ───────────────── */
+/* ───────────── Barcode → product resolvers (OFF primary, FDC fallback) ───────────── */
+type SourceTag = "OFF" | "FDC";
+export type ResolvedProduct = {
+  name: string;
+  brand?: string | null;
+  unit: string; // "serving" | "100 g" | "100 ml"
+  per: number; // 1 or 100
+  nutrients: {
+    calories?: number;
+    protein?: number;
+    carbs?: number;
+    fat?: number;
+    sugar?: number;
+    fiber?: number;
+  };
+  fdcId?: string | null;
+  source?: SourceTag;
+};
 
+async function lookupOpenFoodFacts(
+  barcode: string
+): Promise<ResolvedProduct | null> {
+  try {
+    const r = await fetch(
+      `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(
+        barcode
+      )}.json`
+    );
+    if (!r.ok) return null;
+    const j = await r.json();
+    if (j?.status !== 1) return null;
+
+    const p = j.product || {};
+    const nutr = p.nutriments || {};
+
+    const hasServing =
+      nutr["energy-kcal_serving"] ||
+      nutr["proteins_serving"] ||
+      nutr["carbohydrates_serving"] ||
+      nutr["fat_serving"] ||
+      nutr["sugars_serving"] ||
+      nutr["fiber_serving"];
+
+    if (hasServing) {
+      return {
+        name: String(p.product_name || p.generic_name || "Food"),
+        brand: p.brands || null,
+        unit: "serving",
+        per: 1,
+        nutrients: {
+          calories:
+            nutr["energy-kcal_serving"] ??
+            (nutr["energy_serving"]
+              ? nutr["energy_serving"] / 4.184
+              : undefined),
+          protein: nutr["proteins_serving"],
+          carbs: nutr["carbohydrates_serving"],
+          fat: nutr["fat_serving"],
+          sugar: nutr["sugars_serving"],
+          fiber: nutr["fiber_serving"],
+        },
+        fdcId: null,
+        source: "OFF",
+      };
+    }
+
+    const baseIsMl = (p.quantity || "").toLowerCase().includes("ml");
+    return {
+      name: String(p.product_name || p.generic_name || "Food"),
+      brand: p.brands || null,
+      unit: baseIsMl ? "100 ml" : "100 g",
+      per: 100,
+      nutrients: {
+        calories:
+          nutr["energy-kcal_100g"] ??
+          (nutr["energy_100g"] ? nutr["energy_100g"] / 4.184 : undefined),
+        protein: nutr["proteins_100g"],
+        carbs: nutr["carbohydrates_100g"],
+        fat: nutr["fat_100g"],
+        sugar: nutr["sugars_100g"],
+        fiber: nutr["fiber_100g"],
+      },
+      fdcId: null,
+      source: "OFF",
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function lookupFDCByBarcode(
+  barcode: string
+): Promise<ResolvedProduct | null> {
+  const items = await searchFDC(barcode);
+  if (!items?.length) return null;
+  const x = items[0];
+  const ln = x.labelNutrients || {};
+  return {
+    name: x.description || "Food",
+    brand: x.brandOwner || null,
+    unit: "serving",
+    per: 1,
+    nutrients: {
+      calories: ln.calories?.value,
+      protein: ln.protein?.value,
+      carbs: ln.carbohydrates?.value,
+      fat: ln.fat?.value,
+      sugar: ln.sugars?.value,
+      fiber: ln.fiber?.value,
+    },
+    fdcId: String(x.fdcId),
+    source: "FDC",
+  };
+}
+
+/* ───────────── Scanner Upgrades: normalizer, cache, candidates, picker ───────────── */
+const CACHE_KEY = "@barcode_cache_v1"; // { [barcode: string]: ResolvedProduct }
+
+function variantsFor(barcode: string): string[] {
+  const b = barcode.trim();
+  const xs = new Set<string>([b]);
+  if (b.length === 12 && b.startsWith("0")) xs.add(b.slice(1)); // UPC-A -> EAN-ish
+  if (b.length === 11) xs.add("0" + b); // pad UPC-A
+  if (b.length === 13 && b.startsWith("0")) xs.add(b.slice(1)); // EAN13 -> UPC-A
+  if (b.length === 8 && !b.startsWith("0")) xs.add("0" + b); // pad EAN-8
+  return Array.from(xs);
+}
+
+async function getCache(): Promise<Record<string, ResolvedProduct>> {
+  try {
+    const raw = await AsyncStorage.getItem(CACHE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+async function setCache(map: Record<string, ResolvedProduct>) {
+  try {
+    await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(map));
+  } catch {}
+}
+async function cacheSave(barcode: string, item: ResolvedProduct) {
+  const map = await getCache();
+  map[barcode] = item;
+  await setCache(map);
+}
+async function cacheLoad(barcode: string): Promise<ResolvedProduct | null> {
+  const map = await getCache();
+  return map[barcode] ?? null;
+}
+
+function scoreCandidate(r: ResolvedProduct): number {
+  const filled = [
+    "calories",
+    "protein",
+    "carbs",
+    "fat",
+    "sugar",
+    "fiber",
+  ].reduce((s, k) => s + (Number.isFinite((r.nutrients as any)[k]) ? 1 : 0), 0);
+  const servingBonus = r.per === 1 ? 3 : 0;
+  const srcBonus = r.source === "OFF" ? 1 : 0;
+  return filled + servingBonus + srcBonus;
+}
+
+async function resolveBarcodeCandidates(
+  barcode: string
+): Promise<ResolvedProduct[]> {
+  // Cache first (exact code only)
+  const cached = await cacheLoad(barcode);
+  if (cached) return [cached];
+
+  const tries = variantsFor(barcode);
+  const seen: ResolvedProduct[] = [];
+
+  for (const b of tries) {
+    const off = await lookupOpenFoodFacts(b);
+    if (off) seen.push(off);
+    const fdc = await lookupFDCByBarcode(b);
+    if (fdc) seen.push(fdc);
+  }
+
+  // De-dupe by significant fields
+  const key = (x: ResolvedProduct) =>
+    [x.name, x.brand || "", x.unit, x.per, x.source || ""]
+      .join("|")
+      .toLowerCase();
+  const uniq = Array.from(new Map(seen.map((v) => [key(v), v])).values());
+
+  // Rank best first
+  return uniq.sort((a, b) => scoreCandidate(b) - scoreCandidate(a));
+}
+
+/* ───────────── Small UI helpers ───────────── */
 function ScoreBar({ score }: { score: number }) {
   const pct = Math.max(0, Math.min(100, Math.round(score)));
   const color =
@@ -132,8 +326,6 @@ function ScoreBar({ score }: { score: number }) {
     </View>
   );
 }
-
-/* ───────────────── UI helpers ───────────────── */
 
 function GlassPanel({
   children,
@@ -329,19 +521,17 @@ function ListRow({
     <Pressable
       onPress={onPress}
       android_ripple={{ color: colors.border }}
-      style={({ pressed }) => [
-        {
-          paddingVertical: 12,
-          paddingHorizontal: 12,
-          borderRadius: 12,
-          borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: pressed ? colors.card : "transparent",
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-        },
-      ]}
+      style={{
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: "transparent",
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+      }}
     >
       <View style={{ flex: 1, paddingRight: 10 }}>
         <Text
@@ -442,15 +632,13 @@ function EmptyHint({ text }: { text: string }) {
   );
 }
 
-/* ───────────────────────────── Main ───────────────────────────── */
+/* ───────────── Main ───────────── */
 
 export default function AddMealModal() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
   const navigation = useNavigation();
-  const { user } = useAuth();
 
-  // Hide the default header (modal has its own)
   useLayoutEffect(() => {
     navigation.setOptions?.({ headerShown: false });
   }, [navigation]);
@@ -459,10 +647,27 @@ export default function AddMealModal() {
   const meal = (params.meal as Meal) || "breakfast";
   const date = params.date || new Date().toISOString().slice(0, 10);
 
-  const [tab, setTab] = useState<"search" | "describe" | "manual">("search");
+  const [tab, setTab] = useState<"scan" | "search" | "describe" | "manual">(
+    "search"
+  );
 
-  // Top-level scroll (for manual centering with onFocus)
+  // Top-level scroll
   const scrollRef = useRef<ScrollView>(null);
+
+  // SCAN state
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanBusy, setScanBusy] = useState(false);
+  const [lastCode, setLastCode] = useState<string | null>(null);
+  const [scanError, setScanError] = useState<string>("");
+
+  // Picker for multiple candidates
+  const [pickOpen, setPickOpen] = useState(false);
+  const [candidates, setCandidates] = useState<ResolvedProduct[]>([]);
+  const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (tab === "scan" && !permission?.granted) requestPermission();
+  }, [tab, permission, requestPermission]);
 
   // SEARCH
   const [q, setQ] = useState("");
@@ -472,7 +677,7 @@ export default function AddMealModal() {
     id?: string;
     name: string;
     unit?: string;
-    per?: number; // nutrients defined per this amount
+    per?: number;
     nutrients?: {
       calories?: number;
       protein?: number;
@@ -487,9 +692,6 @@ export default function AddMealModal() {
   const [catalogResults, setCatalogResults] = useState<CatalogItem[]>([]);
   const [fdcResults, setFdcResults] = useState<FdcItem[]>([]);
 
-  // 🔎 Query Community Catalog (also when query is empty to show popular/top)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // helper: normalize various service return shapes to an array
   function normalizeCatalogResponse(r: any): any[] {
     if (!r) return [];
     if (Array.isArray(r)) return r;
@@ -500,7 +702,6 @@ export default function AddMealModal() {
     return [];
   }
 
-  // OPTIONAL: if your SDK exposes getPopularCatalog, we'll use it
   let getPopularCatalog:
     | undefined
     | ((limit?: number, opts?: any) => Promise<any>);
@@ -511,7 +712,6 @@ export default function AddMealModal() {
       getPopularCatalog = fc.getPopularCatalog;
   } catch {}
 
-  // 👇 Use a uniquely named ref so there's no redeclare
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -522,7 +722,6 @@ export default function AddMealModal() {
       try {
         const queryText = q.trim();
 
-        // If your catalog needs auth, pass an ID token
         let idToken: string | undefined;
         try {
           const auth = getAuth();
@@ -538,15 +737,11 @@ export default function AddMealModal() {
         if (queryText) {
           try {
             const res = await (searchCatalog as any)(queryText, 30, opts);
-            // after: const res = await (searchCatalog as any)(queryText, 30, opts);
-            console.log("[catalog] raw response:", res);
-
             cat = normalizeCatalogResponse(res);
           } catch (e) {
             console.warn("[catalog] searchCatalog failed:", e);
           }
         } else {
-          // empty query → popular/top
           let res: any = null;
           if (getPopularCatalog) {
             try {
@@ -557,7 +752,7 @@ export default function AddMealModal() {
           }
           if (!res) {
             try {
-              res = await (searchCatalog as any)("*", 30, opts); // wildcard fallback
+              res = await (searchCatalog as any)("*", 30, opts);
             } catch (e) {
               console.warn("[catalog] wildcard searchCatalog failed:", e);
             }
@@ -565,7 +760,6 @@ export default function AddMealModal() {
           cat = normalizeCatalogResponse(res);
         }
 
-        // USDA only when there’s a query
         let fdc: any[] = [];
         if (queryText) {
           try {
@@ -575,14 +769,13 @@ export default function AddMealModal() {
           }
         }
 
-        // inside the effect that depends on [q], where we build `fixed`
         const fixed = (cat || []).map((c: any) => {
           const n = c?.nutrients || c?.nutrition || {};
           return {
             id: c?.id || c?.docId || c?._id,
             name: String(c?.name || c?.title || "Food"),
             unit: c?.unit || c?.servingUnit || "serving",
-            per: Number(c?.qty ?? c?.per ?? c?.servingSize ?? 1), // ← add this line (qty first)
+            per: Number(c?.qty ?? c?.per ?? c?.servingSize ?? 1),
             nutrients: {
               calories: Number(
                 n.calories ?? n.kcal ?? n.energy ?? c?.calories ?? 0
@@ -596,12 +789,6 @@ export default function AddMealModal() {
             brand: c?.brand ?? c?.brandOwner ?? null,
           };
         });
-
-        console.log(
-          `[catalog] q="${queryText}" got ${fixed.length} items; [fdc] ${
-            fdc?.length || 0
-          } items`
-        );
 
         setCatalogResults(fixed);
         setFdcResults(Array.isArray(fdc) ? fdc : []);
@@ -655,7 +842,7 @@ export default function AddMealModal() {
       }
 
       const payload = {
-        mode: "meal:v2", // totals mode
+        mode: "meal:v2",
         query: text,
         rawText: text,
         context: { meal, date },
@@ -675,10 +862,8 @@ export default function AddMealModal() {
         return;
       }
 
-      const data = await res.json();
+      const got = await res.json();
 
-      // v2 shape returns { name, quantity, unit, calories, protein, carbs, fat, sugar, fiber }
-      const got = data || {};
       const nName = String(got.name || text);
       const nQty = numstr(got.quantity ?? (dQty || "1"));
       const nUnit = String(got.unit || dUnit || "serving");
@@ -690,7 +875,6 @@ export default function AddMealModal() {
       const nSugar = numstr(got.sugar);
       const nFiber = numstr(got.fiber);
 
-      // Set all fields
       setDName(nName);
       setDQty(String(nQty || "1"));
       setDUnit(nUnit);
@@ -702,7 +886,6 @@ export default function AddMealModal() {
       setDSugar(nSugar);
       setDFiber(nFiber);
 
-      // Compute score
       setDScore(
         computeMealScore({
           calories: Number(nCalories || 0),
@@ -713,14 +896,13 @@ export default function AddMealModal() {
           fiber: Number(nFiber || 0),
         })
       );
-    } catch (e) {
+    } catch {
       setCalcError("Describe service unavailable. Please try again.");
     } finally {
       setCalcLoading(false);
     }
   }
 
-  // Recompute score if user tweaks describe fields
   useEffect(() => {
     setDScore(
       computeMealScore({
@@ -737,7 +919,7 @@ export default function AddMealModal() {
   useEffect(() => {
     (async () => {
       try {
-        // try popular/empty query, then wildcard as fallback
+        // probe catalog
         // @ts-ignore
         const fc = require("@/services/foodCatalog");
         const search = fc.searchCatalog || fc.search || fc.default;
@@ -749,7 +931,7 @@ export default function AddMealModal() {
         } else if (typeof search === "function") {
           res = await search("", 5);
           if (!res || (Array.isArray(res) && res.length === 0)) {
-            res = await search("*", 5); // some backends use "*" for “show top”
+            res = await search("*", 5);
           }
         } else {
           console.log(
@@ -758,12 +940,9 @@ export default function AddMealModal() {
           return;
         }
 
-        console.log("CATALOG_PROBE raw:", res);
-        const items = Array.isArray(res)
+        const _items = Array.isArray(res)
           ? res
           : res?.items || res?.top || res?.results || res?.data || [];
-        console.log("CATALOG_PROBE count:", items.length);
-        if (items[0]) console.log("CATALOG_PROBE first item:", items[0]);
       } catch (e) {
         console.warn("CATALOG_PROBE error:", e);
       }
@@ -795,9 +974,11 @@ export default function AddMealModal() {
     );
   }, [calories, protein, carbs, fat, sugar, fiber]);
 
-  // EDIT SHEET (Catalog & FDC)
+  // EDIT SHEET (Catalog, FDC & Barcode)
   const [editOpen, setEditOpen] = useState(false);
-  const [editSource, setEditSource] = useState<"fdc" | "catalog" | null>(null);
+  const [editSource, setEditSource] = useState<
+    "fdc" | "catalog" | "barcode" | null
+  >(null);
   const [eName, setEName] = useState("");
   const [eQty, setEQty] = useState("1");
   const [eUnit, setEUnit] = useState("serving");
@@ -823,9 +1004,17 @@ export default function AddMealModal() {
     );
   }, [eCalories, eProtein, eCarbs, eFat, eSugar, eFiber]);
 
-  // Animations
+  // Bottom sheet animation
   const sheetProgress = useRef(new Animated.Value(0)).current; // 0 closed, 1 open
   const H = Dimensions.get("window").height;
+  const scrimOpacity = sheetProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0.6],
+  });
+  const translateY = sheetProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [H * 0.5, 0],
+  });
 
   function animateSheet(to: 0 | 1, after?: () => void) {
     Animated.timing(sheetProgress, {
@@ -837,12 +1026,10 @@ export default function AddMealModal() {
       if (finished && after) after();
     });
   }
-
   function openEdit() {
     setEditOpen(true);
     requestAnimationFrame(() => animateSheet(1));
   }
-
   function closeEdit() {
     animateSheet(0, () => setEditOpen(false));
   }
@@ -864,8 +1051,7 @@ export default function AddMealModal() {
     setTab("search");
   }
 
-  // Start edit from Community Catalog
-  function startEditFromCatalog(item: CatalogItem) {
+  function startEditFromCatalog(item: any) {
     if (item?.id) {
       try {
         bumpUse(item.id);
@@ -874,7 +1060,7 @@ export default function AddMealModal() {
     const n = item?.nutrients || {};
     setEditSource("catalog");
     setEName(item?.name || "Food");
-    setEQty(String(item?.per ?? 1)); // nutrients are "per" amount
+    setEQty(String(item?.per ?? 1));
     setEUnit(item?.unit || "serving");
     setECalories(String(Number(n.calories || 0)));
     setEProtein(String(Number(n.protein || 0)));
@@ -887,7 +1073,23 @@ export default function AddMealModal() {
     setTab("search");
   }
 
-  // back with payload (pairs with nutrition.tsx AsyncStorage reader)
+  function startEditFromBarcode(r: ResolvedProduct) {
+    setEditSource("barcode");
+    setEName(r.name || "Food");
+    setEQty(String(r.per ?? 1)); // 1 (serving) or 100
+    setEUnit(r.unit || "serving");
+    setECalories(String(Number(r.nutrients.calories || 0)));
+    setEProtein(String(Number(r.nutrients.protein || 0)));
+    setECarbs(String(Number(r.nutrients.carbs || 0)));
+    setEFat(String(Number(r.nutrients.fat || 0)));
+    setESugar(String(Number(r.nutrients.sugar || 0)));
+    setEFiber(String(Number(r.nutrients.fiber || 0)));
+    setEFdcId(r.fdcId ?? null);
+    openEdit();
+    setScanBusy(false);
+  }
+
+  // Back with payload (pairs with nutrition.tsx AsyncStorage reader)
   function done(payload: AddPayload) {
     AsyncStorage.setItem("@pending_add_meal", JSON.stringify(payload))
       .catch(() => {})
@@ -955,7 +1157,7 @@ export default function AddMealModal() {
     });
   }
 
-  function addFromEditDraft() {
+  async function addFromEditDraft() {
     if (!eName.trim()) return;
 
     const healthScore = computeMealScore({
@@ -966,6 +1168,46 @@ export default function AddMealModal() {
       sugar: Number(eSugar || 0),
       fiber: Number(eFiber || 0),
     });
+
+    // Save user correction locally for this barcode
+    if (editSource === "barcode" && scannedBarcode) {
+      // Save user correction locally for this barcode
+      await cacheSave(scannedBarcode, {
+        name: eName,
+        unit: eUnit,
+        per: Number(eQty || 1),
+        nutrients: {
+          calories: Number(eCalories || 0),
+          protein: Number(eProtein || 0),
+          carbs: Number(eCarbs || 0),
+          fat: Number(eFat || 0),
+          sugar: Number(eSugar || 0),
+          fiber: Number(eFiber || 0),
+        },
+        fdcId: eFdcId ?? null,
+        source: "OFF",
+      });
+
+      // ALSO push to Community DB + link barcode -> foodId
+      try {
+        const uid = getAuth().currentUser?.uid || null;
+        await submitSuggestionFromScan({
+          barcode: scannedBarcode,
+          name: eName,
+          unit: eUnit,
+          qty: Number(eQty || 1),
+          calories: Number(eCalories || 0),
+          protein: Number(eProtein || 0),
+          carbs: Number(eCarbs || 0),
+          fat: Number(eFat || 0),
+          sugar: Number(eSugar || 0),
+          fiber: Number(eFiber || 0),
+          submitterUid: uid,
+          verified: false,
+          bumpPopularity: true, // instant popularity signal
+        });
+      } catch {}
+    }
 
     done({
       date,
@@ -985,15 +1227,50 @@ export default function AddMealModal() {
     });
   }
 
-  // Derived animations
-  const scrimOpacity = sheetProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 0.6],
-  });
-  const translateY = sheetProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [H * 0.5, 0],
-  });
+  // --- Scan handler with candidates/picker ---
+  async function onBarcodeScanned(res: BarcodeScanningResult) {
+    if (scanBusy) return;
+    const code = res?.data;
+    if (!code || code === lastCode) return;
+
+    setScanBusy(true);
+    setLastCode(code);
+    setScannedBarcode(code);
+    setScanError("");
+
+    try {
+      const list = await resolveBarcodeCandidates(code);
+      if (!list.length) {
+        setScanError("No nutrition match found for this barcode.");
+        setScanBusy(false);
+        return;
+      }
+      if (list.length === 1) {
+        startEditFromBarcode(list[0]);
+        setScanBusy(false);
+      } else {
+        setCandidates(list);
+        setPickOpen(true);
+        setScanBusy(false);
+      }
+    } catch {
+      setScanError("Scan lookup failed. Please try again.");
+      setScanBusy(false);
+    }
+  }
+
+  // helper for per-100g/ml warning
+  const perIs100 = (() => {
+    const q = Number(eQty);
+    const u = (eUnit || "").toLowerCase();
+    return (
+      q === 100 &&
+      (u.includes("100 g") ||
+        u === "100 g" ||
+        u.includes("100 ml") ||
+        u === "100 ml")
+    );
+  })();
 
   return (
     <SafeAreaView
@@ -1056,11 +1333,85 @@ export default function AddMealModal() {
             </View>
           </GlassPanel>
 
+          {/* AI meal ideas entrypoint (complete today's macros) */}
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: "/(modals)/ai-meal-suggestions",
+                params: { date, meal }, // scope to current meal (optional)
+              })
+            }
+            accessibilityLabel="Generate meal ideas to hit today's macros"
+            style={{
+              borderRadius: 14,
+              overflow: "hidden",
+              shadowColor: "#000",
+              shadowOpacity: isDark ? 0.3 : 0.08,
+              shadowRadius: 12,
+              shadowOffset: { width: 0, height: 6 },
+            }}
+          >
+            <LinearGradient
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              colors={isDark ? ["#a78bfa", "#8b5cf6"] : ["#22c55e", "#16a34a"]}
+              style={{
+                height: 48,
+                alignItems: "center",
+                justifyContent: "center",
+                paddingHorizontal: 14,
+                flexDirection: "row",
+                gap: 8,
+              }}
+            >
+              <Ionicons name="sparkles-outline" size={20} color={"#fff"} />
+              <Text
+                style={{ color: "#fff", fontWeight: "900", letterSpacing: 0.3 }}
+              >
+                AI meal ideas
+              </Text>
+            </LinearGradient>
+          </Pressable>
+
+          {/* Optional: quick notes/restrictions chip */}
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: "/(modals)/ai-meal-suggestions",
+                params: { date, meal, focus: "notes" },
+              })
+            }
+            accessibilityLabel="Add notes or dietary restrictions"
+            style={{
+              alignSelf: "flex-start",
+              marginTop: 8,
+              borderRadius: 999,
+              paddingVertical: 8,
+              paddingHorizontal: 12,
+              backgroundColor: isDark
+                ? "rgba(255,255,255,0.06)"
+                : "rgba(0,0,0,0.04)",
+              borderWidth: 1,
+              borderColor: colors.border,
+              flexDirection: "row",
+              gap: 6,
+              alignItems: "center",
+            }}
+          >
+            <Ionicons name="create-outline" size={16} color={colors.text} />
+            <Text
+              style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}
+            >
+              Notes / restrictions
+            </Text>
+          </Pressable>
+
           {/* Tabs */}
           <Segmented
             value={tab}
             onChange={(k) => setTab(k as any)}
             items={[
+              { key: "scan", label: "Scan", icon: "barcode-outline" },
               { key: "search", label: "Search", icon: "search-outline" },
               {
                 key: "describe",
@@ -1070,6 +1421,126 @@ export default function AddMealModal() {
               { key: "manual", label: "Manual", icon: "apps-outline" },
             ]}
           />
+
+          {/* SCAN */}
+          {tab === "scan" && (
+            <View style={{ gap: 12 }}>
+              <GlassPanel>
+                <SectionTitle>Scan a barcode</SectionTitle>
+
+                {!permission ? (
+                  <EmptyHint text="Requesting camera permission…" />
+                ) : !permission.granted ? (
+                  <View style={{ gap: 10 }}>
+                    <EmptyHint text="Camera access is blocked. Grant access to scan barcodes." />
+                    <PrimaryButton
+                      label="Grant Camera Access"
+                      onPress={() => requestPermission()}
+                    />
+                  </View>
+                ) : (
+                  <View
+                    style={{
+                      overflow: "hidden",
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                    }}
+                  >
+                    <View style={{ aspectRatio: 3 / 4 }}>
+                      <CameraView
+                        style={{ width: "100%", height: "100%" }}
+                        facing="back"
+                        barcodeScannerSettings={{
+                          barcodeTypes: [
+                            "ean13",
+                            "ean8",
+                            "upc_a",
+                            "upc_e",
+                            "code128",
+                            "code39",
+                            "qr",
+                          ] as BarcodeType[],
+                        }}
+                        onBarcodeScanned={onBarcodeScanned}
+                      />
+
+                      {/* Improved overlay tip + frame */}
+                      <View
+                        pointerEvents="none"
+                        style={{ position: "absolute", inset: 0 }}
+                      >
+                        <View
+                          style={{
+                            position: "absolute",
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            height: 48,
+                            backgroundColor: "#00000033",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Text style={{ color: "white", fontWeight: "800" }}>
+                            Hold steady • Avoid glare • Fill the frame
+                          </Text>
+                        </View>
+                        <View
+                          style={{
+                            position: "absolute",
+                            left: "10%",
+                            right: "10%",
+                            top: "30%",
+                            bottom: "30%",
+                            borderWidth: 2,
+                            borderColor: "#ffffff88",
+                            borderRadius: 12,
+                          }}
+                        />
+                      </View>
+
+                      {scanBusy && (
+                        <View
+                          style={{
+                            position: "absolute",
+                            bottom: 12,
+                            left: 12,
+                            right: 12,
+                            height: 40,
+                            borderRadius: 999,
+                            backgroundColor: "#00000066",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Text style={{ color: "white", fontWeight: "800" }}>
+                            Looking up nutrition…
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                )}
+
+                {!!scanError && (
+                  <Text
+                    style={{ color: "#ef4444", marginTop: 8, fontSize: 12 }}
+                  >
+                    {scanError}
+                  </Text>
+                )}
+                {permission?.granted && (
+                  <Text
+                    style={{ color: colors.muted, fontSize: 12, marginTop: 8 }}
+                  >
+                    Data sources: Open Food Facts (primary), USDA FDC
+                    (fallback).
+                  </Text>
+                )}
+              </GlassPanel>
+            </View>
+          )}
 
           {/* SEARCH */}
           {tab === "search" && (
@@ -1130,7 +1601,7 @@ export default function AddMealModal() {
                 </View>
               </GlassPanel>
 
-              {/* Community catalog (replaces History) */}
+              {/* Community catalog */}
               <GlassPanel>
                 <SectionTitle>
                   {q.trim()
@@ -1447,7 +1918,7 @@ export default function AddMealModal() {
           )}
         </ScrollView>
 
-        {/* Bottom Sheet Editor (Catalog & FDC) */}
+        {/* Bottom Sheet Editor (Catalog, FDC, Barcode) */}
         {editOpen && (
           <>
             {/* Scrim */}
@@ -1501,6 +1972,40 @@ export default function AddMealModal() {
                       />
                     </Pressable>
                   </View>
+
+                  {/* Source + basis badges */}
+                  {editSource && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        gap: 8,
+                        alignItems: "center",
+                        marginTop: 6,
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, color: colors.muted }}>
+                        Source:{" "}
+                        <Text style={{ fontWeight: "800", color: colors.text }}>
+                          {editSource.toUpperCase()}
+                        </Text>
+                      </Text>
+                      <Text style={{ fontSize: 12, color: colors.muted }}>
+                        Basis:{" "}
+                        <Text style={{ fontWeight: "800", color: colors.text }}>
+                          per {eQty} {eUnit}
+                        </Text>
+                      </Text>
+                    </View>
+                  )}
+                  {perIs100 && (
+                    <Text
+                      style={{ marginTop: 6, fontSize: 12, color: "#f59e0b" }}
+                    >
+                      Tip: This entry is per 100{" "}
+                      {eUnit.toLowerCase().includes("ml") ? "ml" : "g"}. Adjust
+                      quantity/unit to match your serving.
+                    </Text>
+                  )}
 
                   <Field
                     label="Name"
@@ -1575,11 +2080,146 @@ export default function AddMealModal() {
 
                   <ScoreBar score={eScore} />
 
+                  {/* Report mismatch / update from label */}
+                  <Pressable
+                    onPress={async () => {
+                      try {
+                        // try forwarding to your catalog if available
+                        // @ts-ignore
+                        const fc = require("@/services/foodCatalog");
+                        if (typeof fc.submitSuggestion === "function") {
+                          await fc.submitSuggestion({
+                            barcode: scannedBarcode,
+                            name: eName,
+                            unit: eUnit,
+                            per: Number(eQty || 1),
+                            nutrients: {
+                              calories: Number(eCalories || 0),
+                              protein: Number(eProtein || 0),
+                              carbs: Number(eCarbs || 0),
+                              fat: Number(eFat || 0),
+                              sugar: Number(eSugar || 0),
+                              fiber: Number(eFiber || 0),
+                            },
+                            source: editSource,
+                          });
+                        }
+                        // always cache locally
+                        if (scannedBarcode) {
+                          await cacheSave(scannedBarcode, {
+                            name: eName,
+                            unit: eUnit,
+                            per: Number(eQty || 1),
+                            nutrients: {
+                              calories: Number(eCalories || 0),
+                              protein: Number(eProtein || 0),
+                              carbs: Number(eCarbs || 0),
+                              fat: Number(eFat || 0),
+                              sugar: Number(eSugar || 0),
+                              fiber: Number(eFiber || 0),
+                            },
+                            fdcId: eFdcId ?? null,
+                            source: "OFF",
+                          });
+                        }
+                        Alert.alert("Thanks!", "We saved your correction.");
+                      } catch {
+                        Alert.alert(
+                          "Oops",
+                          "Couldn’t send suggestion. Saved locally."
+                        );
+                      }
+                    }}
+                    style={{ alignSelf: "flex-start", marginBottom: 8 }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        color: colors.muted,
+                        textDecorationLine: "underline",
+                      }}
+                    >
+                      Report mismatch / Update from label
+                    </Text>
+                  </Pressable>
+
                   <PrimaryButton
                     label="Add"
                     onPress={addFromEditDraft}
                     disabled={!eName.trim()}
                   />
+                </GlassPanel>
+              </SafeAreaView>
+            </Animated.View>
+          </>
+        )}
+
+        {/* Candidate Picker Sheet */}
+        {pickOpen && (
+          <>
+            <Animated.View
+              style={{
+                position: "absolute",
+                inset: 0,
+                backgroundColor: "#000",
+                opacity: scrimOpacity,
+              }}
+            />
+            <Pressable
+              onPress={() => setPickOpen(false)}
+              style={{ position: "absolute", inset: 0 }}
+            />
+            <Animated.View
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                bottom: 0,
+                transform: [{ translateY }],
+              }}
+            >
+              <SafeAreaView
+                edges={["bottom"]}
+                style={{ padding: 16, paddingTop: 8 }}
+              >
+                <GlassPanel>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text style={{ color: colors.text, fontWeight: "800" }}>
+                      Select a match
+                    </Text>
+                    <Pressable onPress={() => setPickOpen(false)}>
+                      <Ionicons
+                        name="close-circle"
+                        size={20}
+                        color={colors.muted}
+                      />
+                    </Pressable>
+                  </View>
+
+                  {candidates.map((c, i) => (
+                    <ListRow
+                      key={i}
+                      onPress={() => {
+                        setPickOpen(false);
+                        startEditFromBarcode(c);
+                      }}
+                      title={`${c.name}${c.brand ? " • " + c.brand : ""}`}
+                      subtitle={`${c.source} • per ${c.per} ${c.unit}`}
+                      right={
+                        <Ionicons
+                          name="chevron-forward"
+                          size={18}
+                          color={colors.muted}
+                        />
+                      }
+                    />
+                  ))}
                 </GlassPanel>
               </SafeAreaView>
             </Animated.View>

@@ -5,6 +5,7 @@ import React, {
   useRef,
   useState,
   useLayoutEffect,
+  useCallback,
 } from "react";
 import {
   View,
@@ -16,16 +17,22 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  LayoutChangeEvent,
 } from "react-native";
 import {
   useSafeAreaInsets,
   SafeAreaView,
 } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/content/ThemeProvider";
 import { useAuth } from "@/content/AuthContext";
-import ThemeToggle from "@/components/ThemeToggle";
+import { useRouter, useNavigation } from "expo-router";
+
 import Card from "@/components/Card";
+import ThemeToggle from "@/components/ThemeToggle";
+import BottomTabSpacer from "@/components/ui/BottomTapSpacer";
 
 import {
   ensureProfile,
@@ -37,24 +44,15 @@ import { computeTargets } from "@/utils/macros";
 import { kgToLb, lbToKg } from "@/utils/units";
 
 import BasicsCard from "@/components/profile/cards/BasicsCard";
-import GoalsActivityCard from "@/components/profile/cards/GoalsActivityCard";
-import MacrosCard from "@/components/profile/cards/MacrosCard";
-import DietCookingCard from "@/components/profile/cards/DietCookingCard";
+import GoalsMacrosCard from "@/components/profile/cards/GoalsMacrosCard";
 import MealScheduleCard from "@/components/profile/cards/MealScheduleCard";
-import EquipmentCard from "@/components/profile/cards/EquipmentCard";
 
 import SectionNav from "@/components/profile/SectionNav";
 import AccordionCard from "@/components/profile/AccordionCard";
 import StickySaveBar from "@/components/profile/StickySaveBar";
-import Tip from "@/components/profile/Tip";
-import HeaderSection from "@/components/profile/HeaderSection";
-// at top with other imports
-import HeaderActions from "@/components/profile/HeaderActions";
-import { useNavigation, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import BottomTabSpacer from "@/components/ui/BottomTapSpacer";
 
-// ───────── helpers ─────────
+/* ───────────────── constants / helpers ───────────────── */
+
 const clamp01 = (x: number) => Math.max(0, Math.min(1, Number(x) || 0));
 
 const withAlpha = (hex: string, a = 0.18) => {
@@ -66,20 +64,19 @@ const withAlpha = (hex: string, a = 0.18) => {
   return `rgba(${r}, ${g}, ${b}, ${a})`;
 };
 
-function toISO(d: Date) {
+const toISO = (d: Date) => {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
-function commaSplit(s: string) {
-  return s
+};
+
+const commaSplit = (s: string) =>
+  s
     .split(",")
     .map((x) => x.trim())
     .filter(Boolean);
-}
-function joinComma(arr?: string[]) {
-  return (arr || []).join(", ");
-}
-function pruneUndefinedDeep<T>(val: T): T {
+const joinComma = (arr?: string[]) => (arr || []).join(", ");
+
+const pruneUndefinedDeep = <T,>(val: T): T => {
   if (Array.isArray(val)) return val.map(pruneUndefinedDeep) as unknown as T;
   if (val && typeof val === "object") {
     const out: any = {};
@@ -90,13 +87,38 @@ function pruneUndefinedDeep<T>(val: T): T {
     return out;
   }
   return val;
-}
+};
+
+export type GoalUILabel = "maintain" | "cut" | "bulk";
+
+const initialsFrom = (displayName?: string | null, email?: string | null) => {
+  const source = (displayName || email || "You").trim();
+  const parts = source
+    .replace(/@.*/, "")
+    .split(/\s|[._-]/)
+    .filter(Boolean);
+  const first = (parts[0] || "Y")[0]?.toUpperCase() ?? "Y";
+  const second = (parts[1]?.[0] || (parts[0]?.[1] ?? "U")).toUpperCase();
+  return `${first}${second}`;
+};
+
+export type ActivityLevel =
+  | "sedentary"
+  | "light"
+  | "moderate"
+  | "active"
+  | "athlete";
+
+/* ───────────────── screen ───────────────── */
 
 export default function ProfileScreen() {
   const { colors, isDark } = useTheme();
   const { user } = useAuth();
+  const router = useRouter();
+  const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
 
-  // ── all hooks before any early return ──
+  /* state hydrated from profile */
   const [profile, setProfile] = useState<Profile | null>(null);
 
   const [sex, setSex] = useState<"male" | "female">("male");
@@ -108,40 +130,25 @@ export default function ProfileScreen() {
   const [targetWeight, setTargetWeight] = useState("70");
   const [targetDate, setTargetDate] = useState(toISO(new Date()));
 
-  const [activityLevel, setActivityLevel] = useState<
-    "sedentary" | "light" | "moderate" | "active" | "athlete"
-  >("moderate");
+  const [activityLevel, setActivityLevel] = useState<ActivityLevel>("moderate");
   const [trainingDaysPerWeek, setTrainingDaysPerWeek] = useState("3");
   const [stepsGoal, setStepsGoal] = useState("8000");
-
-  const navigation = useNavigation();
 
   const [macroMethod, setMacroMethod] = useState<
     "proteinPerKg" | "percent" | "cycling"
   >("proteinPerKg");
   const [proteinPerKg, setProteinPerKg] = useState("1.8");
+  const [proteinPct, setProteinPct] = useState(30);
+  const [carbPct, setCarbPct] = useState(40);
+  const [fatPct, setFatPct] = useState(30);
+  const [trainCarbPct, setTrainCarbPct] = useState(45);
+  const [restCarbPct, setRestCarbPct] = useState(35);
 
-  const [proteinPct, setProteinPct] = useState(0.3);
-  const [carbPct, setCarbPct] = useState(0.4);
-  const [fatPct, setFatPct] = useState(0.3);
-  const [trainCarbPct, setTrainCarbPct] = useState(0.45);
-  const [restCarbPct, setRestCarbPct] = useState(0.35);
-
-  const [dietType, setDietType] = useState<
-    | "balanced"
-    | "mediterranean"
-    | "high-protein"
-    | "vegetarian"
-    | "vegan"
-    | "keto"
-  >("balanced");
-  const [allergies, setAllergies] = useState("");
-  const [dislikes, setDislikes] = useState("");
-  const [cookMins, setCookMins] = useState("20");
-  const [cookSkill, setCookSkill] = useState<
-    "beginner" | "intermediate" | "advanced"
-  >("beginner");
-  const [budgetPerMeal, setBudgetPerMeal] = useState("5");
+  const [goalType, setGoalType] = useState<GoalUILabel>("maintain");
+  const [weeklyPace, setWeeklyPace] = useState<string>("0.5");
+  const [aggressionPct, setAggressionPct] = useState<number>(0);
+  const [calorieCyclingPct, setCalorieCyclingPct] = useState<number>(0);
+  const [macrosPreview, setMacrosPreview] = useState<null | any>(null);
 
   const DEFAULT_MEALS = [
     { label: "breakfast", time: "08:00" },
@@ -153,83 +160,70 @@ export default function ProfileScreen() {
   type Meal = { label: MealLabel; time?: string };
   const [meals, setMeals] = useState<Meal[]>([...DEFAULT_MEALS]);
 
-  const EQUIP = [
-    "none",
-    "bands",
-    "dumbbells",
-    "barbell",
-    "kettlebells",
-    "machines",
-    "cable",
-    "pullupbar",
-  ] as const;
-  const [equipment, setEquipment] = useState<string[]>([]);
-  const [workoutPlace, setWorkoutPlace] = useState<"home" | "gym">("home");
-  const [injuries, setInjuries] = useState("");
-
-  const insets = useSafeAreaInsets();
-  const TOP_BAR_H = -52; // height of your ProfileTopBar's chip cluster
-  const topPad = insets.top + TOP_BAR_H; // safe area + bar + breathing room
-
-  // multi-open accordions + active chip
+  /* UI state */
   const [openKeys, setOpenKeys] = useState<Record<string, boolean>>({
     basics: true,
   });
   const [activeChip, setActiveChip] = useState<string | null>("basics");
-
-  // save feedback
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<null | "ok" | "err">(null);
+  const [dirty, setDirty] = useState<Set<string>>(new Set());
 
-  // entrance
+  const [mealsPerDay, setMealsPerDay] = useState<string | number>(3);
+  const [fastingWindow, setFastingWindow] = useState<string | null>(null);
+  const [breakfastTime, setBreakfastTime] = useState("08:00");
+  const [lastMealTime, setLastMealTime] = useState("19:00");
+
+  // Track section anchors reliably
+  const scrollRef = useRef<ScrollView>(null);
+  const sectionOffsets = useRef<Record<string, number>>({});
+  const onSectionLayout = useCallback(
+    (key: string) => (e: LayoutChangeEvent) => {
+      sectionOffsets.current[key] = e.nativeEvent.layout.y;
+    },
+    []
+  );
+
+  const openAndJump = (key: keyof typeof anchors) => {
+    setOpenKeys((prev) => ({ ...prev, [key]: true }));
+    setActiveChip(String(key));
+    const y = sectionOffsets.current[String(key)] ?? 0;
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 80), animated: true });
+  };
+
+  const toggleOpen = (key: keyof typeof anchors) => {
+    setOpenKeys((prev) => ({ ...prev, [key]: !prev[key] }));
+    setActiveChip(String(key));
+  };
+
+  const anchors = {
+    basics: useRef<View>(null),
+    goals: useRef<View>(null),
+    meals: useRef<View>(null),
+  } as const;
+
+  // Fade-in
   const fadeIn = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(fadeIn, {
       toValue: 1,
-      duration: 320,
+      duration: 300,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
   }, []);
 
-  // keep % balanced
-  function setSplit(
-    which: "proteinPct" | "carbPct" | "fatPct",
-    nextVal: number
-  ) {
-    const next = clamp01(nextVal);
-    const current = { proteinPct, carbPct, fatPct };
-    const others = Object.entries(current)
-      .filter(([k]) => k !== which)
-      .map(([key, val]) => ({ key, val: val as number }));
-    const sumOthers = others[0].val + others[1].val;
-    const targetOthers = 1 - next;
-    const scale = sumOthers <= 0 ? 0.5 : targetOthers / sumOthers;
-    const n1 = sumOthers <= 0 ? targetOthers / 2 : others[0].val * scale;
-    const n2 = sumOthers <= 0 ? targetOthers / 2 : others[1].val * scale;
-    if (which === "proteinPct") {
-      setProteinPct(next);
-      (others[0].key === "carbPct" ? setCarbPct : setFatPct)(n1);
-      (others[1].key === "fatPct" ? setFatPct : setCarbPct)(n2);
-    } else if (which === "carbPct") {
-      setCarbPct(next);
-      (others[0].key === "proteinPct" ? setProteinPct : setFatPct)(n1);
-      (others[1].key === "fatPct" ? setFatPct : setProteinPct)(n2);
-    } else {
-      setFatPct(next);
-      (others[0].key === "proteinPct" ? setProteinPct : setCarbPct)(n1);
-      (others[1].key === "carbPct" ? setCarbPct : setProteinPct)(n2);
-    }
-  }
+  // Header
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerRight: () => <HeaderRightActions />, // ← replace here
+      headerRight: () => <HeaderRightActions />,
       headerTitle: "Profile",
       headerBackground: () => <GlassAdaptiveHeader />,
       headerShadowVisible: false,
     });
   }, [navigation, colors]);
-  // hydrate
+
+  /* hydrate from Firestore */
   useEffect(() => {
     if (!user?.uid) return;
     let unsub: undefined | (() => void);
@@ -255,22 +249,18 @@ export default function ProfileScreen() {
             : String(Math.round(tkg))
         );
         setTargetDate(p?.targetDate || toISO(new Date()));
-        setActivityLevel((p?.activityLevel as any) || "moderate");
+        setActivityLevel((p?.activityLevel as ActivityLevel) || "moderate");
         setTrainingDaysPerWeek(String((p as any)?.trainingDaysPerWeek ?? 3));
         setStepsGoal(String((p as any)?.stepsGoal ?? 8000));
+
         setMacroMethod((p?.macroMethod as any) || "proteinPerKg");
         setProteinPerKg(String(p?.proteinPerKg ?? 1.8));
-        setProteinPct(p?.proteinPct ?? 0.3);
-        setCarbPct(p?.carbPct ?? 0.4);
-        setFatPct(p?.fatPct ?? 0.3);
-        setTrainCarbPct((p as any)?.cycling?.trainingCarbPct ?? 0.45);
-        setRestCarbPct((p as any)?.cycling?.restCarbPct ?? 0.35);
-        setDietType((p as any)?.diet?.type ?? "balanced");
-        setAllergies(joinComma((p as any)?.diet?.allergies));
-        setDislikes(joinComma((p as any)?.diet?.dislikes));
-        setCookMins(String((p as any)?.cooking?.minutes ?? 20));
-        setCookSkill(((p as any)?.cooking?.skill as any) || "beginner");
-        setBudgetPerMeal(String((p as any)?.cooking?.budgetPerMealUSD ?? 5));
+        setProteinPct(p?.proteinPct ?? 30);
+        setCarbPct(p?.carbPct ?? 40);
+        setFatPct(p?.fatPct ?? 30);
+        setTrainCarbPct((p as any)?.cycling?.trainingCarbPct ?? 45);
+        setRestCarbPct((p as any)?.cycling?.restCarbPct ?? 35);
+
         const ALLOWED: readonly MealLabel[] = [
           "breakfast",
           "lunch",
@@ -288,19 +278,28 @@ export default function ProfileScreen() {
             time: (m?.time || "").trim() || undefined,
           }))
         );
-        setEquipment((p as any)?.equipment ?? []);
-        setWorkoutPlace((p as any)?.workoutPlace ?? "home");
-        setInjuries(((p as any)?.injuries || []).join(", "));
+
+        const legacyGoal = (p as any)?.goal as string | undefined;
+        const mappedGoal: GoalUILabel =
+          legacyGoal === "lose"
+            ? "cut"
+            : legacyGoal === "gain"
+            ? "bulk"
+            : (legacyGoal as GoalUILabel) || "maintain";
+
+        setGoalType(mappedGoal);
+
+        setAggressionPct((p as any)?.aggressionPct ?? 0);
+        setCalorieCyclingPct((p as any)?.calorieCyclingPct ?? 0);
+        setWeeklyPace(String((p as any)?.weeklyPace ?? "0.5"));
+
+        // Reset dirty state on fresh load
+        setDirty(new Set());
       });
     })();
-    return () => {
-      try {
-        unsub && unsub();
-      } catch {}
-    };
   }, [user?.uid]);
 
-  // derived preview
+  /* derived previews */
   const weightKg = useMemo(
     () =>
       weightUnit === "lb"
@@ -316,144 +315,19 @@ export default function ProfileScreen() {
     [targetWeight, weightUnit]
   );
 
-  const baseParams = useMemo(
-    () => ({
-      sex,
-      weightKg: Number(weightKg || 0),
-      heightCm: Number(heightCm || 0),
-      age: Number(age || 0),
-      activityLevel,
-      goal: (profile?.goal as any) || "maintain",
-    }),
-    [sex, weightKg, heightCm, age, activityLevel, profile?.goal]
-  );
+  /* ─────────────── saving (manual + autosave) ─────────────── */
+  const markDirty = (key: string) => setDirty((d) => new Set(d).add(key));
 
-  const preview = useMemo(() => {
-    if (!baseParams.weightKg || !baseParams.heightCm || !baseParams.age)
-      return null;
-    if (macroMethod === "proteinPerKg") {
-      return computeTargets(baseParams, {
-        mode: "proteinPerKg",
-        proteinPerKg: Number(proteinPerKg || 0),
-      });
-    }
-    if (macroMethod === "percent") {
-      return computeTargets(baseParams, {
-        mode: "percent",
-        proteinPct,
-        carbPct,
-        fatPct,
-      });
-    }
-    const trainingFat = clamp01(1 - proteinPct - trainCarbPct);
-    const restFat = clamp01(1 - proteinPct - restCarbPct);
-    const training = computeTargets(baseParams, {
-      mode: "percent",
-      proteinPct,
-      carbPct: trainCarbPct,
-      fatPct: trainingFat,
-    });
-    const rest = computeTargets(baseParams, {
-      mode: "percent",
-      proteinPct,
-      carbPct: restCarbPct,
-      fatPct: restFat,
-    });
-    return { training, rest };
-  }, [
-    baseParams,
-    macroMethod,
-    proteinPerKg,
-    proteinPct,
-    carbPct,
-    fatPct,
-    trainCarbPct,
-    restCarbPct,
-  ]);
-
-  // refs
-  const scrollRef = useRef<ScrollView>(null);
-  const anchors = {
-    basics: useRef<View>(null),
-    goals: useRef<View>(null),
-    macros: useRef<View>(null),
-    diet: useRef<View>(null),
-    meals: useRef<View>(null),
-    equipment: useRef<View>(null),
-  };
-
-  // early skeleton
-  if (!profile) {
-    return (
-      <View style={{ flex: 1 }}>
-        {/* Wallpaper */}
-        <LinearGradient
-          colors={isDark ? ["#0b0f1a", "#0e1320"] : ["#eaf2ff", "#f6f7ff"]}
-          style={{ position: "absolute", inset: 0 }}
-          pointerEvents="none"
-        />
-        <View style={{ flex: 1, padding: 16 }}>
-          <Card style={{ padding: 16, gap: 12 }}>
-            <View
-              style={{
-                height: 22,
-                borderRadius: 6,
-                backgroundColor: "rgba(255,255,255,0.2)",
-                width: 160,
-              }}
-            />
-            <View
-              style={{
-                height: 16,
-                borderRadius: 6,
-                backgroundColor: "rgba(255,255,255,0.18)",
-                width: 120,
-              }}
-            />
-          </Card>
-        </View>
-      </View>
-    );
-  }
-  function GlassAdaptiveHeader() {
-    const { isDark } = useTheme();
-    let BlurView: any = View;
-    try {
-      BlurView = require("expo-blur").BlurView;
-    } catch {}
-    return (
-      <BlurView
-        intensity={28}
-        tint={isDark ? "dark" : "light"}
-        style={{
-          flex: 1,
-          borderBottomWidth: 1,
-          borderColor: isDark
-            ? "rgba(255,255,255,0.08)"
-            : "rgba(255,255,255,0.18)",
-        }}
-      />
-    );
-  }
-  function toggleOpen(key: keyof typeof anchors) {
-    setOpenKeys((prev) => ({ ...prev, [key]: !prev[key] }));
-    setActiveChip(String(key));
-  }
-  function openAndJump(key: keyof typeof anchors) {
-    setOpenKeys((prev) => ({ ...prev, [key]: true }));
-    setActiveChip(String(key));
-    anchors[key].current?.measure?.((x, y, w, h, px, py) => {
-      scrollRef.current?.scrollTo({ y: Math.max(0, py - 80), animated: true });
-    });
-  }
-
-  async function onSave() {
+  async function onSave(manual = true) {
     if (!user?.uid) return;
     setSaving(true);
     setSaveStatus(null);
     try {
-      const trainingFat = clamp01(1 - proteinPct - trainCarbPct);
-      const restFat = clamp01(1 - proteinPct - restCarbPct);
+      const pct = (n: number) => Math.max(0, Math.min(100, Number(n) || 0));
+      const remainingPct = (p: number, c: number) => pct(100 - pct(p) - pct(c));
+
+      const trainingFat = remainingPct(proteinPct, trainCarbPct);
+      const restFat = remainingPct(proteinPct, restCarbPct);
 
       const patch: Partial<Profile> & Record<string, any> = {
         email: user.email || undefined,
@@ -478,55 +352,65 @@ export default function ProfileScreen() {
           trainingFatPct: trainingFat,
           restFatPct: restFat,
         },
-        diet: {
-          type: dietType,
-          allergies: commaSplit(allergies),
-          dislikes: commaSplit(dislikes),
-        },
         meals: {
           schedule: meals.map((m) => ({
             label: m.label,
             time: (m.time || "").trim() || undefined,
           })),
         },
-        cooking: {
-          minutes: Number(cookMins || 0),
-          skill: cookSkill,
-          budgetPerMealUSD: Number(budgetPerMeal || 0),
-        },
-        equipment,
-        workoutPlace,
-        injuries: commaSplit(injuries),
         updatedAt: Date.now(),
+        goal: goalType, // UI label stored
+        aggressionPct,
+        calorieCyclingPct,
+        weeklyPace: Number(weeklyPace || 0),
       };
 
-      let targets: null | {
-        calorieGoal: number;
-        proteinGoal: number;
-        carbGoal: number;
-        fatGoal: number;
-      } = null;
-      if (macroMethod === "proteinPerKg") {
-        targets = computeTargets(baseParams, {
-          mode: "proteinPerKg",
-          proteinPerKg: Number(proteinPerKg || 0),
-        });
-      } else if (macroMethod === "percent") {
-        targets = computeTargets(baseParams, {
-          mode: "percent",
-          proteinPct,
-          carbPct,
-          fatPct,
-        });
+      let targets: any = null;
+
+      if (macrosPreview && "calorieGoal" in (macrosPreview as any)) {
+        targets = macrosPreview as any;
+      } else if (macrosPreview && "training" in (macrosPreview as any)) {
+        targets = (macrosPreview as any).training;
       } else {
-        const tFat = clamp01(1 - proteinPct - trainCarbPct);
-        targets = computeTargets(baseParams, {
-          mode: "percent",
-          proteinPct,
-          carbPct: trainCarbPct,
-          fatPct: tFat,
-        });
+        const weightKgNum =
+          weightUnit === "lb"
+            ? lbToKg(Number(weightInput || 0))
+            : Number(weightInput || 0);
+
+        type ComputeBase = Parameters<typeof computeTargets>[0];
+
+        const baseParams: ComputeBase = {
+          sex,
+          weightKg: Number(weightKgNum || 0),
+          heightCm: Number(heightCm || 0),
+          age: Number(age || 0),
+          activityLevel,
+          goal: goalType as "maintain" | "cut" | "bulk",
+        };
+
+        if (macroMethod === "proteinPerKg") {
+          targets = computeTargets(baseParams, {
+            mode: "proteinPerKg",
+            proteinPerKg: Number(proteinPerKg || 0),
+          });
+        } else if (macroMethod === "percent") {
+          targets = computeTargets(baseParams, {
+            mode: "percent",
+            proteinPct,
+            carbPct,
+            fatPct,
+          });
+        } else {
+          const tFat = remainingPct(proteinPct, trainCarbPct);
+          targets = computeTargets(baseParams, {
+            mode: "percent",
+            proteinPct,
+            carbPct: trainCarbPct,
+            fatPct: tFat,
+          });
+        }
       }
+
       if (targets) {
         patch.calorieGoal = targets.calorieGoal;
         patch.proteinGoal = targets.proteinGoal;
@@ -538,8 +422,9 @@ export default function ProfileScreen() {
 
       const safePatch = pruneUndefinedDeep(patch);
       await updateProfile(user.uid, safePatch);
-      setSaveStatus("ok");
-    } catch {
+      setSaveStatus(manual ? "ok" : null);
+      setDirty(new Set());
+    } catch (e) {
       setSaveStatus("err");
     } finally {
       setSaving(false);
@@ -547,11 +432,93 @@ export default function ProfileScreen() {
     }
   }
 
+  // Debounced autosave when fields change
+  const autosaveDeps = [
+    sex,
+    age,
+    heightCm,
+    weightUnit,
+    weightInput,
+    targetWeight,
+    targetDate,
+    activityLevel,
+    trainingDaysPerWeek,
+    stepsGoal,
+    macroMethod,
+    proteinPerKg,
+    proteinPct,
+    carbPct,
+    fatPct,
+    trainCarbPct,
+    restCarbPct,
+    meals,
+    goalType,
+    aggressionPct,
+    calorieCyclingPct,
+    weeklyPace,
+  ];
+
+  useEffect(() => {
+    if (!profile) return;
+    if (dirty.size === 0) return;
+    const t = setTimeout(() => onSave(false), 1000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty, ...autosaveDeps]);
+
+  // Mark keys dirty when setters used
+  const setAgeDirty = (v: string) => {
+    setAge(v);
+    markDirty("age");
+  };
+  const setHeightDirty = (v: string) => {
+    setHeightCm(v);
+    markDirty("heightCm");
+  };
+  const setWeightInputDirty = (v: string) => {
+    setWeightInput(v);
+    markDirty("weightInput");
+  };
+
+  /* skeleton */
+  if (!profile) {
+    return (
+      <View style={{ flex: 1 }}>
+        <LinearGradient
+          colors={isDark ? ["#0b0f1a", "#0e1320"] : ["#eaf2ff", "#f6f7ff"]}
+          style={{ position: "absolute", inset: 0 }}
+          pointerEvents="none"
+        />
+        <View style={{ flex: 1, padding: 16, justifyContent: "center" }}>
+          <Card style={{ padding: 20, gap: 12 }}>
+            <View
+              style={{
+                height: 20,
+                borderRadius: 6,
+                backgroundColor: withAlpha(colors.text, 0.1),
+                width: 160,
+              }}
+            />
+            <View
+              style={{
+                height: 16,
+                borderRadius: 6,
+                backgroundColor: withAlpha(colors.text, 0.06),
+                width: 120,
+              }}
+            />
+          </Card>
+        </View>
+      </View>
+    );
+  }
+
+  const topPad = insets.top + 52;
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      // If you have a fixed top bar, offset so the content centers correctly while typing:
       keyboardVerticalOffset={-40}
     >
       <View style={{ flex: 1 }}>
@@ -566,85 +533,106 @@ export default function ProfileScreen() {
           style={{ position: "absolute", inset: 0 }}
           pointerEvents="none"
         />
-        {/* Soft vignette */}
-        <LinearGradient
-          colors={[
-            "rgba(255,255,255,0)",
-            isDark ? "rgba(0,0,0,0.25)" : "rgba(0,0,0,0.06)",
-          ]}
-          style={{
-            position: "absolute",
-            left: -80,
-            right: -80,
-            top: -40,
-            height: 240,
-            borderBottomLeftRadius: 200,
-            borderBottomRightRadius: 200,
-          }}
-        />
+
         <ProfileTopBar />
+
         <Animated.View style={{ flex: 1, opacity: fadeIn }}>
           <ScrollView
             ref={scrollRef}
             keyboardShouldPersistTaps="always"
             keyboardDismissMode="on-drag"
-            automaticallyAdjustKeyboardInsets // ⬅︎ iOS 15+: auto insets when kb shows
+            automaticallyAdjustKeyboardInsets
             contentContainerStyle={{
-              paddingTop: topPad, // your computed topPad
+              paddingTop: topPad,
               paddingHorizontal: 16,
               paddingBottom: 120,
               gap: 14,
             }}
           >
-            {/* Header */}
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: 2,
+            {/* HERO */}
+            <HeroHeader
+              name={profile?.displayName || user?.displayName || null}
+              email={user?.email || null}
+              unit={weightUnit}
+              goal={goalType}
+              activity={activityLevel}
+              stepsGoal={stepsGoal}
+              onToggleUnit={() =>
+                user &&
+                updateProfile(user.uid, {
+                  weightUnit: weightUnit === "kg" ? "lb" : "kg",
+                })
+              }
+            />
+
+            {/* Targets snapshot */}
+            <TargetsPreview
+              colors={colors}
+              unit={weightUnit}
+              preview={macrosPreview}
+              fallback={{
+                calories: profile?.calorieGoal,
+                protein: profile?.proteinGoal,
+                carbs: profile?.carbGoal,
+                fat: profile?.fatGoal,
               }}
-            >
-              <View>
-                <Text
-                  style={{
-                    fontSize: 28,
-                    fontWeight: "800",
-                    letterSpacing: -0.2,
-                    color: colors.text,
-                  }}
-                >
-                  Profile
-                </Text>
-                <Text style={{ color: colors.muted, fontSize: 13 }}>
-                  Personalization & goals
-                </Text>
-              </View>
+            />
 
-              {/* Right cluster: theme + quick actions */}
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-              >
-                <ThemeToggle />
-              </View>
-            </View>
+            {/* Quick actions */}
+            <QuickActions
+              onSync={() =>
+                Alert.alert(
+                  "Sync Health",
+                  "Coming soon: Apple Health / Google Fit connection."
+                )
+              }
+              onExport={() => Alert.alert("Export", "CSV export coming soon.")}
+              onReset={() => {
+                setGoalType("maintain");
+                setWeeklyPace("0.5");
+                setAggressionPct(0);
+                setCalorieCyclingPct(0);
 
-            {/* Glass chips */}
+                setMacroMethod("proteinPerKg");
+                setProteinPerKg("1.8");
+                setProteinPct(30);
+                setCarbPct(40);
+                setFatPct(30);
+                setTrainCarbPct(45);
+                setRestCarbPct(35);
+                setStepsGoal("8000");
+
+                markDirty("goals");
+                markDirty("macros");
+                Alert.alert(
+                  "Reset",
+                  "Goals and macro targets reset to defaults."
+                );
+              }}
+            />
+
+            {/* Section chips with dirty markers */}
             <SectionNav
               activeKey={activeChip}
               onPress={(key) => openAndJump(key as keyof typeof anchors)}
               items={[
-                { key: "basics", label: "Basics" },
-                { key: "goals", label: "Goals" },
-                { key: "macros", label: "Macros" },
-                { key: "diet", label: "Diet" },
-                { key: "meals", label: "Meals" },
-                { key: "equipment", label: "Equipment" },
+                {
+                  key: "basics",
+                  label: dirty.has("basics") ? "Basics •" : "Basics",
+                },
+                {
+                  key: "goals",
+                  label: dirty.has("goals") ? "Goals •" : "Goals",
+                },
+                {
+                  key: "meals",
+                  label: dirty.has("meals") ? "Meals •" : "Meals",
+                },
               ]}
             />
 
-            {/* Basics */}
-            <View ref={anchors.basics}>
+            {/* BASICS */}
+            <View ref={anchors.basics} onLayout={onSectionLayout("basics")}>
               <AccordionCard
                 title="Basics"
                 subtitle="Age, height, weight & sex"
@@ -653,127 +641,156 @@ export default function ProfileScreen() {
               >
                 <BasicsCard
                   sex={sex}
-                  setSex={setSex}
+                  setSex={(v: any) => {
+                    setSex(v);
+                    markDirty("basics");
+                  }}
                   age={age}
-                  setAge={setAge}
+                  setAge={setAgeDirty}
                   heightCm={heightCm}
-                  setHeightCm={setHeightCm}
+                  setHeightCm={setHeightDirty}
                   weightUnit={weightUnit}
-                  setWeightUnit={setWeightUnit}
+                  setWeightUnit={(v: any) => {
+                    setWeightUnit(v);
+                    markDirty("basics");
+                  }}
                   weightInput={weightInput}
-                  setWeightInput={setWeightInput}
+                  setWeightInput={setWeightInputDirty}
                 />
               </AccordionCard>
             </View>
 
-            {/* Goals */}
-            <View ref={anchors.goals}>
+            {/* GOALS + MACROS (combined) */}
+            <View ref={anchors.goals} onLayout={onSectionLayout("goals")}>
               <AccordionCard
-                title="Goals & Activity"
-                subtitle="Target weight, date & movement"
+                title="Goals + Macros"
+                subtitle="Dial your plan; we do the math"
                 open={!!openKeys.goals}
                 onToggle={() => toggleOpen("goals")}
               >
-                <GoalsActivityCard
-                  targetWeight={targetWeight}
-                  setTargetWeight={setTargetWeight}
-                  targetDate={targetDate}
-                  setTargetDate={setTargetDate}
+                <GoalsMacrosCard
+                  /* basics (read-only) */
+                  sex={sex}
+                  age={age}
+                  heightCm={heightCm}
                   weightUnit={weightUnit}
+                  currentWeight={weightInput}
+                  /* goals */
+                  targetWeight={targetWeight}
+                  setTargetWeight={(v: string) => {
+                    setTargetWeight(v);
+                    markDirty("goals");
+                  }}
+                  targetDate={targetDate}
+                  setTargetDate={(v: string) => {
+                    setTargetDate(v);
+                    markDirty("goals");
+                  }}
                   activityLevel={activityLevel}
-                  setActivityLevel={setActivityLevel}
+                  setActivityLevel={(v: ActivityLevel) => {
+                    setActivityLevel(v);
+                    markDirty("goals");
+                  }}
                   trainingDaysPerWeek={trainingDaysPerWeek}
-                  setTrainingDaysPerWeek={setTrainingDaysPerWeek}
+                  setTrainingDaysPerWeek={(v: string) => {
+                    setTrainingDaysPerWeek(v);
+                    markDirty("goals");
+                  }}
                   stepsGoal={stepsGoal}
-                  setStepsGoal={setStepsGoal}
-                />
-              </AccordionCard>
-            </View>
-
-            {/* Macros */}
-            <View ref={anchors.macros} style={{ position: "relative" }}>
-              <AccordionCard
-                title="Macros"
-                subtitle="Pick a method and fine-tune"
-                open={!!openKeys.macros}
-                onToggle={() => toggleOpen("macros")}
-              >
-                <Tip text="Percent mode auto-balances to 100%. Cycling sets different carbs on training vs rest days; fat fills the remainder." />
-                <MacrosCard
+                  setStepsGoal={(v: string) => {
+                    setStepsGoal(v);
+                    markDirty("goals");
+                  }}
+                  goalType={goalType}
+                  setGoalType={(v: "maintain" | "cut" | "bulk") => {
+                    setGoalType(v);
+                    markDirty("goals");
+                  }}
+                  weeklyPace={weeklyPace}
+                  setWeeklyPace={(v: string) => {
+                    setWeeklyPace(v);
+                    markDirty("goals");
+                  }}
+                  aggressionPct={aggressionPct}
+                  setAggressionPct={(v: number) => {
+                    setAggressionPct(v);
+                    markDirty("goals");
+                  }}
+                  calorieCyclingPct={calorieCyclingPct}
+                  setCalorieCyclingPct={(v: number) => {
+                    setCalorieCyclingPct(v);
+                    markDirty("goals");
+                  }}
+                  /* macros */
                   macroMethod={macroMethod}
-                  setMacroMethod={setMacroMethod}
+                  setMacroMethod={(v: any) => {
+                    setMacroMethod(v);
+                    markDirty("goals");
+                  }}
                   proteinPerKg={proteinPerKg}
-                  setProteinPerKg={setProteinPerKg}
+                  setProteinPerKg={(v: string) => {
+                    setProteinPerKg(v);
+                    markDirty("goals");
+                  }}
                   proteinPct={proteinPct}
-                  setProteinPct={setProteinPct}
+                  setProteinPct={(v: number) => {
+                    setProteinPct(v);
+                    markDirty("goals");
+                  }}
                   carbPct={carbPct}
-                  setCarbPct={setCarbPct}
+                  setCarbPct={(v: number) => {
+                    setCarbPct(v);
+                    markDirty("goals");
+                  }}
                   fatPct={fatPct}
-                  setFatPct={setFatPct}
+                  setFatPct={(v: number) => {
+                    setFatPct(v);
+                    markDirty("goals");
+                  }}
                   trainCarbPct={trainCarbPct}
-                  setTrainCarbPct={setTrainCarbPct}
+                  setTrainCarbPct={(v: number) => {
+                    setTrainCarbPct(v);
+                    markDirty("goals");
+                  }}
                   restCarbPct={restCarbPct}
-                  setRestCarbPct={setRestCarbPct}
-                  setSplit={setSplit}
-                  preview={preview}
-                  clamp01={clamp01}
+                  setRestCarbPct={(v: number) => {
+                    setRestCarbPct(v);
+                    markDirty("goals");
+                  }}
+                  onPreview={setMacrosPreview}
                 />
               </AccordionCard>
             </View>
 
-            {/* Diet */}
-            <View ref={anchors.diet}>
-              <AccordionCard
-                title="Diet & Cooking"
-                subtitle="Food preferences & constraints"
-                open={!!openKeys.diet}
-                onToggle={() => toggleOpen("diet")}
-              >
-                <DietCookingCard
-                  dietType={dietType}
-                  setDietType={setDietType}
-                  allergies={allergies}
-                  setAllergies={setAllergies}
-                  dislikes={dislikes}
-                  setDislikes={setDislikes}
-                  cookMins={cookMins}
-                  setCookMins={setCookMins}
-                  cookSkill={cookSkill}
-                  setCookSkill={setCookSkill}
-                  budgetPerMeal={budgetPerMeal}
-                  setBudgetPerMeal={setBudgetPerMeal}
-                />
-              </AccordionCard>
-            </View>
-
-            {/* Meal schedule */}
-            <View ref={anchors.meals}>
+            {/* MEALS */}
+            <View ref={anchors.meals} onLayout={onSectionLayout("meals")}>
               <AccordionCard
                 title="Meal schedule"
                 subtitle="Times for reminders & planning"
                 open={!!openKeys.meals}
                 onToggle={() => toggleOpen("meals")}
               >
-                <MealScheduleCard meals={meals} setMeals={setMeals} />
-              </AccordionCard>
-            </View>
-
-            {/* Equipment */}
-            <View ref={anchors.equipment}>
-              <AccordionCard
-                title="Equipment & constraints"
-                subtitle="Available gear, place & injuries"
-                open={!!openKeys.equipment}
-                onToggle={() => toggleOpen("equipment")}
-              >
-                <EquipmentCard
-                  EQUIP={EQUIP as readonly string[]}
-                  equipment={equipment}
-                  setEquipment={setEquipment}
-                  workoutPlace={workoutPlace}
-                  setWorkoutPlace={setWorkoutPlace}
-                  injuries={injuries}
-                  setInjuries={setInjuries}
+                <MealScheduleCard
+                  mealsPerDay={mealsPerDay}
+                  setMealsPerDay={(v: string) => {
+                    setMealsPerDay(v);
+                    markDirty("meals");
+                  }}
+                  fastingWindow={fastingWindow}
+                  setFastingWindow={(v: string | null) => {
+                    setFastingWindow(v);
+                    markDirty("meals");
+                  }}
+                  breakfastTime={breakfastTime}
+                  setBreakfastTime={(v: string) => {
+                    setBreakfastTime(v);
+                    markDirty("meals");
+                  }}
+                  lastMealTime={lastMealTime}
+                  setLastMealTime={(v: string) => {
+                    setLastMealTime(v);
+                    markDirty("meals");
+                  }}
                 />
               </AccordionCard>
             </View>
@@ -783,11 +800,39 @@ export default function ProfileScreen() {
           </ScrollView>
         </Animated.View>
 
-        <StickySaveBar saving={saving} status={saveStatus} onSave={onSave} />
+        <StickySaveBar
+          saving={saving}
+          status={saveStatus}
+          onSave={() => onSave(true)}
+        />
       </View>
     </KeyboardAvoidingView>
   );
 }
+
+/* ─────────────── header bits ─────────────── */
+
+function GlassAdaptiveHeader() {
+  const { isDark } = useTheme();
+  let BlurView: any = View;
+  try {
+    BlurView = require("expo-blur").BlurView;
+  } catch {}
+  return (
+    <BlurView
+      intensity={28}
+      tint={isDark ? "dark" : "light"}
+      style={{
+        flex: 1,
+        borderBottomWidth: 1,
+        borderColor: isDark
+          ? "rgba(255,255,255,0.08)"
+          : "rgba(255,255,255,0.18)",
+      }}
+    />
+  );
+}
+
 function HeaderRightActions() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
@@ -805,93 +850,61 @@ function HeaderRightActions() {
     label: string;
     onPress: () => void;
   }) => (
-    <View
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
       style={{
-        marginLeft: 8,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
         borderRadius: 999,
-        overflow: "hidden",
         borderWidth: 1,
         borderColor: withAlpha(colors.primary, 0.35),
+        backgroundColor: withAlpha(colors.primary, 0.12),
+        marginLeft: 8,
       }}
     >
-      <Pressable
-        onPress={onPress}
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          paddingHorizontal: 12,
-          paddingVertical: 6,
-          backgroundColor: withAlpha(colors.primary, 0.12),
-        }}
-        hitSlop={6}
-      >
-        <Ionicons
-          name={icon}
-          size={14}
-          color={colors.primary}
-          style={{ marginRight: 6 }}
-        />
-        <Text
-          style={{ color: colors.primary, fontWeight: "800", fontSize: 12 }}
-        >
-          {label}
-        </Text>
-      </Pressable>
-    </View>
+      <Ionicons name={icon} size={14} color={colors.primary} />
+      <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 12 }}>
+        {label}
+      </Text>
+    </Pressable>
   );
 
+  const Shell = ({ children }: { children: React.ReactNode }) =>
+    BlurView !== View ? (
+      <BlurView
+        intensity={20}
+        tint={isDark ? "dark" : "light"}
+        style={{ flexDirection: "row", borderRadius: 999, overflow: "hidden" }}
+      >
+        {children}
+      </BlurView>
+    ) : (
+      <View style={{ flexDirection: "row" }}>{children}</View>
+    );
+
   return (
-    <View style={{ flexDirection: "row", alignItems: "center" }}>
-      {BlurView !== View ? (
-        <BlurView
-          intensity={18}
-          tint={isDark ? "dark" : "light"}
-          style={{
-            flexDirection: "row",
-            borderRadius: 999,
-            overflow: "hidden",
-          }}
-        >
-          <Chip
-            icon="person-circle-outline"
-            label="Account"
-            onPress={() => router.push("/(modals)/account")}
-          />
-          <Chip
-            icon="settings-outline"
-            label="Settings"
-            onPress={() => router.push("/(modals)/settings")}
-          />
-        </BlurView>
-      ) : (
-        <>
-          <Chip
-            icon="person-circle-outline"
-            label="Account"
-            onPress={() => router.push("/(modals)/account")}
-          />
-          <Chip
-            icon="settings-outline"
-            label="Settings"
-            onPress={() => router.push("/(modals)/settings")}
-          />
-        </>
-      )}
-    </View>
+    <Shell>
+      <Chip
+        icon="person-circle-outline"
+        label="Account"
+        onPress={() => router.push("/(modals)/account")}
+      />
+      <Chip
+        icon="settings-outline"
+        label="Settings"
+        onPress={() => router.push("/(modals)/settings")}
+      />
+    </Shell>
   );
 }
 
 function ProfileTopBar() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
-
-  // ⬇️ TUNING KNOBS
-  const COMPACT_LIFT = 48; // pulls the chip cluster UP (reduce gap under island). Try 4–10.
-  const OUTER_BOTTOM = 2; // space between bar and page content (vertical)
-  const SHELL_PAD = 4; // inner padding of the glass container around the chips
-  const CHIP_VPAD = 6; // chip vertical padding (height)
-  const CHIP_HPAD = 12; // chip horizontal padding (width)
-
   let BlurView: any = View;
   try {
     BlurView = require("expo-blur").BlurView;
@@ -913,8 +926,8 @@ function ProfileTopBar() {
         flexDirection: "row",
         alignItems: "center",
         gap: 6,
-        paddingHorizontal: CHIP_HPAD,
-        paddingVertical: CHIP_VPAD,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
         borderRadius: 999,
         borderWidth: 1,
         borderColor: withAlpha(colors.primary, 0.35),
@@ -936,7 +949,7 @@ function ProfileTopBar() {
         style={{
           flexDirection: "row",
           gap: 8,
-          padding: SHELL_PAD, // ⬅️ tighter
+          padding: 4,
           borderRadius: 999,
           borderWidth: 1,
           borderColor: colors.border,
@@ -948,28 +961,22 @@ function ProfileTopBar() {
         {children}
       </BlurView>
     ) : (
-      <View style={{ flexDirection: "row", gap: 8, padding: SHELL_PAD }}>
+      <View style={{ flexDirection: "row", gap: 8, padding: 4 }}>
         {children}
       </View>
     );
 
   return (
-    // SafeAreaView keeps us below the island; we then *slightly* lift the content.
     <SafeAreaView edges={["top"]} style={{ backgroundColor: "transparent" }}>
       <View
         style={{
-          paddingHorizontal: 12, // side gutters
-          paddingBottom: OUTER_BOTTOM, // space below the bar
+          paddingHorizontal: 12,
+          paddingBottom: 2,
           borderBottomWidth: StyleSheet.hairlineWidth,
           borderBottomColor: colors.border,
         }}
       >
-        <View
-          style={{
-            marginTop: -COMPACT_LIFT, // ⬅️ pulls the chips closer to the island
-            alignItems: "flex-end",
-          }}
-        >
+        <View style={{ marginTop: -48, alignItems: "flex-end" }}>
           <Shell>
             <Chip
               icon="person-circle-outline"
@@ -985,5 +992,295 @@ function ProfileTopBar() {
         </View>
       </View>
     </SafeAreaView>
+  );
+}
+
+/* ─────────────── hero + preview + actions ─────────────── */
+
+function HeroHeader({
+  name,
+  email,
+  unit,
+  goal,
+  activity,
+  stepsGoal,
+  onToggleUnit,
+}: {
+  name: string | null;
+  email: string | null;
+  unit: "kg" | "lb";
+  goal: GoalUILabel;
+  activity: ActivityLevel | string;
+  stepsGoal: string;
+  onToggleUnit: () => void;
+}) {
+  const { colors } = useTheme();
+  const initials = initialsFrom(name || undefined, email || undefined);
+
+  const Chip = ({
+    icon,
+    label,
+    onPress,
+  }: {
+    icon: keyof typeof Ionicons.glyphMap;
+    label: string;
+    onPress?: () => void;
+  }) => (
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: withAlpha(colors.primary, 0.35),
+        backgroundColor: withAlpha(colors.primary, 0.12),
+      }}
+    >
+      <Ionicons name={icon} size={14} color={colors.primary} />
+      <Text style={{ color: colors.primary, fontWeight: "800", fontSize: 12 }}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+
+  return (
+    <Card
+      style={{
+        padding: 14,
+        borderWidth: 1,
+        borderColor: colors.border,
+        overflow: "hidden",
+      }}
+    >
+      <LinearGradient
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        colors={[
+          withAlpha(colors.primary, 0.06),
+          withAlpha(colors.primary, 0.12),
+        ]}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <View
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: 16,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: withAlpha(colors.primary, 0.18),
+            borderWidth: 1,
+            borderColor: withAlpha(colors.primary, 0.35),
+          }}
+        >
+          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}>
+            {initials}
+          </Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text
+            style={{ color: colors.text, fontWeight: "900", fontSize: 20 }}
+            numberOfLines={1}
+          >
+            {name || email || "Your profile"}
+          </Text>
+          <Text style={{ color: colors.muted }} numberOfLines={1}>
+            Personalization & goals
+          </Text>
+        </View>
+        <ThemeToggle />
+      </View>
+
+      <View
+        style={{
+          flexDirection: "row",
+          gap: 8,
+          flexWrap: "wrap",
+          marginTop: 12,
+        }}
+      >
+        <Chip
+          icon="scale-outline"
+          label={`Unit: ${unit.toUpperCase()}`}
+          onPress={onToggleUnit}
+        />
+        <Chip icon="flag-outline" label={`Goal: ${String(goal)}`} />
+        <Chip icon="flash-outline" label={`Activity: ${activity}`} />
+        <Chip icon="walk-outline" label={`Steps goal: ${stepsGoal}`} />
+      </View>
+    </Card>
+  );
+}
+
+function TargetsPreview({
+  colors,
+  unit,
+  preview,
+  fallback,
+}: {
+  colors: ReturnType<typeof useTheme>["colors"];
+  unit: "kg" | "lb";
+  preview:
+    | null
+    | {
+        calorieGoal?: number;
+        proteinGoal?: number;
+        carbGoal?: number;
+        fatGoal?: number;
+      }
+    | {
+        training: {
+          calorieGoal: number;
+          proteinGoal: number;
+          carbGoal: number;
+          fatGoal: number;
+        };
+        rest: {
+          calorieGoal: number;
+          proteinGoal: number;
+          carbGoal: number;
+          fatGoal: number;
+        };
+      };
+  fallback: {
+    calories?: number | null | undefined;
+    protein?: number | null | undefined;
+    carbs?: number | null | undefined;
+    fat?: number | null | undefined;
+  };
+}) {
+  const tile = (
+    title: string,
+    value: number | string | undefined,
+    unitNote?: string
+  ) => (
+    <View
+      style={{
+        flex: 1,
+        borderRadius: 14,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: withAlpha(colors.text, 0.04),
+      }}
+    >
+      <Text style={{ color: colors.muted, fontSize: 12 }}>{title}</Text>
+      <Text style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}>
+        {value ?? "—"} {unitNote}
+      </Text>
+    </View>
+  );
+
+  const simple =
+    preview && "calorieGoal" in (preview as any) ? (preview as any) : null;
+  const training =
+    preview && "training" in (preview as any)
+      ? (preview as any).training
+      : null;
+  const rest =
+    preview && "rest" in (preview as any) ? (preview as any).rest : null;
+  const base = simple || training || rest || null;
+
+  return (
+    <Card
+      style={{
+        padding: 12,
+        gap: 10,
+        borderWidth: 1,
+        borderColor: colors.border,
+      }}
+    >
+      <Text style={{ color: colors.text, fontWeight: "800" }}>
+        Daily targets
+      </Text>
+
+      {!base ? (
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          {tile("Calories", fallback.calories || 0, "kcal")}
+          {tile("Protein", fallback.protein || 0, "g")}
+        </View>
+      ) : training && rest ? (
+        <>
+          <Text style={{ color: colors.muted, fontSize: 12 }}>
+            Training day
+          </Text>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            {tile("Calories", training.calorieGoal, "kcal")}
+            {tile("Protein", training.proteinGoal, "g")}
+            {tile("Carbs", training.carbGoal, "g")}
+            {tile("Fat", training.fatGoal, "g")}
+          </View>
+          <Text style={{ color: colors.muted, fontSize: 12, marginTop: 8 }}>
+            Rest day
+          </Text>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            {tile("Calories", rest.calorieGoal, "kcal")}
+            {tile("Protein", rest.proteinGoal, "g")}
+            {tile("Carbs", rest.carbGoal, "g")}
+            {tile("Fat", rest.fatGoal, "g")}
+          </View>
+        </>
+      ) : (
+        <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+          {tile("Calories", (base as any).calorieGoal, "kcal")}
+          {tile("Protein", (base as any).proteinGoal, "g")}
+          {tile("Carbs", (base as any).carbGoal, "g")}
+          {tile("Fat", (base as any).fatGoal, "g")}
+        </View>
+      )}
+    </Card>
+  );
+}
+
+function QuickActions({
+  onSync,
+  onExport,
+  onReset,
+}: {
+  onSync: () => void;
+  onExport: () => void;
+  onReset: () => void;
+}) {
+  const { colors } = useTheme();
+  const Action = ({
+    icon,
+    label,
+    onPress,
+  }: {
+    icon: keyof typeof Ionicons.glyphMap;
+    label: string;
+    onPress: () => void;
+  }) => (
+    <Pressable
+      onPress={onPress}
+      style={{
+        flex: 1,
+        borderRadius: 14,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: withAlpha(colors.primary, 0.35),
+        backgroundColor: withAlpha(colors.primary, 0.12),
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+      }}
+    >
+      <Ionicons name={icon} size={18} color={colors.primary} />
+      <Text style={{ color: colors.primary, fontWeight: "800" }}>{label}</Text>
+    </Pressable>
+  );
+
+  return (
+    <View style={{ flexDirection: "row", gap: 8 }}>
+      <Action icon="sync-outline" label="Sync health" onPress={onSync} />
+      <Action icon="download-outline" label="Export" onPress={onExport} />
+      <Action icon="refresh-outline" label="Reset targets" onPress={onReset} />
+    </View>
   );
 }

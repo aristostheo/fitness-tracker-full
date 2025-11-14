@@ -144,3 +144,92 @@ export async function searchCatalog(qstr: string, max = 25) {
     return arr.sort((a: any, b: any) => (b?.uses ?? 0) - (a?.uses ?? 0));
   }
 }
+
+// --- Barcode linking helpers & scan submit ---
+
+/** Optional: map barcode -> foodId for fast lookups later */
+export async function linkBarcode(barcode: string, foodId: string) {
+  if (!barcode) return;
+  const ref = doc(db, "barcodeIndex", barcode);
+  await setDoc(ref, { foodId, updatedAt: Date.now() }, { merge: true });
+}
+
+/** Optional: lookup by barcode (returns full catalog item + id, or null) */
+export async function findByBarcode(barcode: string) {
+  if (!barcode) return null;
+  const ref = doc(db, "barcodeIndex", barcode);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return null;
+  const fid = snap.data()?.foodId as string | undefined;
+  if (!fid) return null;
+
+  const foodRef = doc(db, "foodCatalog", fid);
+  const foodSnap = await getDoc(foodRef);
+  if (!foodSnap.exists()) return null;
+  return { id: fid, ...(foodSnap.data() as FoodCatalogItem) };
+}
+
+/** Called when a user confirms a scanned item.
+ *  - Upserts into foodCatalog (verified=false by default)
+ *  - Links barcode -> foodId for future scans
+ *  - Optionally bumps popularity immediately (toggle bump parameter)
+ */
+export async function submitSuggestionFromScan(args: {
+  barcode?: string | null;
+  name: string;
+  unit: string; // e.g., "serving", "100 g", "100 ml"
+  qty: number; // per amount for the macros above (1 or 100 typically)
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  sugar?: number;
+  fiber?: number;
+  submitterUid?: string | null;
+  verified?: boolean; // default false
+  bumpPopularity?: boolean; // default true
+}) {
+  const {
+    barcode,
+    name,
+    unit,
+    qty,
+    calories = 0,
+    protein = 0,
+    carbs = 0,
+    fat = 0,
+    sugar,
+    fiber,
+    submitterUid,
+    verified = false,
+    bumpPopularity = true,
+  } = args;
+
+  // Upsert to catalog
+  await upsertFoodToCatalog({
+    name,
+    unit,
+    qty,
+    calories,
+    protein,
+    carbs,
+    fat,
+    sugar,
+    fiber,
+    submitterUid: submitterUid || undefined,
+    verified,
+  });
+
+  // Link barcode -> foodId
+  const fid = foodIdFor(name, unit);
+  if (barcode) await linkBarcode(barcode, fid);
+
+  // Optionally bump popularity since it was just used
+  if (bumpPopularity) {
+    try {
+      await bumpUse(fid);
+    } catch {}
+  }
+
+  return fid;
+}

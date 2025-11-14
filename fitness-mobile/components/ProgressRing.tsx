@@ -59,7 +59,13 @@ export default function ProgressRing({
             originY={size / 2}
           />
         </Svg>
-        <Text style={{ fontSize: 18, fontWeight: "700" }}>
+        <Text
+          style={{
+            fontSize: 18,
+            fontWeight: "700",
+            color: colors.text, // <- fix: use theme text color
+          }}
+        >
           {Math.round(value)} / {Math.round(target)} {unit}
         </Text>
         <Text style={{ color: colors.muted }}>{label}</Text>
