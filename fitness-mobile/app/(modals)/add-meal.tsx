@@ -35,7 +35,6 @@ import { computeMealScore } from "@/utils/mealScore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Community Food Catalog
-// add to Community Food Catalog imports
 import {
   searchCatalog,
   submitSuggestionFromScan,
@@ -659,6 +658,7 @@ export default function AddMealModal() {
   const [scanBusy, setScanBusy] = useState(false);
   const [lastCode, setLastCode] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string>("");
+  const [manualBarcode, setManualBarcode] = useState("");
 
   // Picker for multiple candidates
   const [pickOpen, setPickOpen] = useState(false);
@@ -805,17 +805,6 @@ export default function AddMealModal() {
   // DESCRIBE
   const [descText, setDescText] = useState("");
   const [calcLoading, setCalcLoading] = useState(false);
-
-  const [dName, setDName] = useState("");
-  const [dQty, setDQty] = useState("1");
-  const [dUnit, setDUnit] = useState("serving");
-  const [dCalories, setDCalories] = useState("");
-  const [dProtein, setDProtein] = useState("");
-  const [dCarbs, setDCarbs] = useState("");
-  const [dFat, setDFat] = useState("");
-  const [dSugar, setDSugar] = useState("");
-  const [dFiber, setDFiber] = useState("");
-  const [dScore, setDScore] = useState(0);
   const [calcError, setCalcError] = useState("");
 
   const AI_URL = process.env.EXPO_PUBLIC_AI_DESCRIBE_URL; // optional
@@ -825,6 +814,261 @@ export default function AddMealModal() {
     return Number.isFinite(n) ? String(n) : "";
   }
 
+  // Probe catalog (unchanged)
+  useEffect(() => {
+    (async () => {
+      try {
+        // probe catalog
+        // @ts-ignore
+        const fc = require("@/services/foodCatalog");
+        const search = fc.searchCatalog || fc.search || fc.default;
+        const getPopular = fc.getPopularCatalog;
+        let res: any;
+
+        if (typeof getPopular === "function") {
+          res = await getPopular(5);
+        } else if (typeof search === "function") {
+          res = await search("", 5);
+          if (!res || (Array.isArray(res) && res.length === 0)) {
+            res = await search("*", 5);
+          }
+        } else {
+          console.log(
+            "foodCatalog service not wired: no search function exported"
+          );
+          return;
+        }
+
+        const _items = Array.isArray(res)
+          ? res
+          : res?.items || res?.top || res?.results || res?.data || [];
+        void _items;
+      } catch (e) {
+        console.warn("CATALOG_PROBE error:", e);
+      }
+    })();
+  }, []);
+
+  // MANUAL (basic details only – macros handled in shared editor)
+  const [name, setName] = useState("");
+  const [qty, setQty] = useState("1");
+  const [unit, setUnit] = useState("serving");
+
+  // EDIT SHEET (shared macro editor for Catalog, FDC, Barcode, Describe, Manual)
+  const [editOpen, setEditOpen] = useState(false);
+  const [editSource, setEditSource] = useState<
+    "fdc" | "catalog" | "barcode" | "manual" | "describe" | null
+  >(null);
+  const [eName, setEName] = useState("");
+  const [eQty, setEQty] = useState("1");
+  const [eUnit, setEUnit] = useState("serving");
+  const [eCalories, setECalories] = useState("");
+  const [eProtein, setEProtein] = useState("");
+  const [eCarbs, setECarbs] = useState("");
+  const [eFat, setEFat] = useState("");
+  const [eSugar, setESugar] = useState("");
+  const [eFiber, setEFiber] = useState("");
+  const [eFdcId, setEFdcId] = useState<string | null>(null);
+  const [eScore, setEScore] = useState(0);
+
+  const lastQtyRef = useRef<number>(1);
+
+  useEffect(() => {
+    setEScore(
+      computeMealScore({
+        calories: Number(eCalories || 0),
+        protein: Number(eProtein || 0),
+        carbs: Number(eCarbs || 0),
+        fat: Number(eFat || 0),
+        sugar: Number(eSugar || 0),
+        fiber: Number(eFiber || 0),
+      })
+    );
+  }, [eCalories, eProtein, eCarbs, eFat, eSugar, eFiber]);
+
+  // Bottom sheet animation (shared by macro editor + candidate picker)
+  const sheetProgress = useRef(new Animated.Value(0)).current; // 0 closed, 1 open
+  const H = Dimensions.get("window").height;
+  const scrimOpacity = sheetProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0.6],
+  });
+  const translateY = sheetProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [H * 0.5, 0],
+  });
+
+  function animateSheet(to: 0 | 1, after?: () => void) {
+    Animated.timing(sheetProgress, {
+      toValue: to,
+      duration: 220,
+      easing: to ? Easing.out(Easing.quad) : Easing.in(Easing.quad),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished && after) after();
+    });
+  }
+  function openEdit() {
+    setEditOpen(true);
+    requestAnimationFrame(() => animateSheet(1));
+  }
+  function closeEdit() {
+    animateSheet(0, () => setEditOpen(false));
+  }
+
+  // When quantity changes in macro editor, scale all macros accordingly
+  const handleEditQtyChange = (t: string) => {
+    const cleaned = t.replace(/[^0-9.]/g, "");
+    setEQty(cleaned);
+
+    const newQty = parseFloat(cleaned);
+    if (!isFinite(newQty) || newQty <= 0) {
+      // User is still typing / cleared the field – don't scale yet
+      return;
+    }
+
+    const prevQty = lastQtyRef.current || 1;
+    const factor = newQty / prevQty;
+    if (!isFinite(factor) || factor <= 0) {
+      lastQtyRef.current = newQty;
+      return;
+    }
+
+    const scale = (val: string) => {
+      const num = parseFloat(val || "0");
+      if (!isFinite(num)) return val;
+      const scaled = num * factor;
+      const rounded = Math.round(scaled * 10) / 10; // 1 decimal
+      return rounded ? String(rounded) : "";
+    };
+
+    setECalories(scale(eCalories));
+    setEProtein(scale(eProtein));
+    setECarbs(scale(eCarbs));
+    setEFat(scale(eFat));
+    setESugar(scale(eSugar));
+    setEFiber(scale(eFiber));
+
+    // Remember latest numeric qty for the next change
+    lastQtyRef.current = newQty;
+  };
+
+  function startEditFromFdc(item: FdcItem) {
+    const ln = item.labelNutrients || {};
+    setEditSource("fdc");
+    setEName(item.description || "Food");
+    setEQty("1");
+    lastQtyRef.current = 1;
+    setEUnit("serving");
+    setECalories(String(ln.calories?.value ?? 0));
+    setEProtein(String(ln.protein?.value ?? 0));
+    setECarbs(String(ln.carbohydrates?.value ?? 0));
+    setEFat(String(ln.fat?.value ?? 0));
+    setESugar(String(ln.sugars?.value ?? 0));
+    setEFiber(String(ln.fiber?.value ?? 0));
+    setEFdcId(String(item.fdcId));
+    openEdit();
+    setTab("search");
+  }
+
+  function startEditFromCatalog(item: any) {
+    if (item?.id) {
+      try {
+        bumpUse(item.id);
+      } catch {}
+    }
+    const n = item?.nutrients || {};
+    const baseQty = Number(item?.per ?? 1) || 1;
+    setEditSource("catalog");
+    setEName(item?.name || "Food");
+    setEQty(String(baseQty));
+    lastQtyRef.current = baseQty;
+    setEUnit(item?.unit || "serving");
+    setECalories(String(Number(n.calories || 0)));
+    setEProtein(String(Number(n.protein || 0)));
+    setECarbs(String(Number(n.carbs || 0)));
+    setEFat(String(Number(n.fat || 0)));
+    setESugar(String(Number(n.sugar || 0)));
+    setEFiber(String(Number(n.fiber || 0)));
+    setEFdcId(null);
+    openEdit();
+    setTab("search");
+  }
+
+  function startEditFromBarcode(r: ResolvedProduct) {
+    const baseQty = Number(r.per ?? 1) || 1;
+    setEditSource("barcode");
+    setEName(r.name || "Food");
+    setEQty(String(baseQty)); // 1 (serving) or 100
+    lastQtyRef.current = baseQty;
+    setEUnit(r.unit || "serving");
+    setECalories(String(Number(r.nutrients.calories || 0)));
+    setEProtein(String(Number(r.nutrients.protein || 0)));
+    setECarbs(String(Number(r.nutrients.carbs || 0)));
+    setEFat(String(Number(r.nutrients.fat || 0)));
+    setESugar(String(Number(r.nutrients.sugar || 0)));
+    setEFiber(String(Number(r.nutrients.fiber || 0)));
+    setEFdcId(r.fdcId ?? null);
+    openEdit();
+    setScanBusy(false);
+  }
+
+  // Start macro editor from Manual tab
+  function startManualEdit() {
+    if (!name.trim()) {
+      Alert.alert("Add a name", "Please enter a meal name first.");
+      return;
+    }
+
+    const baseQty = parseFloat(qty || "1") || 1;
+
+    setEditSource("manual");
+    setEName(name.trim());
+    setEQty(String(baseQty));
+    lastQtyRef.current = baseQty;
+    setEUnit(unit || "serving");
+
+    // Always start with empty macros for manual mode
+    setECalories("");
+    setEProtein("");
+    setECarbs("");
+    setEFat("");
+    setESugar("");
+    setEFiber("");
+    setEFdcId(null);
+
+    openEdit();
+  }
+
+  function startScanFallbackManual() {
+    const trimmed = manualBarcode.trim();
+
+    // If user typed digits, treat it as a barcode (so we can cache + submit suggestion)
+    if (trimmed) {
+      setScannedBarcode(trimmed);
+      setEditSource("barcode");
+    } else {
+      setEditSource("manual");
+    }
+
+    setEName("");
+    setEQty("1");
+    lastQtyRef.current = 1;
+    setEUnit("serving");
+
+    // Start with empty macros – user fills them from the label
+    setECalories("");
+    setEProtein("");
+    setECarbs("");
+    setEFat("");
+    setESugar("");
+    setEFiber("");
+    setEFdcId(null);
+
+    openEdit();
+  }
+
+  // Describe → fill macro editor and open sheet
   async function onCalculateMacros() {
     setCalcError("");
     const text = descText.trim();
@@ -865,8 +1109,9 @@ export default function AddMealModal() {
       const got = await res.json();
 
       const nName = String(got.name || text);
-      const nQty = numstr(got.quantity ?? (dQty || "1"));
-      const nUnit = String(got.unit || dUnit || "serving");
+      const qVal = got.quantity;
+      const nQty = Number.isFinite(Number(qVal)) ? String(qVal) : "1";
+      const nUnit = String(got.unit || "serving");
 
       const nCalories = numstr(got.calories);
       const nProtein = numstr(got.protein);
@@ -875,218 +1120,25 @@ export default function AddMealModal() {
       const nSugar = numstr(got.sugar);
       const nFiber = numstr(got.fiber);
 
-      setDName(nName);
-      setDQty(String(nQty || "1"));
-      setDUnit(nUnit);
+      setEditSource("describe");
+      setEName(nName);
+      setEQty(nQty || "1");
+      lastQtyRef.current = parseFloat(nQty || "1") || 1;
+      setEUnit(nUnit);
+      setECalories(nCalories);
+      setEProtein(nProtein);
+      setECarbs(nCarbs);
+      setEFat(nFat);
+      setESugar(nSugar);
+      setEFiber(nFiber);
+      setEFdcId(null);
 
-      setDCalories(nCalories);
-      setDProtein(nProtein);
-      setDCarbs(nCarbs);
-      setDFat(nFat);
-      setDSugar(nSugar);
-      setDFiber(nFiber);
-
-      setDScore(
-        computeMealScore({
-          calories: Number(nCalories || 0),
-          protein: Number(nProtein || 0),
-          carbs: Number(nCarbs || 0),
-          fat: Number(nFat || 0),
-          sugar: Number(nSugar || 0),
-          fiber: Number(nFiber || 0),
-        })
-      );
+      openEdit();
     } catch {
       setCalcError("Describe service unavailable. Please try again.");
     } finally {
       setCalcLoading(false);
     }
-  }
-
-  useEffect(() => {
-    setDScore(
-      computeMealScore({
-        calories: Number(dCalories || 0),
-        protein: Number(dProtein || 0),
-        carbs: Number(dCarbs || 0),
-        fat: Number(dFat || 0),
-        sugar: Number(dSugar || 0),
-        fiber: Number(dFiber || 0),
-      })
-    );
-  }, [dCalories, dProtein, dCarbs, dFat, dSugar, dFiber]);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        // probe catalog
-        // @ts-ignore
-        const fc = require("@/services/foodCatalog");
-        const search = fc.searchCatalog || fc.search || fc.default;
-        const getPopular = fc.getPopularCatalog;
-        let res: any;
-
-        if (typeof getPopular === "function") {
-          res = await getPopular(5);
-        } else if (typeof search === "function") {
-          res = await search("", 5);
-          if (!res || (Array.isArray(res) && res.length === 0)) {
-            res = await search("*", 5);
-          }
-        } else {
-          console.log(
-            "foodCatalog service not wired: no search function exported"
-          );
-          return;
-        }
-
-        const _items = Array.isArray(res)
-          ? res
-          : res?.items || res?.top || res?.results || res?.data || [];
-      } catch (e) {
-        console.warn("CATALOG_PROBE error:", e);
-      }
-    })();
-  }, []);
-
-  // MANUAL
-  const [name, setName] = useState("");
-  const [qty, setQty] = useState("1");
-  const [unit, setUnit] = useState("serving");
-  const [calories, setCalories] = useState("");
-  const [protein, setProtein] = useState("");
-  const [carbs, setCarbs] = useState("");
-  const [fat, setFat] = useState("");
-  const [sugar, setSugar] = useState("");
-  const [fiber, setFiber] = useState("");
-  const [mScore, setMScore] = useState(0);
-
-  useEffect(() => {
-    setMScore(
-      computeMealScore({
-        calories: Number(calories || 0),
-        protein: Number(protein || 0),
-        carbs: Number(carbs || 0),
-        fat: Number(fat || 0),
-        sugar: Number(sugar || 0),
-        fiber: Number(fiber || 0),
-      })
-    );
-  }, [calories, protein, carbs, fat, sugar, fiber]);
-
-  // EDIT SHEET (Catalog, FDC & Barcode)
-  const [editOpen, setEditOpen] = useState(false);
-  const [editSource, setEditSource] = useState<
-    "fdc" | "catalog" | "barcode" | null
-  >(null);
-  const [eName, setEName] = useState("");
-  const [eQty, setEQty] = useState("1");
-  const [eUnit, setEUnit] = useState("serving");
-  const [eCalories, setECalories] = useState("");
-  const [eProtein, setEProtein] = useState("");
-  const [eCarbs, setECarbs] = useState("");
-  const [eFat, setEFat] = useState("");
-  const [eSugar, setESugar] = useState("");
-  const [eFiber, setEFiber] = useState("");
-  const [eFdcId, setEFdcId] = useState<string | null>(null);
-  const [eScore, setEScore] = useState(0);
-
-  useEffect(() => {
-    setEScore(
-      computeMealScore({
-        calories: Number(eCalories || 0),
-        protein: Number(eProtein || 0),
-        carbs: Number(eCarbs || 0),
-        fat: Number(eFat || 0),
-        sugar: Number(eSugar || 0),
-        fiber: Number(eFiber || 0),
-      })
-    );
-  }, [eCalories, eProtein, eCarbs, eFat, eSugar, eFiber]);
-
-  // Bottom sheet animation
-  const sheetProgress = useRef(new Animated.Value(0)).current; // 0 closed, 1 open
-  const H = Dimensions.get("window").height;
-  const scrimOpacity = sheetProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 0.6],
-  });
-  const translateY = sheetProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [H * 0.5, 0],
-  });
-
-  function animateSheet(to: 0 | 1, after?: () => void) {
-    Animated.timing(sheetProgress, {
-      toValue: to,
-      duration: 220,
-      easing: to ? Easing.out(Easing.quad) : Easing.in(Easing.quad),
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (finished && after) after();
-    });
-  }
-  function openEdit() {
-    setEditOpen(true);
-    requestAnimationFrame(() => animateSheet(1));
-  }
-  function closeEdit() {
-    animateSheet(0, () => setEditOpen(false));
-  }
-
-  function startEditFromFdc(item: FdcItem) {
-    const ln = item.labelNutrients || {};
-    setEditSource("fdc");
-    setEName(item.description || "Food");
-    setEQty("1");
-    setEUnit("serving");
-    setECalories(String(ln.calories?.value ?? 0));
-    setEProtein(String(ln.protein?.value ?? 0));
-    setECarbs(String(ln.carbohydrates?.value ?? 0));
-    setEFat(String(ln.fat?.value ?? 0));
-    setESugar(String(ln.sugars?.value ?? 0));
-    setEFiber(String(ln.fiber?.value ?? 0));
-    setEFdcId(String(item.fdcId));
-    openEdit();
-    setTab("search");
-  }
-
-  function startEditFromCatalog(item: any) {
-    if (item?.id) {
-      try {
-        bumpUse(item.id);
-      } catch {}
-    }
-    const n = item?.nutrients || {};
-    setEditSource("catalog");
-    setEName(item?.name || "Food");
-    setEQty(String(item?.per ?? 1));
-    setEUnit(item?.unit || "serving");
-    setECalories(String(Number(n.calories || 0)));
-    setEProtein(String(Number(n.protein || 0)));
-    setECarbs(String(Number(n.carbs || 0)));
-    setEFat(String(Number(n.fat || 0)));
-    setESugar(String(Number(n.sugar || 0)));
-    setEFiber(String(Number(n.fiber || 0)));
-    setEFdcId(null);
-    openEdit();
-    setTab("search");
-  }
-
-  function startEditFromBarcode(r: ResolvedProduct) {
-    setEditSource("barcode");
-    setEName(r.name || "Food");
-    setEQty(String(r.per ?? 1)); // 1 (serving) or 100
-    setEUnit(r.unit || "serving");
-    setECalories(String(Number(r.nutrients.calories || 0)));
-    setEProtein(String(Number(r.nutrients.protein || 0)));
-    setECarbs(String(Number(r.nutrients.carbs || 0)));
-    setEFat(String(Number(r.nutrients.fat || 0)));
-    setESugar(String(Number(r.nutrients.sugar || 0)));
-    setEFiber(String(Number(r.nutrients.fiber || 0)));
-    setEFdcId(r.fdcId ?? null);
-    openEdit();
-    setScanBusy(false);
   }
 
   // Back with payload (pairs with nutrition.tsx AsyncStorage reader)
@@ -1096,65 +1148,6 @@ export default function AddMealModal() {
       .finally(() => {
         router.back();
       });
-  }
-
-  function addFromDescribe() {
-    if (!dName.trim()) return;
-    const healthScore = computeMealScore({
-      calories: Number(dCalories || 0),
-      protein: Number(dProtein || 0),
-      carbs: Number(dCarbs || 0),
-      fat: Number(dFat || 0),
-      sugar: Number(dSugar || 0),
-      fiber: Number(dFiber || 0),
-    });
-
-    done({
-      date,
-      meal,
-      name: dName.trim(),
-      unit: dUnit || "serving",
-      qty: Number(dQty || 1),
-      calories: Number(dCalories || 0),
-      protein: Number(dProtein || 0),
-      carbs: Number(dCarbs || 0),
-      fat: Number(dFat || 0),
-      sugar: Number(dSugar || 0),
-      fiber: Number(dFiber || 0),
-      source: "describe",
-      fdcId: null,
-      healthScore,
-    });
-  }
-
-  function addFromManual() {
-    if (!name.trim()) return;
-
-    const healthScore = computeMealScore({
-      calories: Number(calories || 0),
-      protein: Number(protein || 0),
-      carbs: Number(carbs || 0),
-      fat: Number(fat || 0),
-      sugar: Number(sugar || 0),
-      fiber: Number(fiber || 0),
-    });
-
-    done({
-      date,
-      meal,
-      name: name.trim(),
-      unit: unit || "serving",
-      qty: Number(qty || 1),
-      calories: Number(calories || 0),
-      protein: Number(protein || 0),
-      carbs: Number(carbs || 0),
-      fat: Number(fat || 0),
-      sugar: Number(sugar || 0),
-      fiber: Number(fiber || 0),
-      source: "manual",
-      fdcId: null,
-      healthScore,
-    });
   }
 
   async function addFromEditDraft() {
@@ -1171,7 +1164,6 @@ export default function AddMealModal() {
 
     // Save user correction locally for this barcode
     if (editSource === "barcode" && scannedBarcode) {
-      // Save user correction locally for this barcode
       await cacheSave(scannedBarcode, {
         name: eName,
         unit: eUnit,
@@ -1204,7 +1196,7 @@ export default function AddMealModal() {
           fiber: Number(eFiber || 0),
           submitterUid: uid,
           verified: false,
-          bumpPopularity: true, // instant popularity signal
+          bumpPopularity: true,
         });
       } catch {}
     }
@@ -1221,7 +1213,7 @@ export default function AddMealModal() {
       fat: Number(eFat || 0),
       sugar: Number(eSugar || 0),
       fiber: Number(eFiber || 0),
-      source: editSource ?? "catalog",
+      source: (editSource as any) ?? "catalog",
       fdcId: editSource === "fdc" ? eFdcId : null,
       healthScore,
     });
@@ -1259,12 +1251,53 @@ export default function AddMealModal() {
     }
   }
 
+  async function onManualBarcodeLookup() {
+    const code = manualBarcode.trim();
+    if (!code) {
+      setScanError("Please enter the digits from the barcode first.");
+      return;
+    }
+    if (scanBusy) return;
+
+    setScanBusy(true);
+    setScanError("");
+    setScannedBarcode(code); // so edits still tie back to this barcode
+    setLastCode(null);
+
+    try {
+      const list = await resolveBarcodeCandidates(code);
+
+      if (!list.length) {
+        setScanError(
+          "We couldn’t find this barcode. Double-check the digits and try again, or add it manually in the Manual tab."
+        );
+        return;
+      }
+
+      if (list.length === 1) {
+        // Same behavior as a successful camera scan
+        startEditFromBarcode(list[0]); // opens macro popup with values
+        setManualBarcode("");
+      } else {
+        // Reuse the candidate picker sheet
+        setCandidates(list);
+        setPickOpen(true);
+      }
+    } catch (e) {
+      setScanError(
+        "Barcode lookup failed. Check your connection and try again."
+      );
+    } finally {
+      setScanBusy(false);
+    }
+  }
+
   // helper for per-100g/ml warning
   const perIs100 = (() => {
-    const q = Number(eQty);
+    const qNum = Number(eQty);
     const u = (eUnit || "").toLowerCase();
     return (
-      q === 100 &&
+      qNum === 100 &&
       (u.includes("100 g") ||
         u === "100 g" ||
         u.includes("100 ml") ||
@@ -1338,7 +1371,7 @@ export default function AddMealModal() {
             onPress={() =>
               router.push({
                 pathname: "/(modals)/ai-meal-suggestions",
-                params: { date, meal }, // scope to current meal (optional)
+                params: { date, meal },
               })
             }
             accessibilityLabel="Generate meal ideas to hit today's macros"
@@ -1538,6 +1571,38 @@ export default function AddMealModal() {
                     (fallback).
                   </Text>
                 )}
+
+                {/* Fallback: manual barcode digits → same lookup as camera */}
+                <View style={{ marginTop: 12, gap: 8 }}>
+                  <Text style={{ color: colors.muted, fontSize: 12 }}>
+                    Having trouble scanning? Type the digits printed under the
+                    barcode and we’ll look it up. If we find a match, we’ll
+                    autofill calories, protein, carbs, fat, sugar and fiber —
+                    you can still tweak everything before adding.
+                  </Text>
+
+                  <Field
+                    label="Barcode digits"
+                    value={manualBarcode}
+                    onChangeText={(t) =>
+                      setManualBarcode(t.replace(/[^0-9]/g, ""))
+                    }
+                    keyboardType="numeric"
+                    placeholder="e.g., 060383123456"
+                  />
+
+                  <PrimaryButton
+                    label={scanBusy ? "Looking up…" : "Look up barcode"}
+                    onPress={onManualBarcodeLookup}
+                    disabled={scanBusy || !manualBarcode.trim()}
+                  />
+
+                  <Text style={{ color: colors.muted, fontSize: 11 }}>
+                    Tip: Use all the numbers directly under the barcode. Once
+                    the product is found, check the serving size and macros
+                    against the nutrition label so everything matches.
+                  </Text>
+                </View>
               </GlassPanel>
             </View>
           )}
@@ -1676,7 +1741,7 @@ export default function AddMealModal() {
             </View>
           )}
 
-          {/* DESCRIBE */}
+          {/* DESCRIBE (now only prompt + button; macros handled in shared sheet) */}
           {tab === "describe" && (
             <View style={{ gap: 12 }}>
               <GlassPanel>
@@ -1691,7 +1756,9 @@ export default function AddMealModal() {
                   }
                 />
                 <PrimaryButton
-                  label={calcLoading ? "Calculating…" : "Calculate macros"}
+                  label={
+                    calcLoading ? "Calculating…" : "Calculate & edit macros"
+                  }
                   onPress={onCalculateMacros}
                   disabled={calcLoading || !descText.trim()}
                 />
@@ -1700,116 +1767,21 @@ export default function AddMealModal() {
                     {calcError}
                   </Text>
                 )}
-              </GlassPanel>
-
-              <GlassPanel>
-                <SectionTitle>Autofilled details (edit if needed)</SectionTitle>
-                <Field
-                  label="Name"
-                  value={dName}
-                  onChangeText={setDName}
-                  placeholder="Meal name"
-                  onFocus={() =>
-                    scrollRef.current?.scrollTo({ y: 0, animated: true })
-                  }
-                />
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <Field
-                    label="Quantity"
-                    value={dQty}
-                    onChangeText={(t) => setDQty(t.replace(/[^0-9.]/g, ""))}
-                    keyboardType="decimal-pad"
-                    onFocus={() =>
-                      scrollRef.current?.scrollTo({ y: 220, animated: true })
-                    }
-                  />
-                  <Field
-                    label="Unit"
-                    value={dUnit}
-                    onChangeText={setDUnit}
-                    placeholder="serving / g / ml"
-                    onFocus={() =>
-                      scrollRef.current?.scrollTo({ y: 220, animated: true })
-                    }
-                  />
-                </View>
-
-                <SectionTitle>Macros (totals for the whole meal)</SectionTitle>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <Field
-                    label="Calories"
-                    value={dCalories}
-                    onChangeText={(t) =>
-                      setDCalories(t.replace(/[^0-9.]/g, ""))
-                    }
-                    keyboardType="decimal-pad"
-                    onFocus={() =>
-                      scrollRef.current?.scrollTo({ y: 360, animated: true })
-                    }
-                  />
-                  <Field
-                    label="Protein (g)"
-                    value={dProtein}
-                    onChangeText={(t) => setDProtein(t.replace(/[^0-9.]/g, ""))}
-                    keyboardType="decimal-pad"
-                    onFocus={() =>
-                      scrollRef.current?.scrollTo({ y: 360, animated: true })
-                    }
-                  />
-                </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <Field
-                    label="Carbs (g)"
-                    value={dCarbs}
-                    onChangeText={(t) => setDCarbs(t.replace(/[^0-9.]/g, ""))}
-                    keyboardType="decimal-pad"
-                    onFocus={() =>
-                      scrollRef.current?.scrollTo({ y: 430, animated: true })
-                    }
-                  />
-                  <Field
-                    label="Fat (g)"
-                    value={dFat}
-                    onChangeText={(t) => setDFat(t.replace(/[^0-9.]/g, ""))}
-                    keyboardType="decimal-pad"
-                    onFocus={() =>
-                      scrollRef.current?.scrollTo({ y: 430, animated: true })
-                    }
-                  />
-                </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <Field
-                    label="Sugar (g)"
-                    value={dSugar}
-                    onChangeText={(t) => setDSugar(t.replace(/[^0-9.]/g, ""))}
-                    keyboardType="decimal-pad"
-                    onFocus={() =>
-                      scrollRef.current?.scrollTo({ y: 500, animated: true })
-                    }
-                  />
-                  <Field
-                    label="Fiber (g)"
-                    value={dFiber}
-                    onChangeText={(t) => setDFiber(t.replace(/[^0-9.]/g, ""))}
-                    keyboardType="decimal-pad"
-                    onFocus={() =>
-                      scrollRef.current?.scrollTo({ y: 500, animated: true })
-                    }
-                  />
-                </View>
-
-                <ScoreBar score={dScore} />
-
-                <PrimaryButton
-                  label="Add"
-                  onPress={addFromDescribe}
-                  disabled={!dName.trim()}
-                />
+                <Text
+                  style={{
+                    marginTop: 6,
+                    fontSize: 12,
+                    color: colors.muted,
+                  }}
+                >
+                  After calculation, a popup will let you tweak quantity and
+                  macros before adding.
+                </Text>
               </GlassPanel>
             </View>
           )}
 
-          {/* MANUAL */}
+          {/* MANUAL (basic details → shared macro editor) */}
           {tab === "manual" && (
             <View style={{ gap: 12 }}>
               <GlassPanel>
@@ -1837,80 +1809,27 @@ export default function AddMealModal() {
                     label="Unit"
                     value={unit}
                     onChangeText={setUnit}
-                    placeholder="serving"
+                    placeholder="serving / g / ml"
                     onFocus={() =>
                       scrollRef.current?.scrollTo({ y: 120, animated: true })
                     }
                   />
                 </View>
 
-                <SectionTitle>Macros (totals for the whole meal)</SectionTitle>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <Field
-                    label="Calories"
-                    value={calories}
-                    onChangeText={(t) => setCalories(t.replace(/[^0-9.]/g, ""))}
-                    keyboardType="decimal-pad"
-                    onFocus={() =>
-                      scrollRef.current?.scrollTo({ y: 250, animated: true })
-                    }
-                  />
-                  <Field
-                    label="Protein (g)"
-                    value={protein}
-                    onChangeText={(t) => setProtein(t.replace(/[^0-9.]/g, ""))}
-                    keyboardType="decimal-pad"
-                    onFocus={() =>
-                      scrollRef.current?.scrollTo({ y: 250, animated: true })
-                    }
-                  />
-                </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <Field
-                    label="Carbs (g)"
-                    value={carbs}
-                    onChangeText={(t) => setCarbs(t.replace(/[^0-9.]/g, ""))}
-                    keyboardType="decimal-pad"
-                    onFocus={() =>
-                      scrollRef.current?.scrollTo({ y: 320, animated: true })
-                    }
-                  />
-                  <Field
-                    label="Fat (g)"
-                    value={fat}
-                    onChangeText={(t) => setFat(t.replace(/[^0-9.]/g, ""))}
-                    keyboardType="decimal-pad"
-                    onFocus={() =>
-                      scrollRef.current?.scrollTo({ y: 320, animated: true })
-                    }
-                  />
-                </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <Field
-                    label="Sugar (g)"
-                    value={sugar}
-                    onChangeText={(t) => setSugar(t.replace(/[^0-9.]/g, ""))}
-                    keyboardType="decimal-pad"
-                    onFocus={() =>
-                      scrollRef.current?.scrollTo({ y: 390, animated: true })
-                    }
-                  />
-                  <Field
-                    label="Fiber (g)"
-                    value={fiber}
-                    onChangeText={(t) => setFiber(t.replace(/[^0-9.]/g, ""))}
-                    keyboardType="decimal-pad"
-                    onFocus={() =>
-                      scrollRef.current?.scrollTo({ y: 390, animated: true })
-                    }
-                  />
-                </View>
-
-                <ScoreBar score={mScore} />
+                <Text
+                  style={{
+                    marginTop: 8,
+                    fontSize: 12,
+                    color: colors.muted,
+                  }}
+                >
+                  You’ll set calories, protein, carbs, fat, sugar and fiber in a
+                  popup next.
+                </Text>
 
                 <PrimaryButton
-                  label="Add"
-                  onPress={addFromManual}
+                  label="Edit macros"
+                  onPress={startManualEdit}
                   disabled={!name.trim()}
                 />
               </GlassPanel>
@@ -1918,7 +1837,7 @@ export default function AddMealModal() {
           )}
         </ScrollView>
 
-        {/* Bottom Sheet Editor (Catalog, FDC, Barcode) */}
+        {/* Bottom Sheet: Shared Macro Editor */}
         {editOpen && (
           <>
             {/* Scrim */}
@@ -2017,7 +1936,7 @@ export default function AddMealModal() {
                     <Field
                       label="Quantity"
                       value={eQty}
-                      onChangeText={(t) => setEQty(t.replace(/[^0-9.]/g, ""))}
+                      onChangeText={handleEditQtyChange}
                       keyboardType="decimal-pad"
                     />
                     <Field
