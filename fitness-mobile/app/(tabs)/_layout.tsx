@@ -17,6 +17,7 @@ export default function TabsLayout() {
 
   const tabBarHeight = 58 + Math.max(0, insets.bottom - 8); // total visual height
   const tabBarPadBottom = Math.max(8, insets.bottom / 2);
+  const scenePaddingBottom = tabBarPadBottom + 20; // keep content off the bar without huge whitespace
 
   return (
     <Tabs
@@ -25,7 +26,7 @@ export default function TabsLayout() {
         // ⬇️ This prevents content from being covered at the bottom
         sceneContainerStyle: {
           backgroundColor: colors.background,
-          paddingBottom: tabBarHeight,
+          paddingBottom: scenePaddingBottom,
         },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
@@ -44,6 +45,7 @@ export default function TabsLayout() {
           backgroundColor: "transparent",
           ...Platform.select({ android: { elevation: 5 } }),
         },
+        tabBarHideOnKeyboard: true,
         tabBarBackground: () =>
           BlurView ? (
             <BlurView

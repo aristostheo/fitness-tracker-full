@@ -8,9 +8,12 @@ import {
   Text,
   StyleSheet,
   Platform,
+  Animated,
+  Easing,
 } from "react-native";
 import { Stack, usePathname, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   SafeAreaProvider,
   useSafeAreaInsets,
@@ -92,6 +95,7 @@ function Gate() {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const enforcedRef = useRef(false);
+  const fade = useRef(new Animated.Value(1)).current;
 
   const inAuth =
     pathname?.startsWith("/(auth)") ||
@@ -141,27 +145,95 @@ function Gate() {
     return unsub;
   }, []);
 
+  // subtle fade on route transitions to avoid hard flashes between auth/app
+  useEffect(() => {
+    fade.setValue(0.9);
+    Animated.timing(fade, {
+      toValue: 1,
+      duration: 220,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+  }, [pathname, user]);
+
   if (initializing) {
     return (
-      <View
-        style={{
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: colors.background,
-        }}
+      <LinearGradient
+        colors={
+          isDark
+            ? ["#0d111a", "#0a0d14"]
+            : ["#f7f9ff", "#e9eefb"] // soft branded fade
+        }
+        style={{ flex: 1 }}
       >
         <StatusBar style={isDark ? "light" : "dark"} />
-        <ActivityIndicator color={colors.primary} />
-        <Text style={{ marginTop: 8, color: colors.muted }}>Loading…</Text>
-      </View>
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 14,
+          }}
+        >
+          <View
+            style={{
+              width: 78,
+              height: 78,
+              borderRadius: 20,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "#fff",
+              borderWidth: 1,
+              borderColor: isDark
+                ? "rgba(255,255,255,0.06)"
+                : "rgba(0,0,0,0.03)",
+              shadowColor: "#000",
+              shadowOpacity: 0.12,
+              shadowRadius: 16,
+              shadowOffset: { width: 0, height: 10 },
+              elevation: 8,
+            }}
+          >
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                backgroundColor: colors.primary,
+                alignItems: "center",
+                justifyContent: "center",
+                transform: [{ rotate: "-8deg" }],
+              }}
+            >
+              <Text
+                style={{
+                  color: "#fff",
+                  fontWeight: "800",
+                  fontSize: 18,
+                  letterSpacing: 0.6,
+                }}
+              >
+                Fit
+              </Text>
+            </View>
+          </View>
+          <View style={{ alignItems: "center", gap: 4 }}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={{ color: colors.muted, fontSize: 14 }}>
+              Loading your plan…
+            </Text>
+          </View>
+        </View>
+      </LinearGradient>
     );
   }
 
   const topHeaderHeight = insets.top + 10;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <Animated.View
+      style={{ flex: 1, backgroundColor: colors.background, opacity: fade }}
+    >
       {/* Translucent so our header shows behind the system area */}
       <StatusBar
         style={isDark ? "light" : "dark"}
@@ -197,7 +269,7 @@ function Gate() {
         />
         <Stack.Screen name="+not-found" />
       </Stack>
-    </View>
+    </Animated.View>
   );
 }
 

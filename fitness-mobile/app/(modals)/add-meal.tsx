@@ -18,6 +18,7 @@ import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Haptics from "expo-haptics";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -112,6 +113,21 @@ export type ResolvedProduct = {
   fdcId?: string | null;
   source?: SourceTag;
 };
+
+function withAlpha(color: string, alpha = 0.25) {
+  if (!color) return `rgba(0,0,0,${alpha})`;
+  if (color.startsWith("rgb")) {
+    const body = color.replace(/^rgba?\(|\)$/g, "");
+    const [r, g, b] = body.split(",").map((s) => s.trim());
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  const m = color.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+  if (!m) return color;
+  return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(
+    m[3],
+    16
+  )}, ${alpha})`;
+}
 
 async function lookupOpenFoodFacts(
   barcode: string
@@ -464,6 +480,7 @@ function Field({
   placeholder,
   multiline,
   onFocus,
+  autoFocus,
 }: {
   label?: string;
   value: string;
@@ -472,6 +489,7 @@ function Field({
   placeholder?: string;
   multiline?: boolean;
   onFocus?: () => void;
+  autoFocus?: boolean;
 }) {
   const { colors } = useTheme();
   return (
@@ -489,6 +507,9 @@ function Field({
         placeholder={placeholder}
         placeholderTextColor={colors.placeholder}
         multiline={multiline}
+        autoFocus={autoFocus}
+        returnKeyType="done"
+        autoCapitalize="sentences"
         style={{
           minHeight: multiline ? 88 : 48,
           borderWidth: 1,
@@ -496,6 +517,7 @@ function Field({
           borderRadius: 12,
           paddingHorizontal: 12,
           paddingVertical: multiline ? 12 : 10,
+          lineHeight: 20,
           backgroundColor: colors.inputBg,
           color: colors.text,
         }}
@@ -563,6 +585,9 @@ function PrimaryButton({
   return (
     <Pressable
       onPress={!disabled ? onPress : undefined}
+      onPressIn={() => {
+        if (!disabled) Haptics.selectionAsync().catch(() => {});
+      }}
       style={{
         height: 48,
         borderRadius: 14,
@@ -859,6 +884,7 @@ export default function AddMealModal() {
   const [editSource, setEditSource] = useState<
     "fdc" | "catalog" | "barcode" | "manual" | "describe" | null
   >(null);
+  const [barcodeSource, setBarcodeSource] = useState<SourceTag | null>(null);
   const [eName, setEName] = useState("");
   const [eQty, setEQty] = useState("1");
   const [eUnit, setEUnit] = useState("serving");
@@ -956,6 +982,7 @@ export default function AddMealModal() {
   function startEditFromFdc(item: FdcItem) {
     const ln = item.labelNutrients || {};
     setEditSource("fdc");
+    setBarcodeSource(null);
     setEName(item.description || "Food");
     setEQty("1");
     lastQtyRef.current = 1;
@@ -980,6 +1007,7 @@ export default function AddMealModal() {
     const n = item?.nutrients || {};
     const baseQty = Number(item?.per ?? 1) || 1;
     setEditSource("catalog");
+    setBarcodeSource(null);
     setEName(item?.name || "Food");
     setEQty(String(baseQty));
     lastQtyRef.current = baseQty;
@@ -998,6 +1026,7 @@ export default function AddMealModal() {
   function startEditFromBarcode(r: ResolvedProduct) {
     const baseQty = Number(r.per ?? 1) || 1;
     setEditSource("barcode");
+    setBarcodeSource(r.source ?? null);
     setEName(r.name || "Food");
     setEQty(String(baseQty)); // 1 (serving) or 100
     lastQtyRef.current = baseQty;
@@ -1023,6 +1052,7 @@ export default function AddMealModal() {
     const baseQty = parseFloat(qty || "1") || 1;
 
     setEditSource("manual");
+    setBarcodeSource(null);
     setEName(name.trim());
     setEQty(String(baseQty));
     lastQtyRef.current = baseQty;
@@ -1047,8 +1077,10 @@ export default function AddMealModal() {
     if (trimmed) {
       setScannedBarcode(trimmed);
       setEditSource("barcode");
+      setBarcodeSource(null);
     } else {
       setEditSource("manual");
+      setBarcodeSource(null);
     }
 
     setEName("");
@@ -1121,6 +1153,7 @@ export default function AddMealModal() {
       const nFiber = numstr(got.fiber);
 
       setEditSource("describe");
+      setBarcodeSource(null);
       setEName(nName);
       setEQty(nQty || "1");
       lastQtyRef.current = parseFloat(nQty || "1") || 1;
@@ -1217,6 +1250,10 @@ export default function AddMealModal() {
       fdcId: editSource === "fdc" ? eFdcId : null,
       healthScore,
     });
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+      () => {}
+    );
   }
 
   // --- Scan handler with candidates/picker ---
@@ -1303,6 +1340,19 @@ export default function AddMealModal() {
         u.includes("100 ml") ||
         u === "100 ml")
     );
+  })();
+
+  const sourceLabel = (() => {
+    if (!editSource) return null;
+    if (editSource === "describe") return "AI parsed";
+    if (editSource === "barcode") {
+      if (barcodeSource === "OFF") return "OpenFoodFacts";
+      if (barcodeSource === "FDC") return "FDC fallback";
+      return "Barcode scan";
+    }
+    if (editSource === "fdc") return "USDA FDC";
+    if (editSource === "catalog") return "Community catalog";
+    return "Manual entry";
   })();
 
   return (
@@ -1868,206 +1918,278 @@ export default function AddMealModal() {
                 edges={["bottom"]}
                 style={{ padding: 16, paddingTop: 8 }}
               >
-                <GlassPanel>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <Text style={{ color: colors.text, fontWeight: "800" }}>
-                      Edit details
-                    </Text>
-                    <Pressable
-                      onPress={closeEdit}
-                      hitSlop={8}
-                      accessibilityLabel="Close edit"
-                    >
-                      <Ionicons
-                        name="close-circle"
-                        size={20}
-                        color={colors.muted}
-                      />
-                    </Pressable>
-                  </View>
-
-                  {/* Source + basis badges */}
-                  {editSource && (
+                {/* Keyboard + scroll handling for popup */}
+                <KeyboardAvoidingView
+                  behavior={Platform.OS === "ios" ? "padding" : undefined}
+                  keyboardVerticalOffset={Platform.OS === "ios" ? 16 : 0}
+                  style={{ maxHeight: H * 0.8 }}
+                >
+                  <GlassPanel>
+                    {/* Header row stays fixed */}
                     <View
                       style={{
                         flexDirection: "row",
-                        gap: 8,
                         alignItems: "center",
-                        marginTop: 6,
+                        justifyContent: "space-between",
+                        marginBottom: 4,
                       }}
                     >
-                      <Text style={{ fontSize: 12, color: colors.muted }}>
-                        Source:{" "}
-                        <Text style={{ fontWeight: "800", color: colors.text }}>
-                          {editSource.toUpperCase()}
-                        </Text>
+                      <Text style={{ color: colors.text, fontWeight: "800" }}>
+                        Edit details
                       </Text>
-                      <Text style={{ fontSize: 12, color: colors.muted }}>
-                        Basis:{" "}
-                        <Text style={{ fontWeight: "800", color: colors.text }}>
-                          per {eQty} {eUnit}
-                        </Text>
-                      </Text>
+                      <Pressable
+                        onPress={closeEdit}
+                        hitSlop={8}
+                        accessibilityLabel="Close edit"
+                      >
+                        <Ionicons
+                          name="close-circle"
+                          size={20}
+                          color={colors.muted}
+                        />
+                      </Pressable>
                     </View>
-                  )}
-                  {perIs100 && (
-                    <Text
-                      style={{ marginTop: 6, fontSize: 12, color: "#f59e0b" }}
+
+                    {/* Scrollable content so keyboard doesn't trap the user */}
+                    <ScrollView
+                      keyboardShouldPersistTaps="handled"
+                      keyboardDismissMode={
+                        Platform.OS === "ios" ? "interactive" : "on-drag"
+                      }
+                      contentContainerStyle={{ paddingBottom: 8, gap: 10 }}
+                      showsVerticalScrollIndicator={false}
                     >
-                      Tip: This entry is per 100{" "}
-                      {eUnit.toLowerCase().includes("ml") ? "ml" : "g"}. Adjust
-                      quantity/unit to match your serving.
-                    </Text>
-                  )}
+                      {/* Source + basis badges */}
+                      {(sourceLabel || editSource) && (
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            flexWrap: "wrap",
+                            gap: 8,
+                            alignItems: "center",
+                            marginTop: 2,
+                          }}
+                        >
+                          {sourceLabel && (
+                            <View
+                              style={{
+                                paddingHorizontal: 10,
+                                paddingVertical: 6,
+                                borderRadius: 999,
+                                borderWidth: 1,
+                                backgroundColor:
+                                  editSource === "describe"
+                                    ? withAlpha(colors.primary, 0.14)
+                                    : withAlpha(colors.card, 0.9),
+                                borderColor:
+                                  editSource === "describe"
+                                    ? withAlpha(colors.primary, 0.35)
+                                    : colors.border,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: "800",
+                                  color:
+                                    editSource === "describe"
+                                      ? colors.primary
+                                      : colors.text,
+                                }}
+                              >
+                                {sourceLabel}
+                              </Text>
+                            </View>
+                          )}
+                          <View
+                            style={{
+                              paddingHorizontal: 10,
+                              paddingVertical: 6,
+                              borderRadius: 999,
+                              borderWidth: 1,
+                              backgroundColor: withAlpha(colors.card, 0.9),
+                              borderColor: colors.border,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                fontWeight: "700",
+                                color: colors.muted,
+                              }}
+                            >
+                              per {eQty} {eUnit}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+                      {perIs100 && (
+                        <Text
+                          style={{
+                            marginTop: 4,
+                            fontSize: 12,
+                            color: "#f59e0b",
+                          }}
+                        >
+                          Tip: This entry is per 100{" "}
+                          {eUnit.toLowerCase().includes("ml") ? "ml" : "g"}.
+                          Adjust quantity/unit to match your serving.
+                        </Text>
+                      )}
 
-                  <Field
-                    label="Name"
-                    value={eName}
-                    onChangeText={setEName}
-                    placeholder="Meal name"
-                  />
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <Field
-                      label="Quantity"
-                      value={eQty}
-                      onChangeText={handleEditQtyChange}
-                      keyboardType="decimal-pad"
-                    />
-                    <Field
-                      label="Unit"
-                      value={eUnit}
-                      onChangeText={setEUnit}
-                      placeholder="serving / g / ml"
-                    />
-                  </View>
+                      <Field
+                        label="Name"
+                        value={eName}
+                        onChangeText={setEName}
+                        placeholder="Meal name"
+                        autoFocus={editOpen}
+                      />
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        <Field
+                          label="Quantity"
+                          value={eQty}
+                          onChangeText={handleEditQtyChange}
+                          keyboardType="decimal-pad"
+                        />
+                        <Field
+                          label="Unit"
+                          value={eUnit}
+                          onChangeText={setEUnit}
+                          placeholder="serving / g / ml"
+                        />
+                      </View>
 
-                  <SectionTitle>
-                    Macros (totals for the whole meal)
-                  </SectionTitle>
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <Field
-                      label="Calories"
-                      value={eCalories}
-                      onChangeText={(t) =>
-                        setECalories(t.replace(/[^0-9.]/g, ""))
-                      }
-                      keyboardType="decimal-pad"
-                    />
-                    <Field
-                      label="Protein (g)"
-                      value={eProtein}
-                      onChangeText={(t) =>
-                        setEProtein(t.replace(/[^0-9.]/g, ""))
-                      }
-                      keyboardType="decimal-pad"
-                    />
-                  </View>
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <Field
-                      label="Carbs (g)"
-                      value={eCarbs}
-                      onChangeText={(t) => setECarbs(t.replace(/[^0-9.]/g, ""))}
-                      keyboardType="decimal-pad"
-                    />
-                    <Field
-                      label="Fat (g)"
-                      value={eFat}
-                      onChangeText={(t) => setEFat(t.replace(/[^0-9.]/g, ""))}
-                      keyboardType="decimal-pad"
-                    />
-                  </View>
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <Field
-                      label="Sugar (g)"
-                      value={eSugar}
-                      onChangeText={(t) => setESugar(t.replace(/[^0-9.]/g, ""))}
-                      keyboardType="decimal-pad"
-                    />
-                    <Field
-                      label="Fiber (g)"
-                      value={eFiber}
-                      onChangeText={(t) => setEFiber(t.replace(/[^0-9.]/g, ""))}
-                      keyboardType="decimal-pad"
-                    />
-                  </View>
+                      <SectionTitle>
+                        Macros (totals for the whole meal)
+                      </SectionTitle>
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        <Field
+                          label="Calories"
+                          value={eCalories}
+                          onChangeText={(t) =>
+                            setECalories(t.replace(/[^0-9.]/g, ""))
+                          }
+                          keyboardType="decimal-pad"
+                        />
+                        <Field
+                          label="Protein (g)"
+                          value={eProtein}
+                          onChangeText={(t) =>
+                            setEProtein(t.replace(/[^0-9.]/g, ""))
+                          }
+                          keyboardType="decimal-pad"
+                        />
+                      </View>
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        <Field
+                          label="Carbs (g)"
+                          value={eCarbs}
+                          onChangeText={(t) =>
+                            setECarbs(t.replace(/[^0-9.]/g, ""))
+                          }
+                          keyboardType="decimal-pad"
+                        />
+                        <Field
+                          label="Fat (g)"
+                          value={eFat}
+                          onChangeText={(t) =>
+                            setEFat(t.replace(/[^0-9.]/g, ""))
+                          }
+                          keyboardType="decimal-pad"
+                        />
+                      </View>
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        <Field
+                          label="Sugar (g)"
+                          value={eSugar}
+                          onChangeText={(t) =>
+                            setESugar(t.replace(/[^0-9.]/g, ""))
+                          }
+                          keyboardType="decimal-pad"
+                        />
+                        <Field
+                          label="Fiber (g)"
+                          value={eFiber}
+                          onChangeText={(t) =>
+                            setEFiber(t.replace(/[^0-9.]/g, ""))
+                          }
+                          keyboardType="decimal-pad"
+                        />
+                      </View>
 
-                  <ScoreBar score={eScore} />
+                      <ScoreBar score={eScore} />
 
-                  {/* Report mismatch / update from label */}
-                  <Pressable
-                    onPress={async () => {
-                      try {
-                        // try forwarding to your catalog if available
-                        // @ts-ignore
-                        const fc = require("@/services/foodCatalog");
-                        if (typeof fc.submitSuggestion === "function") {
-                          await fc.submitSuggestion({
-                            barcode: scannedBarcode,
-                            name: eName,
-                            unit: eUnit,
-                            per: Number(eQty || 1),
-                            nutrients: {
-                              calories: Number(eCalories || 0),
-                              protein: Number(eProtein || 0),
-                              carbs: Number(eCarbs || 0),
-                              fat: Number(eFat || 0),
-                              sugar: Number(eSugar || 0),
-                              fiber: Number(eFiber || 0),
-                            },
-                            source: editSource,
-                          });
-                        }
-                        // always cache locally
-                        if (scannedBarcode) {
-                          await cacheSave(scannedBarcode, {
-                            name: eName,
-                            unit: eUnit,
-                            per: Number(eQty || 1),
-                            nutrients: {
-                              calories: Number(eCalories || 0),
-                              protein: Number(eProtein || 0),
-                              carbs: Number(eCarbs || 0),
-                              fat: Number(eFat || 0),
-                              sugar: Number(eSugar || 0),
-                              fiber: Number(eFiber || 0),
-                            },
-                            fdcId: eFdcId ?? null,
-                            source: "OFF",
-                          });
-                        }
-                        Alert.alert("Thanks!", "We saved your correction.");
-                      } catch {
-                        Alert.alert(
-                          "Oops",
-                          "Couldn’t send suggestion. Saved locally."
-                        );
-                      }
-                    }}
-                    style={{ alignSelf: "flex-start", marginBottom: 8 }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        color: colors.muted,
-                        textDecorationLine: "underline",
-                      }}
-                    >
-                      Report mismatch / Update from label
-                    </Text>
-                  </Pressable>
+                      {/* Report mismatch / update from label */}
+                      <Pressable
+                        onPress={async () => {
+                          try {
+                            // try forwarding to your catalog if available
+                            // @ts-ignore
+                            const fc = require("@/services/foodCatalog");
+                            if (typeof fc.submitSuggestion === "function") {
+                              await fc.submitSuggestion({
+                                barcode: scannedBarcode,
+                                name: eName,
+                                unit: eUnit,
+                                per: Number(eQty || 1),
+                                nutrients: {
+                                  calories: Number(eCalories || 0),
+                                  protein: Number(eProtein || 0),
+                                  carbs: Number(eCarbs || 0),
+                                  fat: Number(eFat || 0),
+                                  sugar: Number(eSugar || 0),
+                                  fiber: Number(eFiber || 0),
+                                },
+                                source: editSource,
+                              });
+                            }
+                            // always cache locally
+                            if (scannedBarcode) {
+                              await cacheSave(scannedBarcode, {
+                                name: eName,
+                                unit: eUnit,
+                                per: Number(eQty || 1),
+                                nutrients: {
+                                  calories: Number(eCalories || 0),
+                                  protein: Number(eProtein || 0),
+                                  carbs: Number(eCarbs || 0),
+                                  fat: Number(eFat || 0),
+                                  sugar: Number(eSugar || 0),
+                                  fiber: Number(eFiber || 0),
+                                },
+                                fdcId: eFdcId ?? null,
+                                source: "OFF",
+                              });
+                            }
+                            Alert.alert("Thanks!", "We saved your correction.");
+                          } catch {
+                            Alert.alert(
+                              "Oops",
+                              "Couldn’t send suggestion. Saved locally."
+                            );
+                          }
+                        }}
+                        style={{ alignSelf: "flex-start", marginBottom: 4 }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            color: colors.muted,
+                            textDecorationLine: "underline",
+                          }}
+                        >
+                          Report mismatch / Update from label
+                        </Text>
+                      </Pressable>
 
-                  <PrimaryButton
-                    label="Add"
-                    onPress={addFromEditDraft}
-                    disabled={!eName.trim()}
-                  />
-                </GlassPanel>
+                      <PrimaryButton
+                        label="Add"
+                        onPress={addFromEditDraft}
+                        disabled={!eName.trim()}
+                      />
+                    </ScrollView>
+                  </GlassPanel>
+                </KeyboardAvoidingView>
               </SafeAreaView>
             </Animated.View>
           </>

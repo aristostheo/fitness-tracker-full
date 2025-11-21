@@ -17,6 +17,7 @@ import { Link, Href, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { MotiView } from "moti";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Card from "../../components/Card";
 import { useAuth } from "@/content/AuthContext";
@@ -220,6 +221,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [date, setDate] = useState(ymd(new Date()));
 
   const todayStr = ymd(new Date());
@@ -620,10 +622,17 @@ export default function HomeScreen() {
   ]);
 
   /* ---------- UI ---------- */
+  const contentPadBottom = 28 + Math.max(12, insets.bottom);
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ padding: 16, gap: 16 }}
+      contentContainerStyle={{
+        padding: 16,
+        gap: 16,
+        paddingBottom: contentPadBottom,
+      }}
+      showsVerticalScrollIndicator={false}
     >
       {/* TOP BAR / AVATAR */}
       <View
@@ -1023,7 +1032,39 @@ export default function HomeScreen() {
             </Text>
           </View>
 
-          <View style={{ marginTop: 12 }}>
+          <View
+            style={{
+              marginTop: 12,
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <Link href={`/(modals)/add-meal?date=${date}`} asChild>
+              <Pressable
+                style={({ pressed }) => [
+                  {
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: withAlpha(colors.card, 0.9),
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                <Ionicons name="add-circle-outline" size={16} color={colors.text} />
+                <Text style={{ color: colors.text, fontWeight: "700" }}>
+                  Quick add meal
+                </Text>
+              </Pressable>
+            </Link>
+
             <Link href={suggestion.href} asChild>
               <Pressable
                 style={({ pressed }) => [
@@ -1253,7 +1294,7 @@ export default function HomeScreen() {
         </View>
       </MotiView>
 
-      <BottomTabSpacer extra={16} />
+      <BottomTabSpacer extra={4} />
 
       {/* Steps custom modal */}
       <Modal transparent visible={openStepsModal} animationType="fade">
