@@ -1,10 +1,12 @@
 // app/(tabs)/_layout.tsx
-import React from "react";
-import { StyleSheet, Platform } from "react-native";
+import React, { useEffect, useState } from "react";
+import { StyleSheet, Platform, View } from "react-native";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/content/ThemeProvider";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuth } from "@/content/AuthContext";
+import { subscribeUnreadCount } from "@/services/notifications";
 
 let BlurView: any = null;
 try {
@@ -14,9 +16,21 @@ try {
 export default function TabsLayout() {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setUnreadCount(0);
+      return;
+    }
+    const unsub = subscribeUnreadCount(user.uid, setUnreadCount);
+    return () => unsub && unsub();
+  }, [user?.uid]);
 
   const tabBarHeight = 58 + Math.max(0, insets.bottom - 8); // total visual height
   const tabBarPadBottom = Math.max(8, insets.bottom / 2);
+  const scenePaddingBottom = tabBarPadBottom + 20; // keep content off the bar without huge whitespace
 
   return (
     <Tabs
@@ -25,7 +39,7 @@ export default function TabsLayout() {
         // ⬇️ This prevents content from being covered at the bottom
         sceneContainerStyle: {
           backgroundColor: colors.background,
-          paddingBottom: tabBarHeight,
+          paddingBottom: scenePaddingBottom,
         },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
@@ -44,6 +58,7 @@ export default function TabsLayout() {
           backgroundColor: "transparent",
           ...Platform.select({ android: { elevation: 5 } }),
         },
+        tabBarHideOnKeyboard: true,
         tabBarBackground: () =>
           BlurView ? (
             <BlurView
@@ -70,8 +85,32 @@ export default function TabsLayout() {
               ? "fast-food-outline"
               : route.name === "insights"
               ? "analytics-outline"
+              : route.name === "friends"
+              ? "people-outline"
+              : route.name === "notifications"
+              ? "notifications-outline"
               : "person-outline";
-          return <Ionicons name={name as any} color={color} size={size} />;
+          const showBadge = route.name === "notifications" && unreadCount > 0;
+          return (
+            <View style={{ position: "relative" }}>
+              <Ionicons name={name as any} color={color} size={size} />
+              {showBadge ? (
+                <View
+                  style={{
+                    position: "absolute",
+                    top: -3,
+                    right: -6,
+                    minWidth: 10,
+                    height: 10,
+                    borderRadius: 6,
+                    backgroundColor: colors.primary,
+                    borderWidth: 1,
+                    borderColor: colors.background,
+                  }}
+                />
+              ) : null}
+            </View>
+          );
         },
       })}
     >
@@ -79,6 +118,8 @@ export default function TabsLayout() {
       <Tabs.Screen name="workouts" options={{ title: "Workouts" }} />
       <Tabs.Screen name="nutrition" options={{ title: "Nutrition" }} />
       <Tabs.Screen name="insights" options={{ title: "Insights" }} />
+      <Tabs.Screen name="friends" options={{ title: "Friends" }} />
+      <Tabs.Screen name="notifications" options={{ title: "Alerts" }} />
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />
     </Tabs>
   );

@@ -13,13 +13,16 @@ import {
   Easing,
   Dimensions,
   Alert,
+  Keyboard,
+  InputAccessoryView,
 } from "react-native";
 import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Haptics from "expo-haptics";
 import { StatusBar } from "expo-status-bar";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   CameraView,
   useCameraPermissions,
@@ -112,6 +115,21 @@ export type ResolvedProduct = {
   fdcId?: string | null;
   source?: SourceTag;
 };
+
+function withAlpha(color: string, alpha = 0.25) {
+  if (!color) return `rgba(0,0,0,${alpha})`;
+  if (color.startsWith("rgb")) {
+    const body = color.replace(/^rgba?\(|\)$/g, "");
+    const [r, g, b] = body.split(",").map((s) => s.trim());
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  const m = color.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+  if (!m) return color;
+  return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(
+    m[3],
+    16
+  )}, ${alpha})`;
+}
 
 async function lookupOpenFoodFacts(
   barcode: string
@@ -392,6 +410,7 @@ function Segmented({
   value,
   onChange,
   items,
+  size = "default",
 }: {
   value: string;
   onChange: (val: string) => void;
@@ -400,8 +419,12 @@ function Segmented({
     label: string;
     icon?: keyof typeof Ionicons.glyphMap;
   }>;
+  size?: "default" | "compact";
 }) {
   const { colors } = useTheme();
+  const compact = size === "compact";
+  const vPad = compact ? 7 : 8;
+  const hPad = compact ? 10 : 14;
   return (
     <View
       style={{
@@ -411,7 +434,8 @@ function Segmented({
         borderColor: colors.border,
         borderRadius: 999,
         padding: 4,
-        backgroundColor: colors.card,
+        backgroundColor: withAlpha(colors.card, 0.92),
+        overflow: "hidden",
       }}
     >
       {items.map((it) => {
@@ -419,18 +443,25 @@ function Segmented({
         return (
           <Pressable
             key={it.key}
-            onPress={() => onChange(it.key)}
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              onChange(it.key);
+            }}
             hitSlop={8}
             style={{
               flexDirection: "row",
               alignItems: "center",
               gap: 6,
-              paddingVertical: 8,
-              paddingHorizontal: 14,
+              paddingVertical: vPad,
+              paddingHorizontal: hPad,
               borderRadius: 999,
               borderWidth: 1,
-              borderColor: active ? colors.chipActiveBg : "transparent",
-              backgroundColor: active ? colors.chipActiveBg : "transparent",
+              borderColor: active
+                ? withAlpha(colors.primary, 0.3)
+                : "transparent",
+              backgroundColor: active
+                ? withAlpha(colors.primary, 0.12)
+                : "transparent",
             }}
           >
             {it.icon && (
@@ -464,6 +495,8 @@ function Field({
   placeholder,
   multiline,
   onFocus,
+  autoFocus,
+  inputAccessoryViewID,
 }: {
   label?: string;
   value: string;
@@ -472,6 +505,8 @@ function Field({
   placeholder?: string;
   multiline?: boolean;
   onFocus?: () => void;
+  autoFocus?: boolean;
+  inputAccessoryViewID?: string;
 }) {
   const { colors } = useTheme();
   return (
@@ -489,6 +524,10 @@ function Field({
         placeholder={placeholder}
         placeholderTextColor={colors.placeholder}
         multiline={multiline}
+        autoFocus={autoFocus}
+        returnKeyType="done"
+        autoCapitalize="sentences"
+        inputAccessoryViewID={inputAccessoryViewID}
         style={{
           minHeight: multiline ? 88 : 48,
           borderWidth: 1,
@@ -496,6 +535,7 @@ function Field({
           borderRadius: 12,
           paddingHorizontal: 12,
           paddingVertical: multiline ? 12 : 10,
+          lineHeight: 20,
           backgroundColor: colors.inputBg,
           color: colors.text,
         }}
@@ -563,6 +603,9 @@ function PrimaryButton({
   return (
     <Pressable
       onPress={!disabled ? onPress : undefined}
+      onPressIn={() => {
+        if (!disabled) Haptics.selectionAsync().catch(() => {});
+      }}
       style={{
         height: 48,
         borderRadius: 14,
@@ -637,13 +680,16 @@ export default function AddMealModal() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
 
   useLayoutEffect(() => {
     navigation.setOptions?.({ headerShown: false });
   }, [navigation]);
 
   const params = useLocalSearchParams<{ meal?: string; date?: string }>();
-  const meal = (params.meal as Meal) || "breakfast";
+  const [meal, setMeal] = useState<Meal>(
+    (params.meal as Meal) || "breakfast"
+  );
   const date = params.date || new Date().toISOString().slice(0, 10);
 
   const [tab, setTab] = useState<"scan" | "search" | "describe" | "manual">(
@@ -859,6 +905,7 @@ export default function AddMealModal() {
   const [editSource, setEditSource] = useState<
     "fdc" | "catalog" | "barcode" | "manual" | "describe" | null
   >(null);
+  const [barcodeSource, setBarcodeSource] = useState<SourceTag | null>(null);
   const [eName, setEName] = useState("");
   const [eQty, setEQty] = useState("1");
   const [eUnit, setEUnit] = useState("serving");
@@ -956,6 +1003,7 @@ export default function AddMealModal() {
   function startEditFromFdc(item: FdcItem) {
     const ln = item.labelNutrients || {};
     setEditSource("fdc");
+    setBarcodeSource(null);
     setEName(item.description || "Food");
     setEQty("1");
     lastQtyRef.current = 1;
@@ -980,6 +1028,7 @@ export default function AddMealModal() {
     const n = item?.nutrients || {};
     const baseQty = Number(item?.per ?? 1) || 1;
     setEditSource("catalog");
+    setBarcodeSource(null);
     setEName(item?.name || "Food");
     setEQty(String(baseQty));
     lastQtyRef.current = baseQty;
@@ -998,6 +1047,7 @@ export default function AddMealModal() {
   function startEditFromBarcode(r: ResolvedProduct) {
     const baseQty = Number(r.per ?? 1) || 1;
     setEditSource("barcode");
+    setBarcodeSource(r.source ?? null);
     setEName(r.name || "Food");
     setEQty(String(baseQty)); // 1 (serving) or 100
     lastQtyRef.current = baseQty;
@@ -1023,6 +1073,7 @@ export default function AddMealModal() {
     const baseQty = parseFloat(qty || "1") || 1;
 
     setEditSource("manual");
+    setBarcodeSource(null);
     setEName(name.trim());
     setEQty(String(baseQty));
     lastQtyRef.current = baseQty;
@@ -1047,8 +1098,10 @@ export default function AddMealModal() {
     if (trimmed) {
       setScannedBarcode(trimmed);
       setEditSource("barcode");
+      setBarcodeSource(null);
     } else {
       setEditSource("manual");
+      setBarcodeSource(null);
     }
 
     setEName("");
@@ -1121,6 +1174,7 @@ export default function AddMealModal() {
       const nFiber = numstr(got.fiber);
 
       setEditSource("describe");
+      setBarcodeSource(null);
       setEName(nName);
       setEQty(nQty || "1");
       lastQtyRef.current = parseFloat(nQty || "1") || 1;
@@ -1217,6 +1271,10 @@ export default function AddMealModal() {
       fdcId: editSource === "fdc" ? eFdcId : null,
       healthScore,
     });
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+      () => {}
+    );
   }
 
   // --- Scan handler with candidates/picker ---
@@ -1305,6 +1363,25 @@ export default function AddMealModal() {
     );
   })();
 
+  const sourceLabel = (() => {
+    if (!editSource) return null;
+    if (editSource === "describe") return "AI parsed";
+    if (editSource === "barcode") {
+      if (barcodeSource === "OFF") return "OpenFoodFacts";
+      if (barcodeSource === "FDC") return "FDC fallback";
+      return "Barcode scan";
+    }
+    if (editSource === "fdc") return "USDA FDC";
+    if (editSource === "catalog") return "Community catalog";
+    return "Manual entry";
+  })();
+
+  const headerHeight = insets.top + 120;
+  const mealOptions: Meal[] = ["breakfast", "lunch", "dinner", "snacks"];
+  const accessoryId = "macroAccessory";
+  const showAccessory = Platform.OS === "ios";
+  const formatMeal = (m: Meal) => m.charAt(0).toUpperCase() + m.slice(1);
+
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.background }}
@@ -1318,53 +1395,131 @@ export default function AddMealModal() {
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
+        {/* iOS-style blurred header with large title */}
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: headerHeight,
+            zIndex: 30,
+            overflow: "hidden",
+          }}
+          pointerEvents="box-none"
+        >
+          <View style={{ flex: 1 }}>
+            {BlurView ? (
+              <BlurView
+                intensity={28}
+                tint={isDark ? "dark" : "light"}
+                style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+              />
+            ) : (
+              <LinearGradient
+                colors={
+                  isDark
+                    ? ["rgba(12,14,20,0.95)", "rgba(12,14,20,0.75)"]
+                    : ["rgba(247,249,255,0.95)", "rgba(235,240,255,0.75)"]
+                }
+                style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+              />
+            )}
+
+            <View
+              style={{
+                flex: 1,
+                paddingTop: insets.top + 10,
+                paddingHorizontal: 16,
+                gap: 12,
+                justifyContent: "center",
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <View>
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontSize: 28,
+                      fontWeight: "900",
+                      letterSpacing: -0.3,
+                    }}
+                  >
+                    Add meal
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.muted,
+                      marginTop: 2,
+                      fontSize: 13,
+                    }}
+                  >
+                    {date} · {formatMeal(meal)}
+                  </Text>
+                </View>
+
+                <Pressable
+                  onPress={() => router.back()}
+                  hitSlop={10}
+                  accessibilityLabel="Close"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 12,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: withAlpha(colors.card, 0.9),
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                >
+                  <Ionicons name="close" size={18} color={colors.text} />
+                </Pressable>
+              </View>
+
+                <View style={{ gap: 10 }}>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <ContextTile label="Date" value={date} mono />
+                    <ContextTile label="Meal" value={formatMeal(meal)} />
+                  </View>
+                  <Segmented
+                    value={meal}
+                    onChange={(val) => {
+                      Haptics.selectionAsync().catch(() => {});
+                      setMeal(val as Meal);
+                    }}
+                    items={mealOptions.map((m) => ({
+                      key: m,
+                      label: formatMeal(m),
+                    }))}
+                    size="compact"
+                  />
+                </View>
+            </View>
+          </View>
+        </View>
+
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 24 }}
+          contentContainerStyle={{
+            padding: 16,
+            gap: 14,
+            paddingBottom: 24,
+            paddingTop: headerHeight + 10,
+          }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={
             Platform.OS === "ios" ? "interactive" : "on-drag"
           }
           automaticallyAdjustKeyboardInsets
         >
-          {/* Header */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-            >
-              <Ionicons
-                name="fast-food-outline"
-                size={18}
-                color={colors.text}
-              />
-              <Text
-                style={{ color: colors.text, fontSize: 18, fontWeight: "800" }}
-              >
-                Add food
-              </Text>
-            </View>
-            <Pressable
-              onPress={() => router.back()}
-              hitSlop={8}
-              accessibilityLabel="Close"
-            >
-              <Ionicons name="close" size={22} color={colors.text} />
-            </Pressable>
-          </View>
-
-          {/* Context bar */}
-          <GlassPanel pad={10}>
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              <ContextTile label="Meal" value={meal} />
-              <ContextTile label="Date" value={date} mono />
-            </View>
-          </GlassPanel>
+          {/* spacer covered by header */}
 
           {/* AI meal ideas entrypoint (complete today's macros) */}
           <Pressable
@@ -1588,6 +1743,7 @@ export default function AddMealModal() {
                       setManualBarcode(t.replace(/[^0-9]/g, ""))
                     }
                     keyboardType="numeric"
+                    inputAccessoryViewID={showAccessory ? accessoryId : undefined}
                     placeholder="e.g., 060383123456"
                   />
 
@@ -1801,6 +1957,7 @@ export default function AddMealModal() {
                     value={qty}
                     onChangeText={(t) => setQty(t.replace(/[^0-9.]/g, ""))}
                     keyboardType="decimal-pad"
+                    inputAccessoryViewID={showAccessory ? accessoryId : undefined}
                     onFocus={() =>
                       scrollRef.current?.scrollTo({ y: 120, animated: true })
                     }
@@ -1868,206 +2025,299 @@ export default function AddMealModal() {
                 edges={["bottom"]}
                 style={{ padding: 16, paddingTop: 8 }}
               >
-                <GlassPanel>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <Text style={{ color: colors.text, fontWeight: "800" }}>
-                      Edit details
-                    </Text>
-                    <Pressable
-                      onPress={closeEdit}
-                      hitSlop={8}
-                      accessibilityLabel="Close edit"
-                    >
-                      <Ionicons
-                        name="close-circle"
-                        size={20}
-                        color={colors.muted}
-                      />
-                    </Pressable>
-                  </View>
-
-                  {/* Source + basis badges */}
-                  {editSource && (
+                {/* Keyboard + scroll handling for popup */}
+                <KeyboardAvoidingView
+                  behavior={Platform.OS === "ios" ? "padding" : undefined}
+                  keyboardVerticalOffset={Platform.OS === "ios" ? 16 : 0}
+                  style={{ maxHeight: H * 0.8 }}
+                >
+                  <GlassPanel>
+                    {/* Header row stays fixed */}
                     <View
                       style={{
                         flexDirection: "row",
-                        gap: 8,
                         alignItems: "center",
-                        marginTop: 6,
+                        justifyContent: "space-between",
+                        marginBottom: 4,
                       }}
                     >
-                      <Text style={{ fontSize: 12, color: colors.muted }}>
-                        Source:{" "}
-                        <Text style={{ fontWeight: "800", color: colors.text }}>
-                          {editSource.toUpperCase()}
-                        </Text>
+                      <Text style={{ color: colors.text, fontWeight: "800" }}>
+                        Edit details
                       </Text>
-                      <Text style={{ fontSize: 12, color: colors.muted }}>
-                        Basis:{" "}
-                        <Text style={{ fontWeight: "800", color: colors.text }}>
-                          per {eQty} {eUnit}
-                        </Text>
-                      </Text>
+                      <Pressable
+                        onPress={closeEdit}
+                        hitSlop={8}
+                        accessibilityLabel="Close edit"
+                      >
+                        <Ionicons
+                          name="close-circle"
+                          size={20}
+                          color={colors.muted}
+                        />
+                      </Pressable>
                     </View>
-                  )}
-                  {perIs100 && (
-                    <Text
-                      style={{ marginTop: 6, fontSize: 12, color: "#f59e0b" }}
+
+                    {/* Scrollable content so keyboard doesn't trap the user */}
+                    <ScrollView
+                      keyboardShouldPersistTaps="handled"
+                      keyboardDismissMode={
+                        Platform.OS === "ios" ? "interactive" : "on-drag"
+                      }
+                      contentContainerStyle={{ paddingBottom: 8, gap: 10 }}
+                      showsVerticalScrollIndicator={false}
                     >
-                      Tip: This entry is per 100{" "}
-                      {eUnit.toLowerCase().includes("ml") ? "ml" : "g"}. Adjust
-                      quantity/unit to match your serving.
-                    </Text>
-                  )}
+                      {/* Source + basis badges */}
+                      {(sourceLabel || editSource) && (
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            flexWrap: "wrap",
+                            gap: 8,
+                            alignItems: "center",
+                            marginTop: 2,
+                          }}
+                        >
+                          {sourceLabel && (
+                            <View
+                              style={{
+                                paddingHorizontal: 10,
+                                paddingVertical: 6,
+                                borderRadius: 999,
+                                borderWidth: 1,
+                                backgroundColor:
+                                  editSource === "describe"
+                                    ? withAlpha(colors.primary, 0.14)
+                                    : withAlpha(colors.card, 0.9),
+                                borderColor:
+                                  editSource === "describe"
+                                    ? withAlpha(colors.primary, 0.35)
+                                    : colors.border,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: "800",
+                                  color:
+                                    editSource === "describe"
+                                      ? colors.primary
+                                      : colors.text,
+                                }}
+                              >
+                                {sourceLabel}
+                              </Text>
+                            </View>
+                          )}
+                          <View
+                            style={{
+                              paddingHorizontal: 10,
+                              paddingVertical: 6,
+                              borderRadius: 999,
+                              borderWidth: 1,
+                              backgroundColor: withAlpha(colors.card, 0.9),
+                              borderColor: colors.border,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                fontWeight: "700",
+                                color: colors.muted,
+                              }}
+                            >
+                              per {eQty} {eUnit}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+                      {perIs100 && (
+                        <Text
+                          style={{
+                            marginTop: 4,
+                            fontSize: 12,
+                            color: "#f59e0b",
+                          }}
+                        >
+                          Tip: This entry is per 100{" "}
+                          {eUnit.toLowerCase().includes("ml") ? "ml" : "g"}.
+                          Adjust quantity/unit to match your serving.
+                        </Text>
+                      )}
 
-                  <Field
-                    label="Name"
-                    value={eName}
-                    onChangeText={setEName}
-                    placeholder="Meal name"
-                  />
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <Field
-                      label="Quantity"
-                      value={eQty}
-                      onChangeText={handleEditQtyChange}
-                      keyboardType="decimal-pad"
-                    />
-                    <Field
-                      label="Unit"
-                      value={eUnit}
-                      onChangeText={setEUnit}
-                      placeholder="serving / g / ml"
-                    />
-                  </View>
+                      <Field
+                        label="Name"
+                        value={eName}
+                        onChangeText={setEName}
+                        placeholder="Meal name"
+                        autoFocus={editOpen}
+                      />
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        <Field
+                          label="Quantity"
+                          value={eQty}
+                          onChangeText={handleEditQtyChange}
+                          keyboardType="decimal-pad"
+                          inputAccessoryViewID={
+                            showAccessory ? accessoryId : undefined
+                          }
+                        />
+                        <Field
+                          label="Unit"
+                          value={eUnit}
+                          onChangeText={setEUnit}
+                          placeholder="serving / g / ml"
+                        />
+                      </View>
 
-                  <SectionTitle>
-                    Macros (totals for the whole meal)
-                  </SectionTitle>
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <Field
-                      label="Calories"
-                      value={eCalories}
-                      onChangeText={(t) =>
-                        setECalories(t.replace(/[^0-9.]/g, ""))
-                      }
-                      keyboardType="decimal-pad"
-                    />
-                    <Field
-                      label="Protein (g)"
-                      value={eProtein}
-                      onChangeText={(t) =>
-                        setEProtein(t.replace(/[^0-9.]/g, ""))
-                      }
-                      keyboardType="decimal-pad"
-                    />
-                  </View>
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <Field
-                      label="Carbs (g)"
-                      value={eCarbs}
-                      onChangeText={(t) => setECarbs(t.replace(/[^0-9.]/g, ""))}
-                      keyboardType="decimal-pad"
-                    />
-                    <Field
-                      label="Fat (g)"
-                      value={eFat}
-                      onChangeText={(t) => setEFat(t.replace(/[^0-9.]/g, ""))}
-                      keyboardType="decimal-pad"
-                    />
-                  </View>
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <Field
-                      label="Sugar (g)"
-                      value={eSugar}
-                      onChangeText={(t) => setESugar(t.replace(/[^0-9.]/g, ""))}
-                      keyboardType="decimal-pad"
-                    />
-                    <Field
-                      label="Fiber (g)"
-                      value={eFiber}
-                      onChangeText={(t) => setEFiber(t.replace(/[^0-9.]/g, ""))}
-                      keyboardType="decimal-pad"
-                    />
-                  </View>
+                      <SectionTitle>
+                        Macros (totals for the whole meal)
+                      </SectionTitle>
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        <Field
+                          label="Calories"
+                          value={eCalories}
+                          onChangeText={(t) =>
+                            setECalories(t.replace(/[^0-9.]/g, ""))
+                          }
+                          keyboardType="decimal-pad"
+                          inputAccessoryViewID={
+                            showAccessory ? accessoryId : undefined
+                          }
+                        />
+                        <Field
+                          label="Protein (g)"
+                          value={eProtein}
+                          onChangeText={(t) =>
+                            setEProtein(t.replace(/[^0-9.]/g, ""))
+                          }
+                          keyboardType="decimal-pad"
+                          inputAccessoryViewID={
+                            showAccessory ? accessoryId : undefined
+                          }
+                        />
+                      </View>
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        <Field
+                          label="Carbs (g)"
+                          value={eCarbs}
+                          onChangeText={(t) =>
+                            setECarbs(t.replace(/[^0-9.]/g, ""))
+                          }
+                          keyboardType="decimal-pad"
+                          inputAccessoryViewID={
+                            showAccessory ? accessoryId : undefined
+                          }
+                        />
+                        <Field
+                          label="Fat (g)"
+                          value={eFat}
+                          onChangeText={(t) =>
+                            setEFat(t.replace(/[^0-9.]/g, ""))
+                          }
+                          keyboardType="decimal-pad"
+                          inputAccessoryViewID={
+                            showAccessory ? accessoryId : undefined
+                          }
+                        />
+                      </View>
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        <Field
+                          label="Sugar (g)"
+                          value={eSugar}
+                          onChangeText={(t) =>
+                            setESugar(t.replace(/[^0-9.]/g, ""))
+                          }
+                          keyboardType="decimal-pad"
+                          inputAccessoryViewID={
+                            showAccessory ? accessoryId : undefined
+                          }
+                        />
+                        <Field
+                          label="Fiber (g)"
+                          value={eFiber}
+                          onChangeText={(t) =>
+                            setEFiber(t.replace(/[^0-9.]/g, ""))
+                          }
+                          keyboardType="decimal-pad"
+                          inputAccessoryViewID={
+                            showAccessory ? accessoryId : undefined
+                          }
+                        />
+                      </View>
 
-                  <ScoreBar score={eScore} />
+                      <ScoreBar score={eScore} />
 
-                  {/* Report mismatch / update from label */}
-                  <Pressable
-                    onPress={async () => {
-                      try {
-                        // try forwarding to your catalog if available
-                        // @ts-ignore
-                        const fc = require("@/services/foodCatalog");
-                        if (typeof fc.submitSuggestion === "function") {
-                          await fc.submitSuggestion({
-                            barcode: scannedBarcode,
-                            name: eName,
-                            unit: eUnit,
-                            per: Number(eQty || 1),
-                            nutrients: {
-                              calories: Number(eCalories || 0),
-                              protein: Number(eProtein || 0),
-                              carbs: Number(eCarbs || 0),
-                              fat: Number(eFat || 0),
-                              sugar: Number(eSugar || 0),
-                              fiber: Number(eFiber || 0),
-                            },
-                            source: editSource,
-                          });
-                        }
-                        // always cache locally
-                        if (scannedBarcode) {
-                          await cacheSave(scannedBarcode, {
-                            name: eName,
-                            unit: eUnit,
-                            per: Number(eQty || 1),
-                            nutrients: {
-                              calories: Number(eCalories || 0),
-                              protein: Number(eProtein || 0),
-                              carbs: Number(eCarbs || 0),
-                              fat: Number(eFat || 0),
-                              sugar: Number(eSugar || 0),
-                              fiber: Number(eFiber || 0),
-                            },
-                            fdcId: eFdcId ?? null,
-                            source: "OFF",
-                          });
-                        }
-                        Alert.alert("Thanks!", "We saved your correction.");
-                      } catch {
-                        Alert.alert(
-                          "Oops",
-                          "Couldn’t send suggestion. Saved locally."
-                        );
-                      }
-                    }}
-                    style={{ alignSelf: "flex-start", marginBottom: 8 }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        color: colors.muted,
-                        textDecorationLine: "underline",
-                      }}
-                    >
-                      Report mismatch / Update from label
-                    </Text>
-                  </Pressable>
+                      {/* Report mismatch / update from label */}
+                      <Pressable
+                        onPress={async () => {
+                          try {
+                            // try forwarding to your catalog if available
+                            // @ts-ignore
+                            const fc = require("@/services/foodCatalog");
+                            if (typeof fc.submitSuggestion === "function") {
+                              await fc.submitSuggestion({
+                                barcode: scannedBarcode,
+                                name: eName,
+                                unit: eUnit,
+                                per: Number(eQty || 1),
+                                nutrients: {
+                                  calories: Number(eCalories || 0),
+                                  protein: Number(eProtein || 0),
+                                  carbs: Number(eCarbs || 0),
+                                  fat: Number(eFat || 0),
+                                  sugar: Number(eSugar || 0),
+                                  fiber: Number(eFiber || 0),
+                                },
+                                source: editSource,
+                              });
+                            }
+                            // always cache locally
+                            if (scannedBarcode) {
+                              await cacheSave(scannedBarcode, {
+                                name: eName,
+                                unit: eUnit,
+                                per: Number(eQty || 1),
+                                nutrients: {
+                                  calories: Number(eCalories || 0),
+                                  protein: Number(eProtein || 0),
+                                  carbs: Number(eCarbs || 0),
+                                  fat: Number(eFat || 0),
+                                  sugar: Number(eSugar || 0),
+                                  fiber: Number(eFiber || 0),
+                                },
+                                fdcId: eFdcId ?? null,
+                                source: "OFF",
+                              });
+                            }
+                            Alert.alert("Thanks!", "We saved your correction.");
+                          } catch {
+                            Alert.alert(
+                              "Oops",
+                              "Couldn’t send suggestion. Saved locally."
+                            );
+                          }
+                        }}
+                        style={{ alignSelf: "flex-start", marginBottom: 4 }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            color: colors.muted,
+                            textDecorationLine: "underline",
+                          }}
+                        >
+                          Report mismatch / Update from label
+                        </Text>
+                      </Pressable>
 
-                  <PrimaryButton
-                    label="Add"
-                    onPress={addFromEditDraft}
-                    disabled={!eName.trim()}
-                  />
-                </GlassPanel>
+                      <PrimaryButton
+                        label="Add"
+                        onPress={addFromEditDraft}
+                        disabled={!eName.trim()}
+                      />
+                    </ScrollView>
+                  </GlassPanel>
+                </KeyboardAvoidingView>
               </SafeAreaView>
             </Animated.View>
           </>
@@ -2143,6 +2393,39 @@ export default function AddMealModal() {
               </SafeAreaView>
             </Animated.View>
           </>
+        )}
+
+        {showAccessory && (
+          <InputAccessoryView nativeID={accessoryId}>
+            <View
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                borderTopWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.card,
+                flexDirection: "row",
+                justifyContent: "flex-end",
+              }}
+            >
+              <Pressable
+                onPress={() => Keyboard.dismiss()}
+                hitSlop={8}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 10,
+                  backgroundColor: withAlpha(colors.primary, 0.15),
+                  borderWidth: 1,
+                  borderColor: withAlpha(colors.primary, 0.35),
+                }}
+              >
+                <Text style={{ color: colors.primary, fontWeight: "800" }}>
+                  Done
+                </Text>
+              </Pressable>
+            </View>
+          </InputAccessoryView>
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>

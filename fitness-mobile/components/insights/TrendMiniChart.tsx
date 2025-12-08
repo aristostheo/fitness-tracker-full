@@ -97,6 +97,9 @@ export default function TrendMiniChart({
             />
           </>
         )}
+        {a.length === 1 && (
+          <Circle cx={a[0].x} cy={a[0].y} r={3.5} fill={colorA} />
+        )}
 
         {/* B (optional) */}
         {b.length >= 2 && (
@@ -114,6 +117,9 @@ export default function TrendMiniChart({
               fill={colorB}
             />
           </>
+        )}
+        {b.length === 1 && (
+          <Circle cx={b[0].x} cy={b[0].y} r={3.5} fill={colorB} />
         )}
       </Svg>
     </View>

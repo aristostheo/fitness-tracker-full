@@ -1,18 +1,20 @@
 // app/(tabs)/workouts.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ScrollView,
   View,
   Text,
   Pressable,
   KeyboardAvoidingView,
   Platform,
   Switch,
+  Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Link, useRouter } from "expo-router";
+import { Link } from "expo-router";
 import { useAuth } from "@/content/AuthContext";
 import { useTheme } from "@/content/ThemeProvider";
+import { LinearGradient } from "expo-linear-gradient";
+import { MotiView } from "moti";
 import Card from "@/components/Card";
 import {
   addWorkout,
@@ -166,6 +168,21 @@ const EXERCISES: Ex[] = [
 ];
 // Session cache for exercise estimates (avoid extra network calls)
 const exEstimateCache = new Map<string, { name: string; calories: number }>();
+
+const softShadow = {
+  shadowColor: "#000",
+  shadowOpacity: 0.12,
+  shadowRadius: 12,
+  shadowOffset: { width: 0, height: 6 },
+  elevation: 6,
+};
+
+const arcadeColors = {
+  neonPink: "#ff5ac8",
+  neonBlue: "#5ce1ff",
+  neonLime: "#8cfb9f",
+  amber: "#ffc857",
+};
 
 function normalizeDesc(s: string) {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
@@ -409,7 +426,7 @@ function computeDaysStreakFromDates(dates: string[], refISO: string): number {
 /* ────────────────────────── screen ────────────────────────── */
 export default function WorkoutsScreen() {
   const { colors, isDark } = useTheme();
-  const router = useRouter();
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   const { user } = useAuth();
   const uid = user?.uid ?? "__demo__";
@@ -1100,6 +1117,63 @@ export default function WorkoutsScreen() {
   }, [workouts]);
 
   const nothingToShow = grouped.length === 0;
+  const daysStreak = useMemo(
+    () =>
+      computeDaysStreakFromDates(
+        workouts.map((w) => w.date).filter(Boolean) as string[],
+        fmt(new Date())
+      ),
+    [workouts]
+  );
+  const heroLift = scrollY.interpolate({
+    inputRange: [0, 160],
+    outputRange: [0, -14],
+    extrapolate: "clamp",
+  });
+  const heroScale = scrollY.interpolate({
+    inputRange: [-60, 0, 160],
+    outputRange: [1.03, 1, 0.97],
+    extrapolate: "clamp",
+  });
+  const ribbonTilt = scrollY.interpolate({
+    inputRange: [0, 220],
+    outputRange: ["0deg", "-7deg"],
+    extrapolate: "clamp",
+  });
+  const questList = useMemo(
+    () => [
+      {
+        icon: "checkbox-outline" as const,
+        label: "Log a workout",
+        progress: todaySets > 0 ? 1 : 0.35,
+        detail: todaySets > 0 ? "Logged today" : "Add at least one session",
+      },
+      {
+        icon: "barbell-outline" as const,
+        label: "Hit your sets",
+        progress: Math.min(
+          1,
+          todaySets / Math.max(1, Number.isFinite(dailySetTarget) ? dailySetTarget : 8)
+        ),
+        detail: `${todaySets}/${dailySetTarget} sets`,
+      },
+      {
+        icon: "stats-chart-outline" as const,
+        label: "Volume boost",
+        progress: Math.min(
+          1,
+          totals.volume / Math.max(2000, totals.volumeUnit === "lb" ? 6000 : 3000)
+        ),
+        detail: `${totals.volume.toLocaleString()} ${totals.volumeUnit}`,
+      },
+    ],
+    [dailySetTarget, todaySets, totals.volume, totals.volumeUnit]
+  );
+  const questXp = Math.round(
+    (questList.reduce((s, q) => s + q.progress, 0) /
+      Math.max(1, questList.length)) *
+      100
+  );
 
   const cancelEdit = () => {
     if (!editId) return;
@@ -1121,6 +1195,14 @@ export default function WorkoutsScreen() {
   };
 
   const prFlags = useMemo(() => computePrFlags(workouts), [workouts]);
+  const prTotal = useMemo(
+    () =>
+      Object.values(prFlags).reduce(
+        (n, f) => n + (f.prWeight || f.prVolume ? 1 : 0),
+        0
+      ),
+    [prFlags]
+  );
 
   /* ─────────────── Coach Spark generator state ─────────────── */
   const [genDay, setGenDay] = useState<string>("");
@@ -1187,24 +1269,276 @@ export default function WorkoutsScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={0}
     >
-      <ScrollView
+      <Animated.ScrollView
         style={{
           flex: 1,
           backgroundColor: (colors as any).bg ?? colors.background,
         }}
         contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 28 }}
         keyboardShouldPersistTaps="handled"
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+        scrollEventThrottle={16}
       >
-        <Hero
-          unit={unit}
-          totals={totals}
-          dailySetTarget={dailySetTarget}
-          todaySets={todaySets}
-          onToggleUnit={() =>
-            user &&
-            updateProfile(user.uid, { weightUnit: unit === "kg" ? "lb" : "kg" })
-          }
-        />
+        {/* floating arcade ribbons */}
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: -60,
+            right: -50,
+            width: 220,
+            height: 220,
+            opacity: isDark ? 0.18 : 0.25,
+            transform: [
+              { translateY: Animated.multiply(scrollY, -0.08) },
+              { rotate: ribbonTilt },
+            ],
+          }}
+        >
+          <LinearGradient
+            colors={[arcadeColors.neonBlue, arcadeColors.neonPink]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ flex: 1, borderRadius: 120, transform: [{ rotate: "18deg" }] }}
+          />
+        </Animated.View>
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: 240,
+            left: -70,
+            width: 200,
+            height: 200,
+            opacity: isDark ? 0.14 : 0.22,
+            transform: [
+              { translateY: Animated.multiply(scrollY, -0.04) },
+              { rotate: "-10deg" },
+            ],
+          }}
+        >
+          <LinearGradient
+            colors={[arcadeColors.neonLime, arcadeColors.amber]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ flex: 1, borderRadius: 120, transform: [{ rotate: "-12deg" }] }}
+          />
+        </Animated.View>
+
+        <Animated.View
+          style={{
+            transform: [{ translateY: heroLift }, { scale: heroScale }],
+          }}
+        >
+          <Hero
+            unit={unit}
+            totals={totals}
+            dailySetTarget={dailySetTarget}
+            todaySets={todaySets}
+            onToggleUnit={() =>
+              user &&
+              updateProfile(user.uid, {
+                weightUnit: unit === "kg" ? "lb" : "kg",
+              })
+            }
+          />
+        </Animated.View>
+
+        <MotiView
+          from={{ opacity: 0, translateY: 12 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: "timing", duration: 480, delay: 40 }}
+        >
+          <LinearGradient
+            colors={[withAlpha(arcadeColors.neonBlue, 0.3), colors.card]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{
+              borderRadius: 22,
+              padding: 14,
+              borderWidth: 1,
+              borderColor: withAlpha(colors.primary, 0.35),
+              overflow: "hidden",
+              position: "relative",
+              ...softShadow,
+            }}
+          >
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                right: -50,
+                bottom: -40,
+                width: 160,
+                height: 160,
+                transform: [{ rotate: ribbonTilt }],
+                opacity: 0.16,
+              }}
+            >
+              <LinearGradient
+                colors={[arcadeColors.neonPink, arcadeColors.neonLime]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ flex: 1, borderRadius: 110 }}
+              />
+            </Animated.View>
+
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}
+                >
+                  Training quests
+                </Text>
+                <Text
+                  style={{
+                    color: colors.muted,
+                    marginTop: 2,
+                    fontWeight: "600",
+                  }}
+                >
+                  Rack up XP for logging, sets, and volume today.
+                </Text>
+              </View>
+
+              <View
+                style={{
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  borderRadius: 14,
+                  backgroundColor: withAlpha(colors.card, 0.94),
+                  borderWidth: 1,
+                  borderColor: withAlpha(colors.border, 0.9),
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    color: withAlpha(colors.text, 0.7),
+                    fontSize: 11,
+                    fontWeight: "700",
+                  }}
+                >
+                  XP today
+                </Text>
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontSize: 20,
+                    fontWeight: "900",
+                  }}
+                >
+                  {questXp}
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ marginTop: 12, gap: 10 }}>
+              {questList.map((q, i) => (
+                <QuestChip key={q.label} delay={80 + i * 50} {...q} />
+              ))}
+            </View>
+          </LinearGradient>
+        </MotiView>
+
+        {/* Arcade stats strip */}
+        <MotiView
+          from={{ opacity: 0, translateY: 10 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: "timing", duration: 460, delay: 80 }}
+        >
+          <LinearGradient
+            colors={[withAlpha(arcadeColors.neonPink, 0.18), colors.card]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{
+              borderRadius: 20,
+              padding: 12,
+              borderWidth: 1,
+              borderColor: withAlpha(colors.primary, 0.35),
+              ...softShadow,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: 10,
+                justifyContent: "space-between",
+              }}
+            >
+              {[
+                {
+                  icon: "flame-outline" as const,
+                  label: "Total sets",
+                  value: totals.sets.toLocaleString(),
+                },
+                {
+                  icon: "ribbon-outline" as const,
+                  label: "PRs logged",
+                  value: prTotal.toLocaleString(),
+                },
+                {
+                  icon: "sparkles-outline" as const,
+                  label: "Streak",
+                  value: `${daysStreak} day${daysStreak === 1 ? "" : "s"}`,
+                },
+                {
+                  icon: "barbell-outline" as const,
+                  label: "Volume",
+                  value: `${totals.volume.toLocaleString()} ${totals.volumeUnit}`,
+                },
+              ].map((s, i) => (
+                <MotiView
+                  key={s.label}
+                  from={{ opacity: 0, translateY: 6 }}
+                  animate={{ opacity: 1, translateY: 0 }}
+                  transition={{ type: "timing", duration: 320, delay: 60 + i * 40 }}
+                  style={{
+                    flexGrow: 1,
+                    minWidth: 150,
+                    borderRadius: 14,
+                    padding: 12,
+                    borderWidth: 1,
+                    borderColor: withAlpha(colors.border, 0.8),
+                    backgroundColor: withAlpha(colors.card, 0.96),
+                  }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <View
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 10,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: withAlpha(colors.primary, 0.16),
+                        borderWidth: 1,
+                        borderColor: withAlpha(colors.primary, 0.35),
+                      }}
+                    >
+                      <Ionicons name={s.icon} size={18} color={colors.primary} />
+                    </View>
+                    <View>
+                      <Text style={{ color: colors.text, fontWeight: "800" }}>{s.value}</Text>
+                      <Text style={{ color: colors.muted, fontSize: 12 }}>{s.label}</Text>
+                    </View>
+                  </View>
+                </MotiView>
+              ))}
+            </View>
+          </LinearGradient>
+        </MotiView>
 
         {/* Rest-day switch + soft banner */}
         <Card
@@ -1330,25 +1664,38 @@ export default function WorkoutsScreen() {
         {/* View full calendar button */}
         <View style={{ paddingHorizontal: 16 }}>
           <Link href="/(modals)/full-calendar" asChild>
-            <Pressable
-              style={{
-                marginTop: 8,
-                alignSelf: "flex-start",
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: withAlpha(colors.text, 0.05),
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <Ionicons name="calendar-outline" size={16} color={colors.text} />
-              <Text style={{ color: colors.text, fontWeight: "700" }}>
-                View full calendar
-              </Text>
+            <Pressable>
+              {({ pressed }) => (
+                <MotiView
+                  animate={{
+                    scale: pressed ? 0.96 : 1,
+                    translateY: pressed ? 2 : 0,
+                  }}
+                  transition={{ type: "timing", duration: 140 }}
+                  style={{
+                    marginTop: 8,
+                    alignSelf: "flex-start",
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: withAlpha(colors.text, 0.05),
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <Ionicons
+                    name="calendar-outline"
+                    size={16}
+                    color={colors.text}
+                  />
+                  <Text style={{ color: colors.text, fontWeight: "700" }}>
+                    View full calendar
+                  </Text>
+                </MotiView>
+              )}
             </Pressable>
           </Link>
         </View>
@@ -1480,7 +1827,7 @@ export default function WorkoutsScreen() {
         </View>
 
         <BottomTabSpacer extra={16} />
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* 🎉 Badge celebration modal */}
       <BadgeCelebrate
@@ -1489,5 +1836,115 @@ export default function WorkoutsScreen() {
         onClose={() => setCelebrateIds([])}
       />
     </KeyboardAvoidingView>
+  );
+}
+
+function QuestChip({
+  icon,
+  label,
+  progress,
+  detail,
+  delay = 0,
+}: {
+  icon: any;
+  label: string;
+  progress: number;
+  detail: string;
+  delay?: number;
+}) {
+  const { colors } = useTheme();
+  const pct = Math.round(Math.min(1, Math.max(0, progress)) * 100);
+  return (
+    <MotiView
+      from={{ opacity: 0, translateY: 6 }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{ type: "timing", duration: 360, delay }}
+    >
+      <View
+        style={{
+          borderRadius: 14,
+          padding: 12,
+          borderWidth: 1,
+          borderColor: withAlpha(colors.border, 0.9),
+          backgroundColor: withAlpha(colors.card, 0.95),
+          ...softShadow,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            marginBottom: 8,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 10,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: withAlpha(colors.primary, 0.18),
+                borderWidth: 1,
+                borderColor: withAlpha(colors.primary, 0.35),
+              }}
+            >
+              <Ionicons name={icon} size={18} color={colors.primary} />
+            </View>
+            <View>
+              <Text
+                style={{ color: colors.text, fontWeight: "800", fontSize: 15 }}
+              >
+                {label}
+              </Text>
+              <Text style={{ color: colors.muted }}>{detail}</Text>
+            </View>
+          </View>
+
+          <View
+            style={{
+              paddingVertical: 6,
+              paddingHorizontal: 10,
+              borderRadius: 10,
+              backgroundColor: withAlpha(
+                pct >= 100 ? arcadeColors.neonLime : colors.primary,
+                0.14
+              ),
+            }}
+          >
+            <Text
+              style={{
+                color: pct >= 100 ? arcadeColors.neonLime : colors.primary,
+                fontWeight: "800",
+              }}
+            >
+              {pct}%
+            </Text>
+          </View>
+        </View>
+        <View
+          style={{
+            height: 10,
+            borderRadius: 999,
+            backgroundColor: withAlpha(colors.border, 0.9),
+            overflow: "hidden",
+          }}
+        >
+          <View
+            style={{
+              width: `${pct}%`,
+              height: "100%",
+              borderRadius: 999,
+              backgroundColor:
+                pct >= 100 ? arcadeColors.neonLime : colors.primary,
+              opacity: 0.9,
+            }}
+          />
+        </View>
+      </View>
+    </MotiView>
   );
 }
