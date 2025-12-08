@@ -242,7 +242,7 @@ function Gate() {
       />
 
       {/* Always-present glossy header spacer */}
-      {/* <GlobalTopHeader /> */}
+      <GlobalTopHeader />
 
       <Stack
         screenOptions={{

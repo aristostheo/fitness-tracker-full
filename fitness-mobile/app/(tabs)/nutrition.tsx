@@ -1,5 +1,5 @@
 // app/(tabs)/nutrition.tsx
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import {
   ScrollView,
   View,
@@ -18,6 +18,7 @@ import { BlurView } from "expo-blur";
 import { useAuth } from "@/content/AuthContext";
 import { useTheme } from "@/content/ThemeProvider";
 import { useNutritionStreams } from "@/hooks/useNutritionStreams";
+import { MotiView } from "moti";
 import {
   addFood,
   updateFood,
@@ -62,6 +63,36 @@ import {
   getFirestore,
 } from "firebase/firestore";
 import { app } from "@/lib/firebase";
+
+function withAlpha(color: string, alpha = 0.25) {
+  if (!color) return `rgba(0,0,0,${alpha})`;
+  if (color.startsWith("rgb")) {
+    const body = color.replace(/^rgba?\(|\)$/g, "");
+    const [r, g, b] = body.split(",").map((s) => s.trim());
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  const m = color.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+  if (!m) return color;
+  return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(
+    m[3],
+    16
+  )}, ${alpha})`;
+}
+
+const softShadow = {
+  shadowColor: "#000",
+  shadowOpacity: 0.12,
+  shadowRadius: 12,
+  shadowOffset: { width: 0, height: 6 },
+  elevation: 6,
+};
+
+const arcadeColors = {
+  neonPink: "#ff5ac8",
+  neonBlue: "#5ce1ff",
+  neonLime: "#8cfb9f",
+  amber: "#ffc857",
+};
 
 /* -------------------- small utils -------------------- */
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -116,6 +147,116 @@ function ScoreBadge({ score }: { score: number }) {
         Score {v}
       </Text>
     </View>
+  );
+}
+
+function QuestChip({
+  icon,
+  label,
+  progress,
+  detail,
+  delay = 0,
+}: {
+  icon: any;
+  label: string;
+  progress: number;
+  detail: string;
+  delay?: number;
+}) {
+  const { colors } = useTheme();
+  const pct = Math.round(Math.min(1, Math.max(0, progress)) * 100);
+  return (
+    <MotiView
+      from={{ opacity: 0, translateY: 6 }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{ type: "timing", duration: 360, delay }}
+    >
+      <View
+        style={{
+          borderRadius: 14,
+          padding: 12,
+          borderWidth: 1,
+          borderColor: withAlpha(colors.border, 0.9),
+          backgroundColor: withAlpha(colors.card, 0.95),
+          ...softShadow,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            marginBottom: 8,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 10,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: withAlpha(colors.primary, 0.18),
+                borderWidth: 1,
+                borderColor: withAlpha(colors.primary, 0.35),
+              }}
+            >
+              <Ionicons name={icon} size={18} color={colors.primary} />
+            </View>
+            <View>
+              <Text
+                style={{ color: colors.text, fontWeight: "800", fontSize: 15 }}
+              >
+                {label}
+              </Text>
+              <Text style={{ color: colors.muted }}>{detail}</Text>
+            </View>
+          </View>
+
+          <View
+            style={{
+              paddingVertical: 6,
+              paddingHorizontal: 10,
+              borderRadius: 10,
+              backgroundColor: withAlpha(
+                pct >= 100 ? arcadeColors.neonLime : colors.primary,
+                0.14
+              ),
+            }}
+          >
+            <Text
+              style={{
+                color: pct >= 100 ? arcadeColors.neonLime : colors.primary,
+                fontWeight: "800",
+              }}
+            >
+              {pct}%
+            </Text>
+          </View>
+        </View>
+        <View
+          style={{
+            height: 10,
+            borderRadius: 999,
+            backgroundColor: withAlpha(colors.border, 0.9),
+            overflow: "hidden",
+          }}
+        >
+          <View
+            style={{
+              width: `${pct}%`,
+              height: "100%",
+              borderRadius: 999,
+              backgroundColor:
+                pct >= 100 ? arcadeColors.neonLime : colors.primary,
+              opacity: 0.9,
+            }}
+          />
+        </View>
+      </View>
+    </MotiView>
   );
 }
 
@@ -628,6 +769,7 @@ export default function NutritionScreen() {
   const { colors: themeColors } = useTheme() as any;
   const { user } = useAuth();
   const router = useRouter();
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   // date & data streams
   const [date, setDate] = useState(todayISO());
@@ -1042,6 +1184,92 @@ export default function NutritionScreen() {
     !mealsMap.lunch?.length &&
     !mealsMap.dinner?.length &&
     !mealsMap.snacks?.length;
+  const heroLift = scrollY.interpolate({
+    inputRange: [0, 140],
+    outputRange: [0, -14],
+    extrapolate: "clamp",
+  });
+  const heroScale = scrollY.interpolate({
+    inputRange: [-60, 0, 140],
+    outputRange: [1.03, 1, 0.97],
+    extrapolate: "clamp",
+  });
+  const ribbonTilt = scrollY.interpolate({
+    inputRange: [0, 220],
+    outputRange: ["0deg", "-7deg"],
+    extrapolate: "clamp",
+  });
+
+  const mealsLogged = foods?.length ?? 0;
+  const exerciseLogged = exercise?.length ?? 0;
+  const questList = useMemo(
+    () => [
+      {
+        icon: "flame-outline" as const,
+        label: "Calories",
+        progress: Math.min(
+          1,
+          goals.calories > 0 ? totals.calories / goals.calories : 0
+        ),
+        detail: `${Math.max(0, Math.round(goals.calories - totals.calories))} kcal left`,
+      },
+      {
+        icon: "barbell-outline" as const,
+        label: "Protein",
+        progress: Math.min(
+          1,
+          goals.protein > 0 ? totals.protein / goals.protein : 0
+        ),
+        detail: `${Math.max(0, Math.round(goals.protein - totals.protein))} g left`,
+      },
+      {
+        icon: "restaurant-outline" as const,
+        label: "Meals logged",
+        progress: Math.min(1, mealsLogged / 4),
+        detail: mealsLogged ? `${mealsLogged} logged today` : "Add your first meal",
+      },
+      {
+        icon: "sparkles-outline" as const,
+        label: "Movement",
+        progress: exerciseLogged > 0 ? 1 : 0.35,
+        detail: exerciseLogged ? "Exercise logged" : "Add a quick burn",
+      },
+    ],
+    [goals.calories, goals.protein, mealsLogged, exerciseLogged, totals.calories, totals.protein]
+  );
+  const questXp = Math.round(
+    (questList.reduce((s, q) => s + q.progress, 0) /
+      Math.max(1, questList.length)) *
+      100
+  );
+
+  const statCards = useMemo(
+    () => [
+      {
+        icon: "pie-chart-outline" as const,
+        label: "Calories",
+        value: `${Math.round(totals.calories).toLocaleString()} / ${Math.round(
+          goals.calories
+        ).toLocaleString()} kcal`,
+      },
+      {
+        icon: "fitness-outline" as const,
+        label: "Protein",
+        value: `${Math.round(totals.protein)} / ${Math.round(goals.protein)} g`,
+      },
+      {
+        icon: "timer-outline" as const,
+        label: "Meals",
+        value: `${mealsLogged} logged`,
+      },
+      {
+        icon: "trending-up-outline" as const,
+        label: "Carbs / Fat",
+        value: `${Math.round(totals.carbs)}c · ${Math.round(totals.fat)}f`,
+      },
+    ],
+    [goals.calories, goals.protein, mealsLogged, totals.calories, totals.carbs, totals.fat, totals.protein]
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: themeColors.background }}>
@@ -1062,12 +1290,240 @@ export default function NutritionScreen() {
         pointerEvents="none"
       />
 
-      <ScrollView
-        ref={scrollRef}
+      <Animated.ScrollView
+        ref={scrollRef as any}
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 28 }}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+        scrollEventThrottle={16}
       >
-        <Header date={date} onChangeDate={setDate} totals={totals} />
+        {/* floating arcade ribbons */}
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: -70,
+            right: -60,
+            width: 220,
+            height: 220,
+            opacity: isDark ? 0.16 : 0.26,
+            transform: [
+              { translateY: Animated.multiply(scrollY, -0.08) },
+              { rotate: ribbonTilt },
+            ],
+          }}
+        >
+          <LinearGradient
+            colors={[arcadeColors.neonBlue, arcadeColors.neonPink]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ flex: 1, borderRadius: 120, transform: [{ rotate: "18deg" }] }}
+          />
+        </Animated.View>
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: 220,
+            left: -80,
+            width: 200,
+            height: 200,
+            opacity: isDark ? 0.14 : 0.22,
+            transform: [
+              { translateY: Animated.multiply(scrollY, -0.04) },
+              { rotate: "-10deg" },
+            ],
+          }}
+        >
+          <LinearGradient
+            colors={[arcadeColors.neonLime, arcadeColors.amber]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ flex: 1, borderRadius: 120, transform: [{ rotate: "-12deg" }] }}
+          />
+        </Animated.View>
+
+        <Animated.View
+          style={{
+            transform: [{ translateY: heroLift }, { scale: heroScale }],
+          }}
+        >
+          <Header date={date} onChangeDate={setDate} totals={totals} />
+        </Animated.View>
+
+        <MotiView
+          from={{ opacity: 0, translateY: 12 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: "timing", duration: 480, delay: 40 }}
+        >
+          <LinearGradient
+            colors={[withAlpha(arcadeColors.neonBlue, 0.28), colors.card]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{
+              borderRadius: 22,
+              padding: 14,
+              borderWidth: 1,
+              borderColor: withAlpha(colors.primary, 0.35),
+              position: "relative",
+              overflow: "hidden",
+              ...softShadow,
+            }}
+          >
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                right: -40,
+                bottom: -30,
+                width: 150,
+                height: 150,
+                opacity: 0.16,
+                transform: [{ rotate: ribbonTilt }],
+              }}
+            >
+              <LinearGradient
+                colors={[arcadeColors.neonPink, arcadeColors.neonLime]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ flex: 1, borderRadius: 100 }}
+              />
+            </Animated.View>
+
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}
+                >
+                  Nutrition quests
+                </Text>
+                <Text
+                  style={{
+                    color: withAlpha(colors.text, 0.7),
+                    marginTop: 2,
+                    fontWeight: "600",
+                  }}
+                >
+                  Earn XP for calories, protein, logging meals, and movement.
+                </Text>
+              </View>
+
+              <View
+                style={{
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  borderRadius: 14,
+                  backgroundColor: withAlpha(colors.card, 0.94),
+                  borderWidth: 1,
+                  borderColor: withAlpha(colors.border, 0.9),
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    color: withAlpha(colors.text, 0.7),
+                    fontSize: 11,
+                    fontWeight: "700",
+                  }}
+                >
+                  XP today
+                </Text>
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontSize: 20,
+                    fontWeight: "900",
+                  }}
+                >
+                  {questXp}
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ marginTop: 12, gap: 10 }}>
+              {questList.map((q, i) => (
+                <QuestChip key={q.label} delay={80 + i * 50} {...q} />
+              ))}
+            </View>
+          </LinearGradient>
+        </MotiView>
+
+        <MotiView
+          from={{ opacity: 0, translateY: 10 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: "timing", duration: 460, delay: 100 }}
+        >
+          <LinearGradient
+            colors={[withAlpha(arcadeColors.neonPink, 0.16), colors.card]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{
+              borderRadius: 18,
+              padding: 12,
+              borderWidth: 1,
+              borderColor: withAlpha(colors.primary, 0.3),
+              ...softShadow,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: 10,
+                justifyContent: "space-between",
+              }}
+            >
+              {statCards.map((s, i) => (
+                <MotiView
+                  key={s.label}
+                  from={{ opacity: 0, translateY: 6 }}
+                  animate={{ opacity: 1, translateY: 0 }}
+                  transition={{ type: "timing", duration: 300, delay: 60 + i * 40 }}
+                  style={{
+                    flexGrow: 1,
+                    minWidth: 150,
+                    borderRadius: 14,
+                    padding: 12,
+                    borderWidth: 1,
+                    borderColor: withAlpha(colors.border, 0.8),
+                    backgroundColor: withAlpha(colors.card, 0.95),
+                  }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <View
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 10,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: withAlpha(colors.primary, 0.16),
+                        borderWidth: 1,
+                        borderColor: withAlpha(colors.primary, 0.35),
+                      }}
+                    >
+                      <Ionicons name={s.icon} size={18} color={colors.primary} />
+                    </View>
+                    <View>
+                      <Text style={{ color: colors.text, fontWeight: "800" }}>{s.value}</Text>
+                      <Text style={{ color: colors.muted, fontSize: 12 }}>{s.label}</Text>
+                    </View>
+                  </View>
+                </MotiView>
+              ))}
+            </View>
+          </LinearGradient>
+        </MotiView>
 
         {/* Header action: day-level “complete my macros” */}
         <Pressable
@@ -1599,7 +2055,7 @@ export default function NutritionScreen() {
 
         <View style={{ height: 12 }} />
         <BottomTapSpacer extra={16} />
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* Celebration modal */}
       <BadgeCelebrate

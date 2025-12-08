@@ -1,7 +1,6 @@
 // app/(tabs)/index.tsx
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
-  ScrollView,
   View,
   Text,
   Pressable,
@@ -10,6 +9,7 @@ import {
   Modal,
   TextInput,
   Platform,
+  Animated,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
@@ -91,6 +91,13 @@ const softShadow = {
   shadowRadius: 12,
   shadowOffset: { width: 0, height: 6 },
   elevation: 6,
+};
+
+const arcadeColors = {
+  neonPink: "#ff5ac8",
+  neonBlue: "#5ce1ff",
+  neonLime: "#8cfb9f",
+  amber: "#ffc857",
 };
 
 /* initials helper for avatar */
@@ -223,6 +230,7 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const [date, setDate] = useState(ymd(new Date()));
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   const todayStr = ymd(new Date());
   const isToday = date === todayStr;
@@ -286,6 +294,26 @@ export default function HomeScreen() {
   // responsive helpers
   const isCompact = width < 390; // iPhone mini / compact
   const headingSize = isCompact ? 24 : 28;
+  const heroLift = scrollY.interpolate({
+    inputRange: [0, 140],
+    outputRange: [0, -16],
+    extrapolate: "clamp",
+  });
+  const heroScale = scrollY.interpolate({
+    inputRange: [-60, 0, 140],
+    outputRange: [1.03, 1, 0.97],
+    extrapolate: "clamp",
+  });
+  const ribbonTilt = scrollY.interpolate({
+    inputRange: [0, 200],
+    outputRange: ["0deg", "-6deg"],
+    extrapolate: "clamp",
+  });
+  const ribbonTiltBack = scrollY.interpolate({
+    inputRange: [0, 200],
+    outputRange: ["-4deg", "-10deg"],
+    extrapolate: "clamp",
+  });
 
   // today
   const [foodsToday, setFoodsToday] = useState<FoodEntry[]>([]);
@@ -460,6 +488,59 @@ export default function HomeScreen() {
     : netDiff > 200
     ? "#FFB02E"
     : successTint;
+  const questList = useMemo(
+    () => [
+      {
+        icon: "flame-outline" as const,
+        label: "Calorie quest",
+        progress: Math.min(
+          1,
+          totals.calories / Math.max(1, kcalGoal || 1)
+        ),
+        detail:
+          kcalGoal && caloriesRemaining <= 0
+            ? "Quest cleared"
+            : `${caloriesRemaining.toLocaleString()} kcal left`,
+      },
+      {
+        icon: "restaurant-outline" as const,
+        label: "Protein quest",
+        progress: Math.min(1, totals.protein / Math.max(1, proteinGoal || 1)),
+        detail:
+          proteinGoal && proteinRemaining <= 0
+            ? "Quest cleared"
+            : `${proteinRemaining.toLocaleString()} g left`,
+      },
+      {
+        icon: "footsteps-outline" as const,
+        label: "Steps quest",
+        progress: Math.min(1, stepsToday / Math.max(1, stepsGoal || 1)),
+        detail: `${stepsToday.toLocaleString()} / ${stepsGoal.toLocaleString()}`,
+      },
+      {
+        icon: "barbell-outline" as const,
+        label: "Workout quest",
+        progress: hasWorkoutToday ? 1 : 0.35,
+        detail: hasWorkoutToday ? "Logged" : "Log one for a bonus",
+      },
+    ],
+    [
+      caloriesRemaining,
+      hasWorkoutToday,
+      kcalGoal,
+      proteinGoal,
+      proteinRemaining,
+      stepsGoal,
+      stepsToday,
+      totals.calories,
+      totals.protein,
+    ]
+  );
+  const questXp = Math.round(
+    (questList.reduce((s, q) => s + q.progress, 0) /
+      Math.max(1, questList.length)) *
+      100
+  );
 
   /* greeting + tiny avatar */
   const greetingLabel = (() => {
@@ -625,7 +706,7 @@ export default function HomeScreen() {
   const contentPadBottom = 28 + Math.max(12, insets.bottom);
 
   return (
-    <ScrollView
+    <Animated.ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{
         padding: 16,
@@ -633,7 +714,58 @@ export default function HomeScreen() {
         paddingBottom: contentPadBottom,
       }}
       showsVerticalScrollIndicator={false}
+      onScroll={Animated.event(
+        [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+        { useNativeDriver: true }
+      )}
+      scrollEventThrottle={16}
     >
+      {/* floating arcade ribbons */}
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: -80,
+          right: -40,
+          width: 220,
+          height: 220,
+          opacity: isDark ? 0.18 : 0.28,
+          transform: [
+            { translateY: Animated.multiply(scrollY, -0.08) },
+            { rotate: ribbonTilt },
+          ],
+        }}
+      >
+        <LinearGradient
+          colors={[arcadeColors.neonBlue, arcadeColors.neonPink]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ flex: 1, borderRadius: 120, transform: [{ rotate: "18deg" }] }}
+        />
+      </Animated.View>
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: 200,
+          left: -60,
+          width: 180,
+          height: 180,
+          opacity: isDark ? 0.16 : 0.24,
+          transform: [
+            { translateY: Animated.multiply(scrollY, -0.04) },
+            { rotate: ribbonTiltBack },
+          ],
+        }}
+      >
+        <LinearGradient
+          colors={[arcadeColors.neonLime, arcadeColors.amber]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ flex: 1, borderRadius: 110, transform: [{ rotate: "-12deg" }] }}
+        />
+      </Animated.View>
+
       {/* TOP BAR / AVATAR */}
       <View
         style={{
@@ -737,243 +869,358 @@ export default function HomeScreen() {
       </View>
 
       {/* HERO / GLASS + GRADIENT (revamped) */}
-      <MotiView
-        from={{ opacity: 0, translateY: 12, scale: 0.98 }}
-        animate={{ opacity: 1, translateY: 0, scale: 1 }}
-        transition={{ type: "timing", duration: 520 }}
+      <Animated.View
+        style={{
+          transform: [{ translateY: heroLift }, { scale: heroScale }],
+        }}
       >
-        <LinearGradient
-          colors={[
-            withAlpha(colors.primary, 0.26),
-            withAlpha(successTint, 0.24),
-          ]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[
-            {
-              borderRadius: 26,
-              padding: 16,
-              borderWidth: 1,
-              borderColor: withAlpha(colors.border, 0.9),
-              overflow: "hidden",
-              position: "relative",
-            },
-            softShadow,
-          ]}
+        <MotiView
+          from={{ opacity: 0, translateY: 12, scale: 0.98 }}
+          animate={{ opacity: 1, translateY: 0, scale: 1 }}
+          transition={{ type: "timing", duration: 520 }}
         >
-          {/* subtle glow blobs */}
-          <View
-            style={{
-              position: "absolute",
-              top: -40,
-              right: -40,
-              width: 160,
-              height: 160,
-              borderRadius: 999,
-              backgroundColor: withAlpha(successTint, 0.38),
-              opacity: 0.6,
-            }}
-          />
-          <View
-            style={{
-              position: "absolute",
-              bottom: -60,
-              left: -40,
-              width: 190,
-              height: 190,
-              borderRadius: 999,
-              backgroundColor: withAlpha(colors.primary, 0.4),
-              opacity: 0.4,
-            }}
-          />
-
-          {/* scrim */}
-          <View
-            style={{
-              position: "absolute",
-              inset: 0,
-              backgroundColor: withAlpha(colors.card, 0.9),
-            }}
-          />
-
-          <View style={{ position: "relative" }}>
+          <LinearGradient
+            colors={[
+              withAlpha(colors.primary, 0.26),
+              withAlpha(successTint, 0.24),
+            ]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[
+              {
+                borderRadius: 26,
+                padding: 16,
+                borderWidth: 1,
+                borderColor: withAlpha(colors.border, 0.9),
+                overflow: "hidden",
+                position: "relative",
+              },
+              softShadow,
+            ]}
+          >
+            {/* subtle glow blobs */}
             <View
               style={{
-                flexDirection: isCompact ? "column" : "row",
-                justifyContent: "space-between",
-                alignItems: isCompact ? "flex-start" : "center",
-                gap: 16,
+                position: "absolute",
+                top: -40,
+                right: -40,
+                width: 160,
+                height: 160,
+                borderRadius: 999,
+                backgroundColor: withAlpha(successTint, 0.38),
+                opacity: 0.6,
               }}
-            >
-              {/* LEFT: greeting + micro stats */}
+            />
+            <View
+              style={{
+                position: "absolute",
+                bottom: -60,
+                left: -40,
+                width: 190,
+                height: 190,
+                borderRadius: 999,
+                backgroundColor: withAlpha(colors.primary, 0.4),
+                opacity: 0.4,
+              }}
+            />
+
+            {/* scrim */}
+            <View
+              style={{
+                position: "absolute",
+                inset: 0,
+                backgroundColor: withAlpha(colors.card, 0.9),
+              }}
+            />
+
+            <View style={{ position: "relative" }}>
               <View
                 style={{
-                  flex: 1,
-                  paddingRight: isCompact ? 0 : 12,
-                  minWidth: 0,
+                  flexDirection: isCompact ? "column" : "row",
+                  justifyContent: "space-between",
+                  alignItems: isCompact ? "flex-start" : "center",
+                  gap: 16,
                 }}
               >
+                {/* LEFT: greeting + micro stats */}
                 <View
                   style={{
-                    alignSelf: "flex-start",
-                    paddingHorizontal: 10,
-                    paddingVertical: 4,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: withAlpha(colors.border, 0.9),
-                    backgroundColor: withAlpha(colors.background, 0.18),
-                    marginBottom: 6,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 6,
+                    flex: 1,
+                    paddingRight: isCompact ? 0 : 12,
+                    minWidth: 0,
                   }}
                 >
-                  <Ionicons
-                    name={isRestToday ? "leaf-outline" : "flash-outline"}
-                    size={14}
-                    color={colors.primary}
+                  <View
+                    style={{
+                      alignSelf: "flex-start",
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      borderRadius: 999,
+                      borderWidth: 1,
+                      borderColor: withAlpha(colors.border, 0.9),
+                      backgroundColor: withAlpha(colors.background, 0.18),
+                      marginBottom: 6,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <Ionicons
+                      name={isRestToday ? "leaf-outline" : "flash-outline"}
+                      size={14}
+                      color={colors.primary}
+                    />
+                    <Text
+                      style={{
+                        color: withAlpha(colors.text, 0.8),
+                        fontSize: 11,
+                        fontWeight: "600",
+                      }}
+                    >
+                      {isRestToday ? "Recovery day overview" : "Daily overview"}
+                    </Text>
+                  </View>
+
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontSize: headingSize,
+                      fontWeight: "900",
+                      letterSpacing: 0.25,
+                      textShadowColor: withAlpha("#000", 0.16),
+                      textShadowOffset: { width: 0, height: 1 },
+                      textShadowRadius: 3,
+                      lineHeight: headingSize + 4,
+                    }}
+                    allowFontScaling
+                    adjustsFontSizeToFit={isCompact}
+                    minimumFontScale={0.8}
+                    numberOfLines={3} // allow an extra line
+                  >
+                    {greeting}
+                  </Text>
+
+                  <Text
+                    style={{
+                      color: withAlpha(colors.text, 0.75),
+                      marginTop: 4,
+                      fontWeight: "600",
+                      fontSize: 13,
+                    }}
+                  >
+                    {prettyDate(date)} ·{" "}
+                    {isRestToday
+                      ? "Focus on easy movement, steps, and sleep."
+                      : "Hit your calories and steps to stay on track."}
+                  </Text>
+
+                  {/* mini stat chips */}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      flexWrap: "wrap",
+                      gap: 8,
+                      marginTop: 10,
+                    }}
+                  >
+                    <MiniStat
+                      label="Calories"
+                      primary={`${Math.round(
+                        totals.calories
+                      ).toLocaleString()} kcal`}
+                      secondary={
+                        kcalGoal
+                          ? `of ${Math.round(
+                              kcalGoal
+                            ).toLocaleString()} • ${caloriesRemaining.toLocaleString()} left`
+                          : "Goal not set"
+                      }
+                    />
+                    <MiniStat
+                      label="Protein"
+                      primary={`${Math.round(totals.protein)} g`}
+                      secondary={
+                        proteinGoal
+                          ? `of ${Math.round(
+                              proteinGoal
+                            )} g • ${proteinRemaining} g left`
+                          : "Goal not set"
+                      }
+                    />
+                    <MiniStat
+                      label="Steps"
+                      primary={`${stepsToday.toLocaleString()} steps`}
+                      secondary={`Goal ${stepsGoal.toLocaleString()}`}
+                    />
+                    <MiniStat
+                      label="Workout"
+                      primary={hasWorkoutToday ? "Logged" : "Not logged"}
+                      secondary={
+                        hasWorkoutToday
+                          ? "Nice work — keep the streak."
+                          : "Tap “Log Workout” below to add one."
+                      }
+                    />
+                  </View>
+                </View>
+
+                {/* RIGHT: net ring + status */}
+                <View
+                  style={{
+                    alignItems: "center",
+                    justifyContent: "center",
+                    minWidth: 150,
+                    paddingVertical: isCompact ? 6 : 0,
+                  }}
+                >
+                  <ProgressRing
+                    label="Net calories"
+                    value={Math.max(0, totals.net)}
+                    target={kcalGoal}
+                    unit="kcal"
                   />
                   <Text
                     style={{
-                      color: withAlpha(colors.text, 0.8),
-                      fontSize: 11,
-                      fontWeight: "600",
+                      marginTop: 8,
+                      fontSize: 14,
+                      fontWeight: "800",
+                      color: isDark ? "#ffffff" : colors.text,
                     }}
                   >
-                    {isRestToday ? "Recovery day overview" : "Daily overview"}
+                    Net {Math.round(totals.net).toLocaleString()} kcal
+                  </Text>
+
+                  <Text
+                    style={{
+                      marginTop: 2,
+                      fontSize: 12,
+                      fontWeight: "600",
+                      color: netStatusColor,
+                    }}
+                  >
+                    {netStatus}
+                  </Text>
+                  <Text
+                    style={{
+                      marginTop: 2,
+                      fontSize: 11,
+                      color: withAlpha(colors.text, 0.7),
+                    }}
+                  >
+                    Target {Math.round(kcalGoal).toLocaleString()} kcal
                   </Text>
                 </View>
-
-                <Text
-                  style={{
-                    color: colors.text,
-                    fontSize: headingSize,
-                    fontWeight: "900",
-                    letterSpacing: 0.25,
-                    textShadowColor: withAlpha("#000", 0.16),
-                    textShadowOffset: { width: 0, height: 1 },
-                    textShadowRadius: 3,
-                    lineHeight: headingSize + 4,
-                  }}
-                  allowFontScaling
-                  adjustsFontSizeToFit={isCompact}
-                  minimumFontScale={0.8}
-                  numberOfLines={3} // allow an extra line
-                >
-                  {greeting}
-                </Text>
-
-                <Text
-                  style={{
-                    color: withAlpha(colors.text, 0.75),
-                    marginTop: 4,
-                    fontWeight: "600",
-                    fontSize: 13,
-                  }}
-                >
-                  {prettyDate(date)} ·{" "}
-                  {isRestToday
-                    ? "Focus on easy movement, steps, and sleep."
-                    : "Hit your calories and steps to stay on track."}
-                </Text>
-
-                {/* mini stat chips */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    flexWrap: "wrap",
-                    gap: 8,
-                    marginTop: 10,
-                  }}
-                >
-                  <MiniStat
-                    label="Calories"
-                    primary={`${Math.round(
-                      totals.calories
-                    ).toLocaleString()} kcal`}
-                    secondary={
-                      kcalGoal
-                        ? `of ${Math.round(
-                            kcalGoal
-                          ).toLocaleString()} • ${caloriesRemaining.toLocaleString()} left`
-                        : "Goal not set"
-                    }
-                  />
-                  <MiniStat
-                    label="Protein"
-                    primary={`${Math.round(totals.protein)} g`}
-                    secondary={
-                      proteinGoal
-                        ? `of ${Math.round(
-                            proteinGoal
-                          )} g • ${proteinRemaining} g left`
-                        : "Goal not set"
-                    }
-                  />
-                  <MiniStat
-                    label="Steps"
-                    primary={`${stepsToday.toLocaleString()} steps`}
-                    secondary={`Goal ${stepsGoal.toLocaleString()}`}
-                  />
-                  <MiniStat
-                    label="Workout"
-                    primary={hasWorkoutToday ? "Logged" : "Not logged"}
-                    secondary={
-                      hasWorkoutToday
-                        ? "Nice work — keep the streak."
-                        : "Tap “Log Workout” below to add one."
-                    }
-                  />
-                </View>
-              </View>
-
-              {/* RIGHT: net ring + status */}
-              <View
-                style={{
-                  alignItems: "center",
-                  justifyContent: "center",
-                  minWidth: 150,
-                  paddingVertical: isCompact ? 6 : 0,
-                }}
-              >
-                <ProgressRing
-                  label="Net calories"
-                  value={Math.max(0, totals.net)}
-                  target={kcalGoal}
-                  unit="kcal"
-                />
-                <Text
-                  style={{
-                    marginTop: 8,
-                    fontSize: 14,
-                    fontWeight: "800",
-                    color: isDark ? "#ffffff" : colors.text,
-                  }}
-                >
-                  Net {Math.round(totals.net).toLocaleString()} kcal
-                </Text>
-
-                <Text
-                  style={{
-                    marginTop: 2,
-                    fontSize: 12,
-                    fontWeight: "600",
-                    color: netStatusColor,
-                  }}
-                >
-                  {netStatus}
-                </Text>
-                <Text
-                  style={{
-                    marginTop: 2,
-                    fontSize: 11,
-                    color: withAlpha(colors.text, 0.7),
-                  }}
-                >
-                  Target {Math.round(kcalGoal).toLocaleString()} kcal
-                </Text>
               </View>
             </View>
+          </LinearGradient>
+        </MotiView>
+      </Animated.View>
+
+      {/* Daily quests / XP strip */}
+      <MotiView
+        from={{ opacity: 0, translateY: 10 }}
+        animate={{ opacity: 1, translateY: 0 }}
+        transition={{ type: "timing", duration: 460, delay: 40 }}
+      >
+        <LinearGradient
+          colors={[withAlpha(arcadeColors.neonBlue, 0.3), colors.card]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            borderRadius: 22,
+            padding: 14,
+            borderWidth: 1,
+            borderColor: withAlpha(colors.primary, 0.35),
+            overflow: "hidden",
+            position: "relative",
+          }}
+        >
+          <Animated.View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              right: -60,
+              bottom: -40,
+              width: 180,
+              height: 180,
+              transform: [{ rotate: ribbonTilt }],
+              opacity: 0.18,
+            }}
+          >
+            <LinearGradient
+              colors={[arcadeColors.neonPink, arcadeColors.neonLime]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ flex: 1, borderRadius: 120 }}
+            />
+          </Animated.View>
+
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}
+              >
+                Daily quests
+              </Text>
+              <Text
+                style={{
+                  color: withAlpha(colors.text, 0.7),
+                  marginTop: 2,
+                  fontWeight: "600",
+                }}
+              >
+                Earn XP by hitting calories, protein, steps, and a workout.
+              </Text>
+            </View>
+
+            <View
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                borderRadius: 14,
+                backgroundColor: withAlpha(colors.card, 0.94),
+                borderWidth: 1,
+                borderColor: withAlpha(colors.border, 0.9),
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{
+                  color: withAlpha(colors.text, 0.7),
+                  fontSize: 11,
+                  fontWeight: "700",
+                }}
+              >
+                XP today
+              </Text>
+              <Text
+                style={{
+                  color: colors.text,
+                  fontSize: 20,
+                  fontWeight: "900",
+                }}
+              >
+                {questXp}
+              </Text>
+            </View>
+          </View>
+
+          <View
+            style={{
+              marginTop: 12,
+              gap: 10,
+            }}
+          >
+            {questList.map((q, i) => (
+              <QuestChip key={q.label} delay={80 + i * 50} {...q} />
+            ))}
           </View>
         </LinearGradient>
       </MotiView>
@@ -1038,13 +1285,19 @@ export default function HomeScreen() {
               flexDirection: "row",
               justifyContent: "space-between",
               alignItems: "center",
-              gap: 12,
-            }}
-          >
-            <Link href={`/(modals)/add-meal?date=${date}`} asChild>
-              <Pressable
-                style={({ pressed }) => [
-                  {
+            gap: 12,
+          }}
+        >
+          <Link href={`/(modals)/add-meal?date=${date}`} asChild>
+            <Pressable>
+              {({ pressed }) => (
+                <MotiView
+                  animate={{
+                    scale: pressed ? 0.97 : 1,
+                    translateY: pressed ? 2 : 0,
+                  }}
+                  transition={{ type: "timing", duration: 140 }}
+                  style={{
                     flexDirection: "row",
                     alignItems: "center",
                     gap: 6,
@@ -1053,41 +1306,53 @@ export default function HomeScreen() {
                     borderRadius: 12,
                     borderWidth: 1,
                     borderColor: colors.border,
-                    backgroundColor: withAlpha(colors.card, 0.9),
-                    opacity: pressed ? 0.85 : 1,
-                  },
-                ]}
-              >
-                <Ionicons name="add-circle-outline" size={16} color={colors.text} />
-                <Text style={{ color: colors.text, fontWeight: "700" }}>
-                  Quick add meal
-                </Text>
-              </Pressable>
-            </Link>
+                    backgroundColor: withAlpha(colors.card, 0.96),
+                  }}
+                >
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={16}
+                    color={colors.text}
+                  />
+                  <Text style={{ color: colors.text, fontWeight: "700" }}>
+                    Quick add meal
+                  </Text>
+                </MotiView>
+              )}
+            </Pressable>
+          </Link>
 
-            <Link href={suggestion.href} asChild>
-              <Pressable
-                style={({ pressed }) => [
-                  {
-                    height: 44,
-                    borderRadius: 12,
+          <Link href={suggestion.href} asChild>
+            <Pressable>
+              {({ pressed }) => (
+                <MotiView
+                  animate={{
+                    scale: pressed ? 0.96 : 1,
+                    translateY: pressed ? 3 : 0,
+                  }}
+                  transition={{ type: "timing", duration: 140 }}
+                  style={{
+                    height: 48,
+                    paddingHorizontal: 16,
+                    borderRadius: 14,
                     alignItems: "center",
                     justifyContent: "center",
                     backgroundColor:
                       suggestion.tint === "workout"
                         ? (colors as any).chartSecondary ?? successTint
                         : colors.primary,
-                    opacity: pressed ? 0.85 : 1,
-                  },
-                ]}
-              >
-                <Text style={{ color: "#fff", fontWeight: "900" }}>
-                  {suggestion.ctaLabel}
-                </Text>
-              </Pressable>
-            </Link>
-          </View>
-        </Card>
+                    ...softShadow,
+                  }}
+                >
+                  <Text style={{ color: "#fff", fontWeight: "900" }}>
+                    {suggestion.ctaLabel}
+                  </Text>
+                </MotiView>
+              )}
+            </Pressable>
+          </Link>
+        </View>
+      </Card>
       </MotiView>
 
       {/* QUICK STATS – full daily macro picture */}
@@ -1185,24 +1450,31 @@ export default function HomeScreen() {
                 { d: 500, label: "+500" },
                 { d: 1000, label: "+1000" },
               ].map((b) => (
-                <Pressable
-                  key={b.d}
-                  onPress={() => addSteps(b.d)}
-                  style={({ pressed }) => ({
-                    paddingVertical: 10,
-                    paddingHorizontal: 12,
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: withAlpha(colors.primary, 0.4),
-                    backgroundColor: withAlpha(
-                      colors.primary,
-                      pressed ? 0.24 : 0.14
-                    ),
-                  })}
-                >
-                  <Text style={{ color: colors.text, fontWeight: "800" }}>
-                    {b.label}
-                  </Text>
+                <Pressable key={b.d} onPress={() => addSteps(b.d)}>
+                  {({ pressed }) => (
+                    <MotiView
+                      animate={{
+                        scale: pressed ? 0.94 : 1,
+                        translateY: pressed ? 2 : 0,
+                      }}
+                      transition={{ type: "timing", duration: 120 }}
+                      style={{
+                        paddingVertical: 10,
+                        paddingHorizontal: 12,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: withAlpha(colors.primary, 0.4),
+                        backgroundColor: withAlpha(
+                          colors.primary,
+                          pressed ? 0.24 : 0.14
+                        ),
+                      }}
+                    >
+                      <Text style={{ color: colors.text, fontWeight: "800" }}>
+                        {b.label}
+                      </Text>
+                    </MotiView>
+                  )}
                 </Pressable>
               ))}
               <Pressable
@@ -1210,18 +1482,31 @@ export default function HomeScreen() {
                   setCustomSteps("");
                   setOpenStepsModal(true);
                 }}
-                style={({ pressed }) => ({
-                  paddingVertical: 10,
-                  paddingHorizontal: 12,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  backgroundColor: withAlpha(colors.card, pressed ? 0.9 : 1),
-                })}
               >
-                <Text style={{ color: colors.text, fontWeight: "800" }}>
-                  Custom
-                </Text>
+                {({ pressed }) => (
+                  <MotiView
+                    animate={{
+                      scale: pressed ? 0.95 : 1,
+                      translateY: pressed ? 2 : 0,
+                    }}
+                    transition={{ type: "timing", duration: 120 }}
+                    style={{
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: withAlpha(
+                        colors.card,
+                        pressed ? 0.9 : 1
+                      ),
+                    }}
+                  >
+                    <Text style={{ color: colors.text, fontWeight: "800" }}>
+                      Custom
+                    </Text>
+                  </MotiView>
+                )}
               </Pressable>
             </View>
           </View>
@@ -1465,7 +1750,7 @@ export default function HomeScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </ScrollView>
+    </Animated.ScrollView>
   );
 }
 
@@ -1474,26 +1759,31 @@ export default function HomeScreen() {
 function IconBtn({ icon, onPress }: { icon: any; onPress?: () => void }) {
   const { colors } = useTheme();
   return (
-    <Pressable
-      accessibilityRole="button"
-      hitSlop={8}
-      onPress={onPress}
-      style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
-    >
-      <View
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: 12,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: withAlpha(colors.card, 0.9),
-          borderWidth: 1,
-          borderColor: colors.border,
-        }}
-      >
-        <Ionicons name={icon} size={18} color={colors.text} />
-      </View>
+    <Pressable accessibilityRole="button" hitSlop={8} onPress={onPress}>
+      {({ pressed }) => (
+        <MotiView
+          animate={{
+            scale: pressed ? 0.92 : 1,
+            translateY: pressed ? 2 : 0,
+          }}
+          transition={{ type: "timing", duration: 140 }}
+        >
+          <View
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 12,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: withAlpha(colors.card, 0.9),
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <Ionicons name={icon} size={18} color={colors.text} />
+          </View>
+        </MotiView>
+      )}
     </Pressable>
   );
 }
@@ -1747,15 +2037,19 @@ function ActionTile({
         {({ pressed }) => (
           <MotiView
             from={{ scale: 1 }}
-            animate={{ scale: pressed ? 0.98 : 1 }}
-            transition={{ type: "timing", duration: 120 }}
+            animate={{
+              scale: pressed ? 0.96 : 1,
+              rotateZ: pressed ? "-1deg" : "0deg",
+              translateY: pressed ? 3 : 0,
+            }}
+            transition={{ type: "timing", duration: 140 }}
             style={{
               padding: 16,
               minWidth: 160,
               borderRadius: 18,
-              backgroundColor: colors.card,
+              backgroundColor: withAlpha(tint, 0.08),
               borderWidth: 1,
-              borderColor: colors.border,
+              borderColor: withAlpha(tint, 0.35),
               ...softShadow,
             }}
           >
@@ -1784,6 +2078,116 @@ function ActionTile({
         )}
       </Pressable>
     </Link>
+  );
+}
+
+function QuestChip({
+  icon,
+  label,
+  progress,
+  detail,
+  delay = 0,
+}: {
+  icon: any;
+  label: string;
+  progress: number;
+  detail: string;
+  delay?: number;
+}) {
+  const { colors } = useTheme();
+  const pct = Math.round(Math.min(1, Math.max(0, progress)) * 100);
+  return (
+    <MotiView
+      from={{ opacity: 0, translateY: 6 }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{ type: "timing", duration: 360, delay }}
+    >
+      <View
+        style={{
+          borderRadius: 14,
+          padding: 12,
+          borderWidth: 1,
+          borderColor: withAlpha(colors.border, 0.9),
+          backgroundColor: withAlpha(colors.card, 0.95),
+          ...softShadow,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            marginBottom: 8,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 10,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: withAlpha(colors.primary, 0.18),
+                borderWidth: 1,
+                borderColor: withAlpha(colors.primary, 0.35),
+              }}
+            >
+              <Ionicons name={icon} size={18} color={colors.primary} />
+            </View>
+            <View>
+              <Text
+                style={{ color: colors.text, fontWeight: "800", fontSize: 15 }}
+              >
+                {label}
+              </Text>
+              <Text style={{ color: withAlpha(colors.text, 0.7) }}>{detail}</Text>
+            </View>
+          </View>
+
+          <View
+            style={{
+              paddingVertical: 6,
+              paddingHorizontal: 10,
+              borderRadius: 10,
+              backgroundColor: withAlpha(
+                pct >= 100 ? arcadeColors.neonLime : colors.primary,
+                0.14
+              ),
+            }}
+          >
+            <Text
+              style={{
+                color: pct >= 100 ? arcadeColors.neonLime : colors.primary,
+                fontWeight: "800",
+              }}
+            >
+              {pct}%
+            </Text>
+          </View>
+        </View>
+        <View
+          style={{
+            height: 10,
+            borderRadius: 999,
+            backgroundColor: withAlpha(colors.border, 0.9),
+            overflow: "hidden",
+          }}
+        >
+          <View
+            style={{
+              width: `${pct}%`,
+              height: "100%",
+              borderRadius: 999,
+              backgroundColor:
+                pct >= 100 ? arcadeColors.neonLime : colors.primary,
+              opacity: 0.9,
+            }}
+          />
+        </View>
+      </View>
+    </MotiView>
   );
 }
 

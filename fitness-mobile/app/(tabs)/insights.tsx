@@ -1,8 +1,8 @@
 // =============================
 // FILE: app/(tabs)/insights.tsx
 // =============================
-import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, ScrollView, Pressable, Platform } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { View, Text, Pressable, Platform, Animated } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Link } from "expo-router";
 import { useAuth } from "@/content/AuthContext";
@@ -19,6 +19,8 @@ import InsightCard from "@/components/insights/InsightCard";
 import TrendMiniChart from "@/components/insights/TrendMiniChart";
 import { withAlpha } from "@/components/workouts/utils/withAlpha";
 import { fmt } from "@/utils/date";
+import { LinearGradient } from "expo-linear-gradient";
+import { MotiView } from "moti";
 
 /* ────────────────────────────────────────────── */
 type Pt = { x: number; y: number };
@@ -40,9 +42,24 @@ type WeightDoc = {
   weight?: number | string;
   weightKg?: number | string;
   weight_kg?: number | string;
+  createdAt?: any;
+  timestamp?: any;
 };
 
 const db = getFirestore();
+const softShadow = {
+  shadowColor: "#000",
+  shadowOpacity: 0.12,
+  shadowRadius: 12,
+  shadowOffset: { width: 0, height: 6 },
+  elevation: 6,
+};
+const arcadeColors = {
+  neonPink: "#ff5ac8",
+  neonBlue: "#5ce1ff",
+  neonLime: "#8cfb9f",
+  amber: "#ffc857",
+};
 
 /* ────────────────────────────────────────────── */
 function addDays(d: Date, n: number) {
@@ -66,70 +83,28 @@ function n(v: any): number {
   return Number.isFinite(x) ? x : 0;
 }
 
+function dateKeyFromDoc(doc: any): string {
+  const raw = doc?.date;
+  if (typeof raw === "string" && raw.trim()) return raw.trim().slice(0, 10);
+  const ts = doc?.createdAt ?? doc?.timestamp;
+  if (ts?.seconds) return fmt(new Date(ts.seconds * 1000));
+  if (typeof ts === "number" && Number.isFinite(ts))
+    return fmt(new Date(ts));
+  return "";
+}
+
 /* ────────────────────────────────────────────── */
 /* Firestore loaders (with safe fallbacks)        */
 async function loadWorkouts(uid: string, fromISO?: string, toISO?: string) {
-  const collRef = collection(db, "users", uid, "exerciseEntries");
-  let qy = query(collRef, orderBy("date", "asc"));
-  if (fromISO && toISO) {
-    qy = query(
-      collRef,
-      where("date", ">=", fromISO),
-      where("date", "<=", toISO),
-      orderBy("date", "asc")
-    );
-  }
-  const snap = await getDocs(qy);
-  const items: WorkoutDoc[] = [];
-  snap.forEach((d) => items.push(d.data() as any));
-  return items;
-}
+  const subs = ["workouts", "exerciseEntries", "exerciseLogs"];
+  const all: WorkoutDoc[] = [];
 
-async function loadExerciseBurns(uid: string, fromISO: string, toISO: string) {
-  const out: BurnDoc[] = [];
-  const scan = async (sub: string) => {
-    try {
-      const collRef = collection(db, "users", uid, sub);
-      const qy = query(
-        collRef,
-        where("date", ">=", fromISO),
-        where("date", "<=", toISO),
-        orderBy("date", "asc")
-      );
-      const snap = await getDocs(qy);
-      snap.forEach((d) => out.push(d.data() as any));
-    } catch {}
+  const withinRange = (iso: string) => {
+    if (!fromISO || !toISO) return true;
+    return iso >= fromISO && iso <= toISO;
   };
-  await scan("exerciseBurnEntries");
-  await scan("activityEntries");
-  await scan("exercises");
-  return out;
-}
 
-async function loadMeals(uid: string, fromISO: string, toISO: string) {
-  const out: MealDoc[] = [];
-  const scan = async (sub: string) => {
-    try {
-      const collRef = collection(db, "users", uid, sub);
-      const qy = query(
-        collRef,
-        where("date", ">=", fromISO),
-        where("date", "<=", toISO),
-        orderBy("date", "asc")
-      );
-      const snap = await getDocs(qy);
-      snap.forEach((d) => out.push(d.data() as any));
-    } catch {}
-  };
-  await scan("foodEntries");
-  await scan("nutritionEntries");
-  await scan("meals");
-  return out;
-}
-
-async function loadWeights(uid: string, fromISO?: string, toISO?: string) {
-  const out: WeightDoc[] = [];
-  const scan = async (sub: string) => {
+  for (const sub of subs) {
     try {
       const collRef = collection(db, "users", uid, sub);
       let qy = query(collRef, orderBy("date", "asc"));
@@ -142,7 +117,117 @@ async function loadWeights(uid: string, fromISO?: string, toISO?: string) {
         );
       }
       const snap = await getDocs(qy);
-      snap.forEach((d) => out.push(d.data() as any));
+      snap.forEach((d) => {
+        const data = d.data() as any;
+        const dk = dateKeyFromDoc(data);
+        if (dk && withinRange(dk)) all.push(data);
+      });
+    } catch {
+      // fallback: try no where filters (some collections might lack indexes)
+      try {
+        const collRef = collection(db, "users", uid, sub);
+        const snap = await getDocs(collRef);
+        snap.forEach((d) => {
+          const data = d.data() as any;
+          const dk = dateKeyFromDoc(data);
+          if (dk && withinRange(dk)) all.push(data);
+        });
+      } catch {}
+    }
+  }
+
+  return all;
+}
+
+async function loadExerciseBurns(uid: string, fromISO: string, toISO: string) {
+  const out: BurnDoc[] = [];
+  const withinRange = (iso: string) => iso && iso >= fromISO && iso <= toISO;
+  const scan = async (sub: string) => {
+    try {
+      const collRef = collection(db, "users", uid, sub);
+      let snap;
+      try {
+        const qy = query(
+          collRef,
+          where("date", ">=", fromISO),
+          where("date", "<=", toISO),
+          orderBy("date", "asc")
+        );
+        snap = await getDocs(qy);
+      } catch {
+        snap = await getDocs(collRef);
+      }
+      snap.forEach((d) => {
+        const data = d.data() as any;
+        const dk = dateKeyFromDoc(data);
+        if (dk && withinRange(dk)) out.push(data);
+      });
+    } catch {}
+  };
+  await scan("exerciseBurnEntries");
+  await scan("activityEntries");
+  await scan("exercises");
+  return out;
+}
+
+async function loadMeals(uid: string, fromISO: string, toISO: string) {
+  const out: MealDoc[] = [];
+  const withinRange = (iso: string) => iso && iso >= fromISO && iso <= toISO;
+  const scan = async (sub: string) => {
+    try {
+      const collRef = collection(db, "users", uid, sub);
+      let snap;
+      try {
+        const qy = query(
+          collRef,
+          where("date", ">=", fromISO),
+          where("date", "<=", toISO),
+          orderBy("date", "asc")
+        );
+        snap = await getDocs(qy);
+      } catch {
+        snap = await getDocs(collRef);
+      }
+      snap.forEach((d) => {
+        const data = d.data() as any;
+        const dk = dateKeyFromDoc(data);
+        if (dk && withinRange(dk)) out.push(data);
+      });
+    } catch {}
+  };
+  await scan("foodEntries");
+  await scan("nutritionEntries");
+  await scan("meals");
+  return out;
+}
+
+async function loadWeights(uid: string, fromISO?: string, toISO?: string) {
+  const out: WeightDoc[] = [];
+  const withinRange = (iso: string) =>
+    !fromISO || !toISO ? true : iso >= fromISO && iso <= toISO;
+  const scan = async (sub: string) => {
+    try {
+      const collRef = collection(db, "users", uid, sub);
+      let snap;
+      try {
+        let qy = query(collRef, orderBy("date", "asc"));
+        if (fromISO && toISO) {
+          qy = query(
+            collRef,
+            where("date", ">=", fromISO),
+            where("date", "<=", toISO),
+            orderBy("date", "asc")
+          );
+        }
+        snap = await getDocs(qy);
+      } catch {
+        snap = await getDocs(collRef);
+      }
+      snap.forEach((d) => {
+        const data = d.data() as any;
+        const dk = dateKeyFromDoc(data);
+        if (dk && withinRange(dk)) out.push(data);
+      });
     } catch {}
   };
   await scan("weightEntries");
@@ -156,6 +241,7 @@ async function loadWeights(uid: string, fromISO?: string, toISO?: string) {
 export default function InsightsScreen() {
   const { user } = useAuth();
   const { colors, isDark } = useTheme();
+  const scrollY = useRef(new Animated.Value(0)).current;
   const uid = user?.uid ?? "__demo__";
 
   const today = useMemo(() => new Date(), []);
@@ -217,13 +303,14 @@ export default function InsightsScreen() {
         let setsCount = 0;
 
         for (const w of w14) {
-          const d = (w.date as string) || "";
+          const d = dateKeyFromDoc(w);
           if (!d) continue;
 
           const s = Number(w.sets ?? 0);
           const r = Number(w.reps ?? 0);
-          // Match Hero.tsx: use the 'weight' field directly (kg), no extra keys, no filtering
-          const wt = Number((w as any).weight ?? 0);
+          const wt = n(
+            (w as any).weight ?? (w as any).weightKg ?? (w as any).weight_kg
+          );
 
           setsCount += s;
           const vol = s * r * wt;
@@ -234,7 +321,7 @@ export default function InsightsScreen() {
         const burns14 = await loadExerciseBurns(uid, from14, to14);
         const bMap = new Map<string, number>();
         for (const b of burns14) {
-          const d = b.date || "";
+          const d = dateKeyFromDoc(b);
           if (!d) continue;
           const kcal = n(b.calories);
           if (kcal <= 0) continue;
@@ -246,7 +333,7 @@ export default function InsightsScreen() {
         const mcMap = new Map<string, number>();
         const mcalMap = new Map<string, number>();
         for (const m of meals14Docs) {
-          const d = m.date || "";
+          const d = dateKeyFromDoc(m);
           if (!d) continue;
           mcMap.set(d, (mcMap.get(d) || 0) + 1);
           const kcal = n(m.calories);
@@ -261,19 +348,28 @@ export default function InsightsScreen() {
         );
         const meals7 = await loadMeals(uid, last7[0], last7[last7.length - 1]);
         const daysWithAny = new Set<string>();
-        for (const w of w30) if (w.date) daysWithAny.add(w.date);
-        for (const b of burns7) if (b.date) daysWithAny.add(b.date);
-        for (const m of meals7) if (m.date) daysWithAny.add(m.date);
-        const consistency = last7.reduce(
-          (acc, d) => acc + (daysWithAny.has(d) ? 1 : 0),
-          0
-        );
+        for (const w of w30) {
+          const d = dateKeyFromDoc(w);
+          if (d) daysWithAny.add(d);
+        }
+        for (const b of burns7) {
+          const d = dateKeyFromDoc(b);
+          if (d) daysWithAny.add(d);
+        }
+        for (const m of meals7) {
+          const d = dateKeyFromDoc(m);
+          if (d) daysWithAny.add(d);
+        }
+        const consistency = last7.reduce((acc, d) => {
+          const iso = d.slice(0, 10);
+          return acc + (daysWithAny.has(iso) ? 1 : 0);
+        }, 0);
 
         // Weights (30d)
         const weights = await loadWeights(uid, from30, to30);
         const wpts: { date: string; kg: number }[] = [];
         for (const wd of weights) {
-          const d = wd.date;
+          const d = dateKeyFromDoc(wd);
           if (!d) continue;
           const kg = n(wd.weightKg ?? wd.weight_kg ?? wd.weight);
           if (kg <= 0) continue;
@@ -368,43 +464,244 @@ export default function InsightsScreen() {
           Math.round(weightDelta30)
         )} kg in 30d`
       : "30d change";
+  const totalVolume14 = Math.round(sum(volumeSeries.map((p) => p.y)));
+  const avgMealsPerDay = (meals14 / 14).toFixed(1);
+  const heroLift = scrollY.interpolate({
+    inputRange: [0, 140],
+    outputRange: [0, -14],
+    extrapolate: "clamp",
+  });
+  const heroScale = scrollY.interpolate({
+    inputRange: [-50, 0, 140],
+    outputRange: [1.03, 1, 0.97],
+    extrapolate: "clamp",
+  });
+  const ribbonTilt = scrollY.interpolate({
+    inputRange: [0, 220],
+    outputRange: ["0deg", "-7deg"],
+    extrapolate: "clamp",
+  });
+  const questList = useMemo(
+    () => [
+      {
+        icon: "flame-outline" as const,
+        label: "Calories logged",
+        progress: Math.min(1, mealCals14 / Math.max(1, 14 * 2200)),
+        detail: `${mealCals14.toLocaleString()} kcal in 14d`,
+      },
+      {
+        icon: "barbell-outline" as const,
+        label: "Strength volume",
+        progress: Math.min(1, totalVolume14 / Math.max(1, 14 * 4000)),
+        detail: `${totalVolume14.toLocaleString()} kg in 14d`,
+      },
+      {
+        icon: "checkmark-done-outline" as const,
+        label: "Consistency",
+        progress: Math.min(1, consistency7 / 7),
+        detail: `${consistency7}/7 active days`,
+      },
+    ],
+    [consistency7, mealCals14, totalVolume14]
+  );
+  const questXp = Math.round(
+    (questList.reduce((s, q) => s + q.progress, 0) /
+      Math.max(1, questList.length)) *
+      100
+  );
 
   return (
-    <ScrollView
+    <Animated.ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{
         padding: 16,
-        // BIGGER bottom padding so last cards never get clipped by the tab bar / home indicator.
         paddingBottom: Platform.OS === "ios" ? 140 : 120,
         gap: 14,
       }}
+      onScroll={Animated.event(
+        [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+        { useNativeDriver: true }
+      )}
+      scrollEventThrottle={16}
     >
-      {/* Header */}
-      <View
+      {/* floating arcade ribbons */}
+      <Animated.View
+        pointerEvents="none"
         style={{
-          flexDirection: "row",
-          alignItems: "flex-end",
-          justifyContent: "space-between",
-          paddingBottom: 2,
+          position: "absolute",
+          top: -70,
+          right: -60,
+          width: 220,
+          height: 220,
+          opacity: isDark ? 0.16 : 0.26,
+          transform: [
+            { translateY: Animated.multiply(scrollY, -0.08) },
+            { rotate: ribbonTilt },
+          ],
         }}
       >
-        <View>
-          <Text style={{ color: colors.muted, fontWeight: "800" }}>
-            Your insights
-          </Text>
-          <Text
-            style={{
-              color: colors.text,
-              fontSize: 28,
-              fontWeight: "900",
-              marginTop: 2,
-            }}
-          >
-            Last 14–30 days
-          </Text>
-        </View>
-        <CalendarChip />
-      </View>
+        <LinearGradient
+          colors={[arcadeColors.neonBlue, arcadeColors.neonPink]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ flex: 1, borderRadius: 120, transform: [{ rotate: "16deg" }] }}
+        />
+      </Animated.View>
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: 240,
+          left: -80,
+          width: 200,
+          height: 200,
+          opacity: isDark ? 0.14 : 0.22,
+          transform: [
+            { translateY: Animated.multiply(scrollY, -0.04) },
+            { rotate: "-10deg" },
+          ],
+        }}
+      >
+        <LinearGradient
+          colors={[arcadeColors.neonLime, arcadeColors.amber]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ flex: 1, borderRadius: 120, transform: [{ rotate: "-12deg" }] }}
+        />
+      </Animated.View>
+
+      {/* Hero header */}
+      <Animated.View
+        style={{
+          transform: [{ translateY: heroLift }, { scale: heroScale }],
+        }}
+      >
+        <LinearGradient
+          colors={[withAlpha(arcadeColors.neonBlue, 0.28), colors.card]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            borderRadius: 22,
+            padding: 16,
+            borderWidth: 1,
+            borderColor: withAlpha(colors.primary, 0.35),
+            overflow: "hidden",
+            ...softShadow,
+          }}
+        >
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+              <Text style={{ color: withAlpha(colors.text, 0.7), fontWeight: "800" }}>
+                Your insights
+              </Text>
+              <Text
+                style={{
+                  color: colors.text,
+                  fontSize: 26,
+                  fontWeight: "900",
+                  letterSpacing: 0.2,
+                }}
+              >
+                14–30 day pulse
+              </Text>
+              <Text style={{ color: withAlpha(colors.text, 0.7), fontWeight: "600" }}>
+                XP today: {questXp}
+              </Text>
+            </View>
+
+            <View
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                borderRadius: 14,
+                backgroundColor: withAlpha(colors.card, 0.92),
+                borderWidth: 1,
+                borderColor: withAlpha(colors.border, 0.9),
+                alignItems: "center",
+                minWidth: 120,
+              }}
+            >
+              <Text style={{ color: withAlpha(colors.text, 0.65), fontWeight: "700", fontSize: 12 }}>
+                Meals / day
+              </Text>
+              <Text style={{ color: colors.text, fontWeight: "900", fontSize: 20 }}>
+                {avgMealsPerDay}
+              </Text>
+              <Text style={{ color: withAlpha(colors.text, 0.65), fontWeight: "700", fontSize: 12, marginTop: 4 }}>
+                Volume 14d
+              </Text>
+              <Text style={{ color: colors.text, fontWeight: "900" }}>
+                {totalVolume14.toLocaleString()} kg
+              </Text>
+            </View>
+          </View>
+
+          <View style={{ marginTop: 12, flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <CalendarChip />
+            <View
+              style={{
+                height: 10,
+                borderRadius: 999,
+                flex: 1,
+                backgroundColor: withAlpha(colors.border, 0.9),
+                overflow: "hidden",
+              }}
+            >
+              <View
+                style={{
+                  width: `${Math.min(100, questXp)}%`,
+                  height: "100%",
+                  backgroundColor: arcadeColors.neonPink,
+                  opacity: 0.85,
+                }}
+              />
+            </View>
+          </View>
+        </LinearGradient>
+      </Animated.View>
+
+      {/* Quests */}
+      <MotiView
+        from={{ opacity: 0, translateY: 10 }}
+        animate={{ opacity: 1, translateY: 0 }}
+        transition={{ type: "timing", duration: 420, delay: 60 }}
+      >
+        <LinearGradient
+          colors={[withAlpha(arcadeColors.neonPink, 0.16), colors.card]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            borderRadius: 20,
+            padding: 12,
+            borderWidth: 1,
+            borderColor: withAlpha(colors.primary, 0.35),
+            ...softShadow,
+          }}
+        >
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}>
+              Daily quests
+            </Text>
+            <View
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 12,
+                backgroundColor: withAlpha(colors.card, 0.92),
+                borderWidth: 1,
+                borderColor: withAlpha(colors.border, 0.8),
+              }}
+            >
+              <Text style={{ color: colors.text, fontWeight: "800" }}>{questXp} XP</Text>
+            </View>
+          </View>
+          <View style={{ gap: 10 }}>
+            {questList.map((q, i) => (
+              <QuestChip key={q.label} delay={80 + i * 60} {...q} />
+            ))}
+          </View>
+        </LinearGradient>
+      </MotiView>
 
       {/* Workout Volume */}
       <InsightCard
@@ -508,6 +805,116 @@ export default function InsightsScreen() {
           />
         </View>
       </View>
-    </ScrollView>
+    </Animated.ScrollView>
+  );
+}
+
+function QuestChip({
+  icon,
+  label,
+  progress,
+  detail,
+  delay = 0,
+}: {
+  icon: any;
+  label: string;
+  progress: number;
+  detail: string;
+  delay?: number;
+}) {
+  const { colors } = useTheme();
+  const pct = Math.round(Math.min(1, Math.max(0, progress)) * 100);
+  return (
+    <MotiView
+      from={{ opacity: 0, translateY: 6 }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{ type: "timing", duration: 360, delay }}
+    >
+      <View
+        style={{
+          borderRadius: 14,
+          padding: 12,
+          borderWidth: 1,
+          borderColor: withAlpha(colors.border, 0.9),
+          backgroundColor: withAlpha(colors.card, 0.95),
+          ...softShadow,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            marginBottom: 8,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 10,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: withAlpha(colors.primary, 0.18),
+                borderWidth: 1,
+                borderColor: withAlpha(colors.primary, 0.35),
+              }}
+            >
+              <Ionicons name={icon} size={18} color={colors.primary} />
+            </View>
+            <View>
+              <Text
+                style={{ color: colors.text, fontWeight: "800", fontSize: 15 }}
+              >
+                {label}
+              </Text>
+              <Text style={{ color: colors.muted }}>{detail}</Text>
+            </View>
+          </View>
+
+          <View
+            style={{
+              paddingVertical: 6,
+              paddingHorizontal: 10,
+              borderRadius: 10,
+              backgroundColor: withAlpha(
+                pct >= 100 ? arcadeColors.neonLime : colors.primary,
+                0.14
+              ),
+            }}
+          >
+            <Text
+              style={{
+                color: pct >= 100 ? arcadeColors.neonLime : colors.primary,
+                fontWeight: "800",
+              }}
+            >
+              {pct}%
+            </Text>
+          </View>
+        </View>
+        <View
+          style={{
+            height: 10,
+            borderRadius: 999,
+            backgroundColor: withAlpha(colors.border, 0.9),
+            overflow: "hidden",
+          }}
+        >
+          <View
+            style={{
+              width: `${pct}%`,
+              height: "100%",
+              borderRadius: 999,
+              backgroundColor:
+                pct >= 100 ? arcadeColors.neonLime : colors.primary,
+              opacity: 0.9,
+            }}
+          />
+        </View>
+      </View>
+    </MotiView>
   );
 }
