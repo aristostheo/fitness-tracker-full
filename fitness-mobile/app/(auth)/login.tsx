@@ -18,6 +18,7 @@ import { signInWithEmailAndPassword, onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useTheme } from "@/content/ThemeProvider";
 import { useGoogleLogin, signInWithApple } from "@/lib/authSocial";
+import { withAlpha } from "@/components/workouts/utils/withAlpha";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function Login() {
@@ -235,7 +236,7 @@ export default function Login() {
             {!!err && (
               <Text
                 style={{
-                  color: colors.danger,
+                  color: withAlpha(colors.text, 0.9),
                   fontSize: 13,
                   marginTop: 6,
                 }}

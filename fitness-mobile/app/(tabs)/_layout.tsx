@@ -7,6 +7,7 @@ import { useTheme } from "@/content/ThemeProvider";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/content/AuthContext";
 import { subscribeUnreadCount } from "@/services/notifications";
+import { withAlpha } from "@/components/workouts/utils/withAlpha";
 
 let BlurView: any = null;
 try {
@@ -34,6 +35,7 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      initialRouteName="index"
       screenOptions={({ route }) => ({
         headerShown: false,
         // ⬇️ This prevents content from being covered at the bottom
@@ -41,7 +43,7 @@ export default function TabsLayout() {
           backgroundColor: colors.background,
           paddingBottom: scenePaddingBottom,
         },
-        tabBarActiveTintColor: colors.primary,
+        tabBarActiveTintColor: withAlpha(colors.primary, 0.9),
         tabBarInactiveTintColor: colors.muted,
         tabBarLabelStyle: { fontWeight: "700" },
 
@@ -77,16 +79,12 @@ export default function TabsLayout() {
 
         tabBarIcon: ({ color, size }) => {
           const name =
-            route.name === "index"
+            route.name === "home"
               ? "home-outline"
               : route.name === "workouts"
               ? "barbell-outline"
               : route.name === "nutrition"
               ? "fast-food-outline"
-              : route.name === "insights"
-              ? "analytics-outline"
-              : route.name === "friends"
-              ? "people-outline"
               : route.name === "notifications"
               ? "notifications-outline"
               : "person-outline";
@@ -115,10 +113,9 @@ export default function TabsLayout() {
       })}
     >
       <Tabs.Screen name="index" options={{ title: "Home" }} />
+      {/* If you want the new home later, add <Tabs.Screen name="home" ... /> back */}
       <Tabs.Screen name="workouts" options={{ title: "Workouts" }} />
       <Tabs.Screen name="nutrition" options={{ title: "Nutrition" }} />
-      <Tabs.Screen name="insights" options={{ title: "Insights" }} />
-      <Tabs.Screen name="friends" options={{ title: "Friends" }} />
       <Tabs.Screen name="notifications" options={{ title: "Alerts" }} />
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />
     </Tabs>

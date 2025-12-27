@@ -1,5 +1,5 @@
 // =============================
-// FILE: app/(tabs)/insights.tsx
+// FILE: app/insights.tsx (moved from tabs)
 // =============================
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, Platform, Animated } from "react-native";
@@ -88,8 +88,7 @@ function dateKeyFromDoc(doc: any): string {
   if (typeof raw === "string" && raw.trim()) return raw.trim().slice(0, 10);
   const ts = doc?.createdAt ?? doc?.timestamp;
   if (ts?.seconds) return fmt(new Date(ts.seconds * 1000));
-  if (typeof ts === "number" && Number.isFinite(ts))
-    return fmt(new Date(ts));
+  if (typeof ts === "number" && Number.isFinite(ts)) return fmt(new Date(ts));
   return "";
 }
 
@@ -242,6 +241,8 @@ export default function InsightsScreen() {
   const { user } = useAuth();
   const { colors, isDark } = useTheme();
   const scrollY = useRef(new Animated.Value(0)).current;
+  const { useRouter } = require("expo-router");
+  const router = useRouter();
   const uid = user?.uid ?? "__demo__";
 
   const today = useMemo(() => new Date(), []);
@@ -657,6 +658,27 @@ export default function InsightsScreen() {
               />
             </View>
           </View>
+
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => ({
+              position: "absolute",
+              top: 12,
+              left: 12,
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: withAlpha(colors.primary, 0.35),
+              backgroundColor: withAlpha(colors.card, pressed ? 0.8 : 0.92),
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+            })}
+          >
+            <Ionicons name="arrow-back" size={16} color={colors.primary} />
+            <Text style={{ color: colors.primary, fontWeight: "800" }}>Back</Text>
+          </Pressable>
         </LinearGradient>
       </Animated.View>
 

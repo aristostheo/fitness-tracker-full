@@ -17,6 +17,8 @@ export type BadgeId =
   | "streak-21"
   | "streak-30"
   | "streak-100"
+  | "streak-60"
+  | "streak-200"
 
   /* lifetime workout totals */
   | "workout-10"
@@ -24,6 +26,8 @@ export type BadgeId =
   | "workout-50"
   | "workout-100"
   | "workout-250"
+  | "workout-500"
+  | "workout-1000"
 
   /* lifetime meal totals */
   | "meal-10"
@@ -32,12 +36,16 @@ export type BadgeId =
   | "meal-100"
   | "meal-250"
   | "meal-500"
+  | "meal-750"
+  | "meal-1000"
 
   /* PRs */
   | "first-pr"
   | "pr-five"
   | "pr-ten"
   | "pr-fifty"
+  | "pr-twenty"
+  | "pr-hundred"
 
   /* nutrition day targets */
   | "protein-pro" // ≥100g
@@ -47,7 +55,29 @@ export type BadgeId =
   | "sugar-sensei" // ≤30g
   | "sugar-ninja" // ≤20g
   | "calorie-zen" // 1-day: 1600–2600 kcal window (tunable)
-  | "macro-balance"; // protein 20–35% kcal & fat 20–35% kcal (rough balance)
+  | "macro-balance" // protein 20–35% kcal & fat 20–35% kcal (rough balance)
+
+  /* templates & presets */
+  | "template-maker"
+  | "template-five"
+  | "template-twenty"
+  | "template-applier"
+  | "template-applier-10"
+  | "preset-maker"
+  | "preset-ten"
+
+  /* routines & scheduling */
+  | "routine-builder"
+  | "routine-week"
+
+  /* social */
+  | "friend-1"
+  | "friend-5"
+  | "friend-10"
+  | "reaction-10"
+  | "reaction-100"
+  | "comment-10"
+  | "comment-50";
 
 export type BadgeDef = {
   id: BadgeId;
@@ -122,6 +152,21 @@ export const BADGES: Record<BadgeId, BadgeDef> = {
     desc: "100 days of momentum. Legendary.",
     hidden: false,
   },
+  "streak-60": {
+    id: "streak-60",
+    name: "60-Day Streak",
+    icon: "flame-outline",
+    color: "#34d399",
+    desc: "Two straight months of consistency.",
+  },
+  "streak-200": {
+    id: "streak-200",
+    name: "200-Day Streak",
+    icon: "flame-outline",
+    color: "#a855f7",
+    desc: "200 days logged. Unstoppable.",
+    hidden: false,
+  },
 
   /* workouts lifetime totals */
   "workout-10": {
@@ -158,6 +203,22 @@ export const BADGES: Record<BadgeId, BadgeDef> = {
     icon: "medal-outline",
     color: "#a78bfa",
     desc: "Log 250 workouts total.",
+    hidden: false,
+  },
+  "workout-500": {
+    id: "workout-500",
+    name: "Workout 500",
+    icon: "medal-outline",
+    color: "#f59e0b",
+    desc: "Log 500 workouts total.",
+    hidden: false,
+  },
+  "workout-1000": {
+    id: "workout-1000",
+    name: "Workout 1000",
+    icon: "trophy",
+    color: "#22c55e",
+    desc: "Log 1000 workouts total.",
     hidden: false,
   },
 
@@ -205,6 +266,22 @@ export const BADGES: Record<BadgeId, BadgeDef> = {
     desc: "Log 500 meals total.",
     hidden: false,
   },
+  "meal-750": {
+    id: "meal-750",
+    name: "Meal 750",
+    icon: "ribbon-outline",
+    color: "#fb7185",
+    desc: "Log 750 meals total.",
+    hidden: false,
+  },
+  "meal-1000": {
+    id: "meal-1000",
+    name: "Meal 1000",
+    icon: "ribbon-outline",
+    color: "#22c55e",
+    desc: "Log 1000 meals total.",
+    hidden: false,
+  },
 
   /* PRs */
   "first-pr": {
@@ -234,6 +311,21 @@ export const BADGES: Record<BadgeId, BadgeDef> = {
     icon: "diamond-outline",
     color: "#10b981",
     desc: "Hit 50 personal records all time.",
+    hidden: false,
+  },
+  "pr-twenty": {
+    id: "pr-twenty",
+    name: "PR Collector",
+    icon: "trophy-outline",
+    color: "#3b82f6",
+    desc: "Hit 20 personal records all time.",
+  },
+  "pr-hundred": {
+    id: "pr-hundred",
+    name: "PR Centurion",
+    icon: "diamond-outline",
+    color: "#22c55e",
+    desc: "Hit 100 personal records all time.",
     hidden: false,
   },
 
@@ -294,6 +386,129 @@ export const BADGES: Record<BadgeId, BadgeDef> = {
     color: "#22c55e",
     desc: "Protein & fat each within 20–35% of calories today.",
   },
+
+  /* templates & presets */
+  "template-maker": {
+    id: "template-maker",
+    name: "Template Maker",
+    icon: "copy-outline",
+    color: "#0ea5e9",
+    desc: "Create your first workout template.",
+  },
+  "template-five": {
+    id: "template-five",
+    name: "Template Library",
+    icon: "albums-outline",
+    color: "#22c55e",
+    desc: "Create 5 workout templates.",
+  },
+  "template-twenty": {
+    id: "template-twenty",
+    name: "Template Architect",
+    icon: "layers-outline",
+    color: "#a855f7",
+    desc: "Create 20 workout templates.",
+    hidden: false,
+  },
+  "template-applier": {
+    id: "template-applier",
+    name: "Template Runner",
+    icon: "play-circle-outline",
+    color: "#f59e0b",
+    desc: "Apply a workout template.",
+  },
+  "template-applier-10": {
+    id: "template-applier-10",
+    name: "Template Power User",
+    icon: "flash-outline",
+    color: "#f97316",
+    desc: "Apply templates 10 times.",
+    hidden: false,
+  },
+  "preset-maker": {
+    id: "preset-maker",
+    name: "Preset Creator",
+    icon: "construct-outline",
+    color: "#14b8a6",
+    desc: "Save your first preset.",
+  },
+  "preset-ten": {
+    id: "preset-ten",
+    name: "Preset Toolbox",
+    icon: "hammer-outline",
+    color: "#0ea5e9",
+    desc: "Save 10 presets.",
+  },
+
+  /* routines & scheduling */
+  "routine-builder": {
+    id: "routine-builder",
+    name: "Routine Builder",
+    icon: "calendar-outline",
+    color: "#22c55e",
+    desc: "Create your first weekly routine.",
+  },
+  "routine-week": {
+    id: "routine-week",
+    name: "Planner",
+    icon: "calendar-number-outline",
+    color: "#a78bfa",
+    desc: "Schedule 7 days in your routine.",
+  },
+
+  /* social */
+  "friend-1": {
+    id: "friend-1",
+    name: "New Friend",
+    icon: "people-outline",
+    color: "#60a5fa",
+    desc: "Add your first friend.",
+  },
+  "friend-5": {
+    id: "friend-5",
+    name: "Crew Builder",
+    icon: "person-add-outline",
+    color: "#22c55e",
+    desc: "Add 5 friends.",
+  },
+  "friend-10": {
+    id: "friend-10",
+    name: "Squad Leader",
+    icon: "trophy-outline",
+    color: "#a855f7",
+    desc: "Add 10 friends.",
+    hidden: false,
+  },
+  "reaction-10": {
+    id: "reaction-10",
+    name: "Cheer Squad",
+    icon: "happy-outline",
+    color: "#f59e0b",
+    desc: "Give or receive 10 reactions.",
+  },
+  "reaction-100": {
+    id: "reaction-100",
+    name: "Hype Train",
+    icon: "megaphone-outline",
+    color: "#22c55e",
+    desc: "Give or receive 100 reactions.",
+    hidden: false,
+  },
+  "comment-10": {
+    id: "comment-10",
+    name: "Chatter",
+    icon: "chatbubbles-outline",
+    color: "#0ea5e9",
+    desc: "Post 10 comments.",
+  },
+  "comment-50": {
+    id: "comment-50",
+    name: "Community Voice",
+    icon: "chatbubble-ellipses-outline",
+    color: "#a855f7",
+    desc: "Post 50 comments.",
+    hidden: false,
+  },
 };
 
 /** ───────────────────────── Helpers ───────────────────────── **/
@@ -352,7 +567,14 @@ export type BadgeEvent =
       prGained?: boolean;
       prTotal?: number;
     }
-  | { type: "account:verified" };
+  | { type: "account:verified" }
+  | { type: "template:create"; totalTemplates: number }
+  | { type: "template:apply"; totalApplied: number }
+  | { type: "preset:create"; totalPresets: number }
+  | { type: "routine:set"; routinesCount: number; daysCovered?: number }
+  | { type: "social:friend"; friendsCount: number }
+  | { type: "social:reaction"; reactionsTotal: number }
+  | { type: "social:comment"; commentsTotal: number };
 
 export async function evaluateBadges(
   uid: string,
@@ -374,6 +596,8 @@ export async function evaluateBadges(
     await tryAward(uid, "streak-21", s >= 21, earned);
     await tryAward(uid, "streak-30", s >= 30, earned);
     await tryAward(uid, "streak-100", s >= 100, earned);
+    await tryAward(uid, "streak-60", s >= 60, earned);
+    await tryAward(uid, "streak-200", s >= 200, earned);
   }
 
   /* Nutrition day targets & lifetime meal totals */
@@ -420,6 +644,8 @@ export async function evaluateBadges(
     await tryAward(uid, "meal-100", m >= 100, earned);
     await tryAward(uid, "meal-250", m >= 250, earned);
     await tryAward(uid, "meal-500", m >= 500, earned);
+    await tryAward(uid, "meal-750", m >= 750, earned);
+    await tryAward(uid, "meal-1000", m >= 1000, earned);
   }
 
   /* Workouts & PR tiers */
@@ -430,17 +656,65 @@ export async function evaluateBadges(
     await tryAward(uid, "workout-50", n >= 50, earned);
     await tryAward(uid, "workout-100", n >= 100, earned);
     await tryAward(uid, "workout-250", n >= 250, earned);
+    await tryAward(uid, "workout-500", n >= 500, earned);
+    await tryAward(uid, "workout-1000", n >= 1000, earned);
 
     if (ev.prGained) await tryAward(uid, "first-pr", true, earned);
     const totalPRs = ev.prTotal ?? 0;
     await tryAward(uid, "pr-five", totalPRs >= 5, earned);
     await tryAward(uid, "pr-ten", totalPRs >= 10, earned);
     await tryAward(uid, "pr-fifty", totalPRs >= 50, earned);
+    await tryAward(uid, "pr-twenty", totalPRs >= 20, earned);
+    await tryAward(uid, "pr-hundred", totalPRs >= 100, earned);
   }
 
   /* Verification */
   if (ev.type === "account:verified") {
     await tryAward(uid, "verified", true, earned);
+  }
+
+  /* Templates & presets */
+  if (ev.type === "template:create") {
+    const t = ev.totalTemplates;
+    await tryAward(uid, "template-maker", t >= 1, earned);
+    await tryAward(uid, "template-five", t >= 5, earned);
+    await tryAward(uid, "template-twenty", t >= 20, earned);
+  }
+  if (ev.type === "template:apply") {
+    const a = ev.totalApplied;
+    await tryAward(uid, "template-applier", a >= 1, earned);
+    await tryAward(uid, "template-applier-10", a >= 10, earned);
+  }
+  if (ev.type === "preset:create") {
+    const p = ev.totalPresets;
+    await tryAward(uid, "preset-maker", p >= 1, earned);
+    await tryAward(uid, "preset-ten", p >= 10, earned);
+  }
+
+  /* Routines */
+  if (ev.type === "routine:set") {
+    await tryAward(uid, "routine-builder", ev.routinesCount >= 1, earned);
+    if (typeof ev.daysCovered === "number") {
+      await tryAward(uid, "routine-week", ev.daysCovered >= 7, earned);
+    }
+  }
+
+  /* Social */
+  if (ev.type === "social:friend") {
+    const f = ev.friendsCount;
+    await tryAward(uid, "friend-1", f >= 1, earned);
+    await tryAward(uid, "friend-5", f >= 5, earned);
+    await tryAward(uid, "friend-10", f >= 10, earned);
+  }
+  if (ev.type === "social:reaction") {
+    const r = ev.reactionsTotal;
+    await tryAward(uid, "reaction-10", r >= 10, earned);
+    await tryAward(uid, "reaction-100", r >= 100, earned);
+  }
+  if (ev.type === "social:comment") {
+    const c = ev.commentsTotal;
+    await tryAward(uid, "comment-10", c >= 10, earned);
+    await tryAward(uid, "comment-50", c >= 50, earned);
   }
 
   return earned;

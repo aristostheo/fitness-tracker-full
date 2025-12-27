@@ -1,4 +1,5 @@
 // app/_layout.tsx
+import "react-native-gesture-handler";
 import "react-native-reanimated";
 
 import React, { useEffect, useRef } from "react";
@@ -18,6 +19,7 @@ import {
   SafeAreaProvider,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { AuthProvider, useAuth } from "@/content/AuthContext";
 import { ThemeProvider, useTheme } from "@/content/ThemeProvider";
@@ -160,9 +162,7 @@ function Gate() {
     return (
       <LinearGradient
         colors={
-          isDark
-            ? ["#0d111a", "#0a0d14"]
-            : ["#f7f9ff", "#e9eefb"] // soft branded fade
+          isDark ? ["#0d111a", "#0a0d14"] : ["#f7f9ff", "#e9eefb"] // soft branded fade
         }
         style={{ flex: 1 }}
       >
@@ -275,16 +275,18 @@ function Gate() {
 
 export default function RootLayout() {
   return (
-    <SettingsProvider>
-      <ThemeProvider>
-        <SafeAreaProvider>
-          <View style={{ flex: 1 }}>
-            <AuthProvider>
-              <Gate />
-            </AuthProvider>
-          </View>
-        </SafeAreaProvider>
-      </ThemeProvider>
-    </SettingsProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SettingsProvider>
+        <ThemeProvider>
+          <SafeAreaProvider>
+            <View style={{ flex: 1 }}>
+              <AuthProvider>
+                <Gate />
+              </AuthProvider>
+            </View>
+          </SafeAreaProvider>
+        </ThemeProvider>
+      </SettingsProvider>
+    </GestureHandlerRootView>
   );
 }

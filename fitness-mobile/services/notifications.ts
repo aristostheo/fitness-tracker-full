@@ -21,6 +21,8 @@ export type NotificationType =
   | "friend:accepted"
   | "ping"
   | "reminder"
+  | "social:reaction"
+  | "social:comment"
   | "info";
 
 export type AppNotification = {
@@ -169,5 +171,55 @@ export async function notifyPing(
     title: from.displayName ? `${from.displayName} pinged you` : "You were pinged",
     body: "Log a meal to keep your streak alive.",
     data: { fromUid: from.uid },
+  });
+}
+
+export async function notifyReaction(
+  toUid: string,
+  payload: {
+    fromUid: string;
+    fromName?: string | null;
+    targetId: string;
+    targetLabel?: string | null;
+    kind: string;
+  }
+) {
+  await addNotification(toUid, {
+    type: "social:reaction",
+    title: `${payload.fromName || "Someone"} reacted to your meal`,
+    body: payload.targetLabel
+      ? `${payload.kind.toUpperCase()} on “${payload.targetLabel}”`
+      : `${payload.kind.toUpperCase()} reaction`,
+    data: {
+      fromUid: payload.fromUid,
+      targetId: payload.targetId,
+      targetLabel: payload.targetLabel ?? null,
+      kind: payload.kind,
+    },
+  });
+}
+
+export async function notifyComment(
+  toUid: string,
+  payload: {
+    fromUid: string;
+    fromName?: string | null;
+    targetId: string;
+    targetLabel?: string | null;
+    text: string;
+  }
+) {
+  await addNotification(toUid, {
+    type: "social:comment",
+    title: `${payload.fromName || "Someone"} commented on your meal`,
+    body: payload.targetLabel
+      ? `"${payload.text.slice(0, 80)}" on “${payload.targetLabel}”`
+      : payload.text.slice(0, 80),
+    data: {
+      fromUid: payload.fromUid,
+      targetId: payload.targetId,
+      targetLabel: payload.targetLabel ?? null,
+      preview: payload.text.slice(0, 120),
+    },
   });
 }

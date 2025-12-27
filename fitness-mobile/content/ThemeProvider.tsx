@@ -12,6 +12,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 type ThemeMode = "system" | "light" | "dark";
 
 type ThemeColors = {
+  // existing (keep)
   background: string;
   text: string;
   card: string;
@@ -24,14 +25,22 @@ type ThemeColors = {
   chipActiveText: string;
   buttonBg: string;
   buttonText: string;
-
-  // charts / extras (already used across the app)
   chartPrimary: string;
   chartSecondary: string;
-
-  // primary & accent are user-tunable
   primary: string;
   accent: string;
+
+  // NEW (aliases + semantic tokens for sleek UI)
+  bg: string; // alias of background (my screens use this)
+  surface: string; // subtle surface
+  surface2: string; // elevated surface
+  glass: string; // glass overlay tint
+  glassBorder: string; // glass border
+  shadow: string; // for shadows (optional)
+  success: string;
+  warning: string;
+  danger: string;
+  ringTrack: string; // ring/track color
 };
 
 type ThemeContextShape = {
@@ -39,13 +48,12 @@ type ThemeContextShape = {
   isDark: boolean;
   modeSetting: ThemeMode;
   setModeSetting: (m: ThemeMode) => void;
-
-  // live accent setters so Settings can update immediately
   setAccents: (primary?: string, accent?: string) => void;
   resetAccents: () => void;
 };
 
 const ThemeContext = createContext<ThemeContextShape | null>(null);
+
 export function useTheme() {
   const ctx = useContext(ThemeContext);
   if (!ctx) throw new Error("useTheme must be used within ThemeProvider");
@@ -57,17 +65,31 @@ const DEFAULT_PRIMARY = "#6366F1"; // indigo
 const DEFAULT_ACCENT = "#8B5CF6"; // violet
 
 const STORAGE_KEYS = {
-  MODE: "@theme:mode", // "system" | "light" | "dark"
-  PRIMARY: "@theme:primary", // hex
-  ACCENT: "@theme:accent", // hex
+  MODE: "@theme:mode",
+  PRIMARY: "@theme:primary",
+  ACCENT: "@theme:accent",
 };
+
+function withAlpha(hexOrRgb: string, alpha: number) {
+  if (!hexOrRgb) return `rgba(0,0,0,${alpha})`;
+  if (hexOrRgb.startsWith("rgb")) {
+    const body = hexOrRgb.replace(/^rgba?\(|\)$/g, "");
+    const [r, g, b] = body.split(",").map((s) => s.trim());
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  const m = hexOrRgb.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+  if (!m) return hexOrRgb;
+  return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(
+    m[3],
+    16
+  )}, ${alpha})`;
+}
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [modeSetting, setModeSetting] = useState<ThemeMode>("system");
   const sysScheme: ColorSchemeName = Appearance.getColorScheme();
   const isSystemDark = sysScheme === "dark";
 
-  // accents are optional — fall back to defaults
   const [accentPrimary, setAccentPrimary] = useState<string | undefined>(
     undefined
   );
@@ -91,7 +113,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  // expose setters that also persist
   const setModePersist = async (m: ThemeMode) => {
     setModeSetting(m);
     try {
@@ -114,7 +135,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const resetAccents = () => setAccents(undefined, undefined);
 
-  // resolve dark vs light
   const isDark =
     modeSetting === "system" ? isSystemDark : modeSetting === "dark";
 
@@ -123,12 +143,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const colors: ThemeColors = useMemo(() => {
     if (isDark) {
+      const background = "#0B0F1A";
+      const text = "#EEF2FF";
+
       return {
-        background: "#0B0F1A",
-        text: "#EEF2FF",
-        card: "rgba(18,22,33,0.7)",
+        // existing
+        background,
+        text,
+        card: "rgba(18,22,33,0.72)",
         border: "rgba(255,255,255,0.08)",
-        muted: "rgba(255,255,255,0.6)",
+        muted: "rgba(255,255,255,0.62)",
         placeholder: "rgba(255,255,255,0.45)",
         inputBg: "rgba(255,255,255,0.06)",
         inputBorder: "rgba(255,255,255,0.12)",
@@ -140,17 +164,35 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         chartSecondary: accent,
         primary,
         accent,
+
+        // NEW
+        bg: background,
+        surface: "rgba(255,255,255,0.04)",
+        surface2: "rgba(255,255,255,0.07)",
+        glass: "rgba(18,22,33,0.55)",
+        glassBorder: "rgba(255,255,255,0.10)",
+        shadow: "#000",
+        success: "#22C55E",
+        warning: "#F59E0B",
+        danger: "#EF4444",
+        ringTrack: "rgba(255,255,255,0.10)",
       };
     }
+
+    // Light mode tuned to feel “premium” (less grey, more depth)
+    const background = "#F6F9FF";
+    const text = "#0B1220";
+
     return {
-      background: "#F6F9FF",
-      text: "#0B1220",
-      card: "rgba(255,255,255,0.85)",
+      // existing
+      background,
+      text,
+      card: "rgba(255,255,255,0.88)",
       border: "rgba(0,0,0,0.07)",
-      muted: "rgba(0,0,0,0.55)",
-      placeholder: "rgba(0,0,0,0.35)",
-      inputBg: "rgba(0,0,0,0.035)",
-      inputBorder: "rgba(0,0,0,0.085)",
+      muted: "rgba(11,18,32,0.56)",
+      placeholder: "rgba(11,18,32,0.35)",
+      inputBg: "rgba(11,18,32,0.035)",
+      inputBorder: "rgba(11,18,32,0.10)",
       chipActiveBg: `${primary}1F`,
       chipActiveText: "#0B1220",
       buttonBg: primary,
@@ -159,6 +201,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       chartSecondary: accent,
       primary,
       accent,
+
+      // NEW
+      bg: background,
+      surface: "rgba(255,255,255,0.70)",
+      surface2: "rgba(255,255,255,0.92)",
+      glass: "rgba(255,255,255,0.55)",
+      glassBorder: "rgba(11,18,32,0.08)",
+      shadow: "rgba(0,0,0,0.25)",
+      success: "#16A34A",
+      warning: "#D97706",
+      danger: "#DC2626",
+      ringTrack: "rgba(11,18,32,0.10)",
     };
   }, [isDark, primary, accent]);
 

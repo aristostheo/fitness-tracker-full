@@ -5,15 +5,19 @@ import { useTheme } from "@/content/ThemeProvider";
 import { Ionicons } from "@expo/vector-icons";
 import Glass from "./ui/Glass";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Haptics from "expo-haptics";
+import { withAlpha } from "@/components/workouts/utils/withAlpha";
 
 export default function StickySaveBar({
   onSave,
   saving,
   status, // null | "ok" | "err"
+  dirty,
 }: {
   onSave: () => void | Promise<void>;
   saving?: boolean;
   status?: null | "ok" | "err";
+  dirty?: boolean;
 }) {
   const { colors, isDark } = useTheme();
   const label = saving
@@ -41,20 +45,35 @@ export default function StickySaveBar({
         left: 16,
         right: 16,
         bottom: TAB_BAR_BASE + 12, // sits above the tab bar
+        shadowColor: "#000",
+        shadowOpacity: 0.18,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 10,
       }}
     >
       <Glass tint={isDark ? "dark" : "light"} intensity={28} radius={16}>
         <Pressable
-          onPress={!saving ? onSave : undefined}
-          style={{
-            backgroundColor: bg,
+          onPress={
+            !saving && dirty
+              ? async () => {
+                  try {
+                    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  } catch {}
+                  await onSave();
+                }
+              : undefined
+          }
+          style={({ pressed }) => ({
+            backgroundColor: dirty ? bg : withAlpha(bg, 0.65),
             borderRadius: 14,
             paddingVertical: 14,
             alignItems: "center",
             justifyContent: "center",
             flexDirection: "row",
             gap: 8,
-          }}
+            transform: [{ scale: pressed && !saving && dirty ? 0.98 : 0.95 }],
+          })}
         >
           {saving ? (
             <ActivityIndicator color={fg} />

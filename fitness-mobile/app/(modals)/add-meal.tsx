@@ -1,28 +1,37 @@
 // app/(modals)/add-meal.tsx
-import React, { useEffect, useRef, useState, useLayoutEffect } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
-  TextInput,
   Pressable,
+  TextInput,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
-  Animated,
-  Easing,
-  Dimensions,
-  Alert,
   Keyboard,
-  InputAccessoryView,
+  ActivityIndicator,
+  Modal,
+  StyleSheet,
+  Alert,
 } from "react-native";
-import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import * as Haptics from "expo-haptics";
-import { StatusBar } from "expo-status-bar";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { MotiView } from "moti";
+import { getAuth } from "firebase/auth";
+
+import { useTheme } from "@/content/ThemeProvider";
+import { useAuth } from "@/content/AuthContext";
+
+import {
+  fetchMyRecentFoods,
+  type RecentFood,
+} from "@/services/nutritionRecents";
+import { searchCatalog } from "@/services/foodCatalog"; // your existing export
+
+// ✅ Scan dependencies
 import {
   CameraView,
   useCameraPermissions,
@@ -30,26 +39,11 @@ import {
   type BarcodeType,
 } from "expo-camera";
 
-import { useTheme } from "@/content/ThemeProvider";
-import { useAuth } from "@/content/AuthContext";
-import { getAuth } from "firebase/auth";
-
-import { computeMealScore } from "@/utils/mealScore";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-
-// Community Food Catalog
-import {
-  searchCatalog,
-  submitSuggestionFromScan,
-  bumpUse,
-} from "@/services/foodCatalog";
-
-/* ───────────── Types ───────────── */
-type Meal = "breakfast" | "lunch" | "dinner" | "snacks";
+type MealKey = "breakfast" | "lunch" | "dinner" | "snacks";
 
 type AddPayload = {
   date: string;
-  meal: Meal;
+  meal: MealKey;
   name: string;
   unit: string;
   qty: number;
@@ -59,47 +53,241 @@ type AddPayload = {
   fat: number;
   sugar?: number;
   fiber?: number;
-  source: "catalog" | "fdc" | "manual" | "describe" | "barcode";
-  fdcId?: string | null;
-  healthScore?: number;
+  source: "catalog" | "manual" | "recent" | "popular" | "describe" | "barcode";
 };
 
-const FDC_API_KEY = process.env.EXPO_PUBLIC_FDC_API_KEY as string;
-
-type FdcItem = {
-  fdcId: string;
-  description: string;
-  brandOwner?: string;
-  dataType?: string;
-  gtinUpc?: string;
-  labelNutrients?: {
-    calories?: { value: number };
-    protein?: { value: number };
-    carbohydrates?: { value: number };
-    fat?: { value: number };
-    fiber?: { value: number };
-    sugars?: { value: number };
-  };
+type DraftItem = {
+  name: string;
+  unit: string;
+  qty: number;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  sugar?: number;
+  fiber?: number;
+  source: AddPayload["source"];
 };
 
-async function searchFDC(queryStr: string): Promise<FdcItem[]> {
-  if (!FDC_API_KEY || !queryStr.trim()) return [];
-  try {
-    const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${encodeURIComponent(
-      FDC_API_KEY
-    )}&query=${encodeURIComponent(queryStr)}&dataType=Branded&pageSize=10`;
-    const r = await fetch(url);
-    if (!r.ok) return [];
-    const j = await r.json();
-    return (j?.foods || []) as FdcItem[];
-  } catch {
-    return [];
+function withAlpha(color: string, alpha = 0.2) {
+  if (!color) return `rgba(0,0,0,${alpha})`;
+  if (color.startsWith("rgb")) {
+    const body = color.replace(/^rgba?\(|\)$/g, "");
+    const [r, g, b] = body.split(",").map((s) => s.trim());
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
+  const m = color.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+  if (!m) return color;
+  return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(
+    m[3],
+    16
+  )}, ${alpha})`;
 }
 
-/* ───────────── Barcode → product resolvers (OFF primary, FDC fallback) ───────────── */
+const softShadow = {
+  shadowColor: "#000",
+  shadowOpacity: 0.16,
+  shadowRadius: 16,
+  shadowOffset: { width: 0, height: 10 },
+  elevation: 8,
+};
+
+function toNum(s: string) {
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function TopBar({
+  title,
+  subtitle,
+  onClose,
+  colors,
+  isDark,
+}: {
+  title: string;
+  subtitle: string;
+  onClose: () => void;
+  colors: any;
+  isDark: boolean;
+}) {
+  const inner = (
+    <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <View style={{ gap: 3 }}>
+          <Text
+            style={{ color: colors.muted, fontWeight: "900", fontSize: 12 }}
+          >
+            {subtitle}
+          </Text>
+          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}>
+            {title}
+          </Text>
+        </View>
+        <Pressable
+          onPress={onClose}
+          hitSlop={10}
+          style={{
+            width: 42,
+            height: 42,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: withAlpha(colors.card, 0.55),
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Ionicons name="close" size={18} color={colors.text} />
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  if (Platform.OS === "ios") {
+    return (
+      <View
+        style={{
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
+          overflow: "hidden",
+        }}
+      >
+        <BlurView
+          intensity={22}
+          tint={isDark ? "systemThinMaterialDark" : "systemThinMaterialLight"}
+        >
+          <LinearGradient
+            colors={[
+              withAlpha(colors.primary, 0.22),
+              withAlpha(colors.card, 0.2),
+            ]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ position: "absolute", inset: 0 }}
+          />
+          {inner}
+        </BlurView>
+      </View>
+    );
+  }
+
+  return (
+    <View
+      style={{
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+        backgroundColor: colors.bg,
+      }}
+    >
+      {inner}
+    </View>
+  );
+}
+
+function Chip({
+  label,
+  active,
+  onPress,
+  colors,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+  colors: any;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={10}
+      style={{
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: active ? withAlpha(colors.primary, 0.35) : colors.border,
+        backgroundColor: active
+          ? withAlpha(colors.primary, 0.14)
+          : withAlpha(colors.card, 0.35),
+      }}
+    >
+      <Text
+        style={{
+          color: colors.text,
+          fontWeight: active ? "900" : "800",
+          fontSize: 13,
+        }}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  keyboardType,
+  colors,
+  placeholder,
+  flex,
+  multiline,
+  minHeight,
+}: {
+  label: string;
+  value: string;
+  onChange: (t: string) => void;
+  keyboardType?: any;
+  colors: any;
+  placeholder?: string;
+  flex?: number;
+  multiline?: boolean;
+  minHeight?: number;
+}) {
+  return (
+    <View style={{ flex: flex ?? 1, gap: 6 }}>
+      <Text style={{ color: colors.muted, fontWeight: "900", fontSize: 11 }}>
+        {label}
+      </Text>
+      <TextInput
+        value={value}
+        onChangeText={onChange}
+        keyboardType={keyboardType}
+        placeholder={placeholder}
+        placeholderTextColor={colors.placeholder}
+        multiline={multiline}
+        style={{
+          height: multiline ? undefined : 46,
+          minHeight: multiline ? minHeight ?? 100 : undefined,
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: colors.inputBorder,
+          backgroundColor: colors.inputBg,
+          color: colors.text,
+          paddingHorizontal: 12,
+          paddingVertical: multiline ? 12 : 0,
+          fontWeight: "900",
+          textAlignVertical: multiline ? "top" : "center",
+        }}
+      />
+    </View>
+  );
+}
+
+function clamp0(n: number) {
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, n);
+}
+
+/* ───────────── Barcode resolvers + cache (ported from old file) ───────────── */
 type SourceTag = "OFF" | "FDC";
-export type ResolvedProduct = {
+type ResolvedProduct = {
   name: string;
   brand?: string | null;
   unit: string; // "serving" | "100 g" | "100 ml"
@@ -116,19 +304,35 @@ export type ResolvedProduct = {
   source?: SourceTag;
 };
 
-function withAlpha(color: string, alpha = 0.25) {
-  if (!color) return `rgba(0,0,0,${alpha})`;
-  if (color.startsWith("rgb")) {
-    const body = color.replace(/^rgba?\(|\)$/g, "");
-    const [r, g, b] = body.split(",").map((s) => s.trim());
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+type FdcItem = {
+  fdcId: string;
+  description: string;
+  brandOwner?: string;
+  labelNutrients?: {
+    calories?: { value: number };
+    protein?: { value: number };
+    carbohydrates?: { value: number };
+    fat?: { value: number };
+    fiber?: { value: number };
+    sugars?: { value: number };
+  };
+};
+
+const FDC_API_KEY = process.env.EXPO_PUBLIC_FDC_API_KEY as string;
+
+async function searchFDC(queryStr: string): Promise<FdcItem[]> {
+  if (!FDC_API_KEY || !queryStr.trim()) return [];
+  try {
+    const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${encodeURIComponent(
+      FDC_API_KEY
+    )}&query=${encodeURIComponent(queryStr)}&dataType=Branded&pageSize=10`;
+    const r = await fetch(url);
+    if (!r.ok) return [];
+    const j = await r.json();
+    return (j?.foods || []) as FdcItem[];
+  } catch {
+    return [];
   }
-  const m = color.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
-  if (!m) return color;
-  return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(
-    m[3],
-    16
-  )}, ${alpha})`;
 }
 
 async function lookupOpenFoodFacts(
@@ -227,16 +431,15 @@ async function lookupFDCByBarcode(
   };
 }
 
-/* ───────────── Scanner Upgrades: normalizer, cache, candidates, picker ───────────── */
-const CACHE_KEY = "@barcode_cache_v1"; // { [barcode: string]: ResolvedProduct }
+const CACHE_KEY = "@barcode_cache_v1";
 
 function variantsFor(barcode: string): string[] {
   const b = barcode.trim();
   const xs = new Set<string>([b]);
-  if (b.length === 12 && b.startsWith("0")) xs.add(b.slice(1)); // UPC-A -> EAN-ish
-  if (b.length === 11) xs.add("0" + b); // pad UPC-A
-  if (b.length === 13 && b.startsWith("0")) xs.add(b.slice(1)); // EAN13 -> UPC-A
-  if (b.length === 8 && !b.startsWith("0")) xs.add("0" + b); // pad EAN-8
+  if (b.length === 12 && b.startsWith("0")) xs.add(b.slice(1));
+  if (b.length === 11) xs.add("0" + b);
+  if (b.length === 13 && b.startsWith("0")) xs.add(b.slice(1));
+  if (b.length === 8 && !b.startsWith("0")) xs.add("0" + b);
   return Array.from(xs);
 }
 
@@ -280,7 +483,6 @@ function scoreCandidate(r: ResolvedProduct): number {
 async function resolveBarcodeCandidates(
   barcode: string
 ): Promise<ResolvedProduct[]> {
-  // Cache first (exact code only)
   const cached = await cacheLoad(barcode);
   if (cached) return [cached];
 
@@ -294,850 +496,592 @@ async function resolveBarcodeCandidates(
     if (fdc) seen.push(fdc);
   }
 
-  // De-dupe by significant fields
   const key = (x: ResolvedProduct) =>
     [x.name, x.brand || "", x.unit, x.per, x.source || ""]
       .join("|")
       .toLowerCase();
   const uniq = Array.from(new Map(seen.map((v) => [key(v), v])).values());
-
-  // Rank best first
   return uniq.sort((a, b) => scoreCandidate(b) - scoreCandidate(a));
 }
 
-/* ───────────── Small UI helpers ───────────── */
-function ScoreBar({ score }: { score: number }) {
-  const pct = Math.max(0, Math.min(100, Math.round(score)));
-  const color =
-    pct >= 80
-      ? "#16a34a"
-      : pct >= 60
-      ? "#22c55e"
-      : pct >= 40
-      ? "#f59e0b"
-      : pct >= 20
-      ? "#f97316"
-      : "#ef4444";
+/* ───────────── Small UI helpers (scan tab) ───────────── */
+function Pill({
+  icon,
+  text,
+  colors,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  text: string;
+  colors: any;
+}) {
   return (
-    <View style={{ gap: 8 }}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-        <Text style={{ fontWeight: "800" }}>Healthy meal score</Text>
-        <Text style={{ fontWeight: "900", color }}>{pct}/100</Text>
-      </View>
-      <View
-        style={{ height: 12, borderRadius: 999, backgroundColor: "#00000014" }}
-      >
-        <View
-          style={{
-            width: `${pct}%`,
-            height: "100%",
-            backgroundColor: color,
-            borderRadius: 999,
-          }}
-        />
-      </View>
-      <Text style={{ fontSize: 12, color: "#6b7280" }}>
-        Higher is better. Balanced protein, reasonable calories, more fiber,
-        less added sugar.
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: withAlpha(colors.border, 0.9),
+        backgroundColor: withAlpha(colors.card, 0.32),
+      }}
+    >
+      <Ionicons name={icon} size={16} color={colors.text} />
+      <Text style={{ color: colors.text, fontWeight: "900", fontSize: 12 }}>
+        {text}
       </Text>
     </View>
   );
 }
+function safeJsonParse(raw: string): any | null {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
 
-function GlassPanel({
-  children,
-  pad = 12,
-  inset = 0,
-  radius = 16,
-}: React.PropsWithChildren<{ pad?: number; inset?: number; radius?: number }>) {
-  const { colors, isDark } = useTheme() as any;
-  const inner = <View style={{ padding: pad, gap: 10 }}>{children}</View>;
+function extractJsonFromText(text: string): any | null {
+  // Try to locate a JSON object/array inside a string
+  const s = text.trim();
 
-  if (Platform.OS === "ios") {
-    return (
-      <View
-        style={{
-          borderRadius: radius,
-          overflow: "hidden",
-          borderWidth: 1,
-          borderColor: colors.border,
-        }}
-      >
-        <BlurView
-          tint={isDark ? "systemThinMaterialDark" : "systemThinMaterialLight"}
-          intensity={20}
-          style={{ padding: inset }}
-        >
-          <LinearGradient
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            colors={[colors.card + "66", colors.card + "99"]}
-            style={{ position: "absolute", inset: 0 }}
-          />
-          {inner}
-        </BlurView>
-      </View>
-    );
+  // direct parse
+  const direct = safeJsonParse(s);
+  if (direct) return direct;
+
+  // try object substring
+  const objStart = s.indexOf("{");
+  const objEnd = s.lastIndexOf("}");
+  if (objStart !== -1 && objEnd !== -1 && objEnd > objStart) {
+    const sub = s.slice(objStart, objEnd + 1);
+    const parsed = safeJsonParse(sub);
+    if (parsed) return parsed;
   }
 
-  return (
-    <LinearGradient
-      start={{ x: 0, y: 0.5 }}
-      end={{ x: 1, y: 0.5 }}
-      colors={[colors.card, colors.card]}
-      style={{
-        borderRadius: radius,
-        borderWidth: 1,
-        borderColor: colors.border,
-        padding: inset,
-      }}
-    >
-      {inner}
-    </LinearGradient>
-  );
+  // try array substring
+  const arrStart = s.indexOf("[");
+  const arrEnd = s.lastIndexOf("]");
+  if (arrStart !== -1 && arrEnd !== -1 && arrEnd > arrStart) {
+    const sub = s.slice(arrStart, arrEnd + 1);
+    const parsed = safeJsonParse(sub);
+    if (parsed) return parsed;
+  }
+
+  return null;
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  const { colors } = useTheme();
-  return (
-    <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 6 }}>
-      {children}
-    </Text>
-  );
+function unwrapDescribePayload(anyGot: any): any {
+  if (!anyGot) return null;
+
+  // If it’s an array, take first item
+  if (Array.isArray(anyGot)) return anyGot[0] ?? null;
+
+  // Common wrappers
+  if (anyGot.data) return unwrapDescribePayload(anyGot.data);
+  if (anyGot.result) return unwrapDescribePayload(anyGot.result);
+  if (anyGot.item) return unwrapDescribePayload(anyGot.item);
+  if (anyGot.meal) return unwrapDescribePayload(anyGot.meal);
+
+  // OpenAI-style
+  const content = anyGot?.choices?.[0]?.message?.content;
+  if (typeof content === "string") {
+    const parsed = extractJsonFromText(content);
+    return parsed ?? { name: content };
+  }
+
+  // If backend returns a JSON string (ugh)
+  if (typeof anyGot === "string") {
+    const parsed = extractJsonFromText(anyGot);
+    return parsed ?? { name: anyGot };
+  }
+
+  return anyGot;
 }
 
-function Segmented({
-  value,
-  onChange,
-  items,
-  size = "default",
-}: {
-  value: string;
-  onChange: (val: string) => void;
-  items: Array<{
-    key: string;
-    label: string;
-    icon?: keyof typeof Ionicons.glyphMap;
-  }>;
-  size?: "default" | "compact";
-}) {
-  const { colors } = useTheme();
-  const compact = size === "compact";
-  const vPad = compact ? 7 : 8;
-  const hPad = compact ? 10 : 14;
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        gap: 6,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 999,
-        padding: 4,
-        backgroundColor: withAlpha(colors.card, 0.92),
-        overflow: "hidden",
-      }}
-    >
-      {items.map((it) => {
-        const active = it.key === value;
-        return (
-          <Pressable
-            key={it.key}
-            onPress={() => {
-              Haptics.selectionAsync().catch(() => {});
-              onChange(it.key);
-            }}
-            hitSlop={8}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 6,
-              paddingVertical: vPad,
-              paddingHorizontal: hPad,
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: active
-                ? withAlpha(colors.primary, 0.3)
-                : "transparent",
-              backgroundColor: active
-                ? withAlpha(colors.primary, 0.12)
-                : "transparent",
-            }}
-          >
-            {it.icon && (
-              <Ionicons
-                name={it.icon}
-                size={14}
-                color={active ? colors.chipActiveText : colors.muted}
-              />
-            )}
-            <Text
-              style={{
-                color: active ? colors.chipActiveText : colors.text,
-                fontWeight: active ? "800" : "600",
-                fontSize: 13,
-              }}
-            >
-              {it.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
+function normalizeDescribeItem(gotRaw: any, fallbackName: string) {
+  const got = unwrapDescribePayload(gotRaw) || {};
 
-function Field({
-  label,
-  value,
-  onChangeText,
-  keyboardType,
-  placeholder,
-  multiline,
-  onFocus,
-  autoFocus,
-  inputAccessoryViewID,
-}: {
-  label?: string;
-  value: string;
-  onChangeText: (t: string) => void;
-  keyboardType?: "default" | "numeric" | "decimal-pad";
-  placeholder?: string;
-  multiline?: boolean;
-  onFocus?: () => void;
-  autoFocus?: boolean;
-  inputAccessoryViewID?: string;
-}) {
-  const { colors } = useTheme();
-  return (
-    <View style={{ flex: 1 }}>
-      {!!label && (
-        <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 6 }}>
-          {label}
-        </Text>
-      )}
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        onFocus={onFocus}
-        keyboardType={keyboardType}
-        placeholder={placeholder}
-        placeholderTextColor={colors.placeholder}
-        multiline={multiline}
-        autoFocus={autoFocus}
-        returnKeyType="done"
-        autoCapitalize="sentences"
-        inputAccessoryViewID={inputAccessoryViewID}
-        style={{
-          minHeight: multiline ? 88 : 48,
-          borderWidth: 1,
-          borderColor: colors.inputBorder,
-          borderRadius: 12,
-          paddingHorizontal: 12,
-          paddingVertical: multiline ? 12 : 10,
-          lineHeight: 20,
-          backgroundColor: colors.inputBg,
-          color: colors.text,
-        }}
-      />
-    </View>
-  );
-}
+  // support alternate field names
+  const name = String(got.name ?? got.title ?? got.food ?? fallbackName).trim();
+  const unit = String(got.unit ?? got.servingUnit ?? "serving").trim();
 
-function ListRow({
-  title,
-  subtitle,
-  right,
-  onPress,
-}: {
-  title: string;
-  subtitle?: string;
-  right?: React.ReactNode;
-  onPress?: () => void;
-}) {
-  const { colors } = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      android_ripple={{ color: colors.border }}
-      style={{
-        paddingVertical: 12,
-        paddingHorizontal: 12,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: "transparent",
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-      }}
-    >
-      <View style={{ flex: 1, paddingRight: 10 }}>
-        <Text
-          style={{ color: colors.text, fontWeight: "700" }}
-          numberOfLines={1}
-        >
-          {title}
-        </Text>
-        {!!subtitle && (
-          <Text style={{ color: colors.muted, fontSize: 12 }} numberOfLines={1}>
-            {subtitle}
-          </Text>
-        )}
-      </View>
-      {right}
-    </Pressable>
-  );
-}
+  const qty =
+    Number(got.quantity ?? got.qty ?? got.servingQty ?? got.servings ?? 1) || 1;
 
-function PrimaryButton({
-  label,
-  onPress,
-  disabled,
-}: {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-}) {
-  const { colors } = useTheme();
-  return (
-    <Pressable
-      onPress={!disabled ? onPress : undefined}
-      onPressIn={() => {
-        if (!disabled) Haptics.selectionAsync().catch(() => {});
-      }}
-      style={{
-        height: 48,
-        borderRadius: 14,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: colors.buttonBg,
-        opacity: disabled ? 0.7 : 1,
-      }}
-    >
-      <Text style={{ color: colors.buttonText, fontWeight: "900" }}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
+  const calories = Number(got.calories ?? got.kcal ?? got.energy ?? 0) || 0;
+  const protein = Number(got.protein ?? got.proteins ?? 0) || 0;
+  const carbs = Number(got.carbs ?? got.carbohydrates ?? 0) || 0;
+  const fat = Number(got.fat ?? got.fats ?? 0) || 0;
 
-function ContextTile({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  const { colors } = useTheme();
-  return (
-    <View
-      style={{
-        flex: 1,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: colors.border,
-        padding: 10,
-      }}
-    >
-      <Text style={{ color: colors.muted, fontSize: 11 }}>{label}</Text>
-      <Text
-        style={{
-          color: colors.text,
-          fontWeight: "800",
-          ...(mono ? { fontVariant: ["tabular-nums"] as any } : null),
-          textTransform: label === "Meal" ? "capitalize" : "none",
-        }}
-      >
-        {value}
-      </Text>
-    </View>
-  );
-}
+  const sugar =
+    got.sugar != null
+      ? Number(got.sugar)
+      : got.sugars != null
+      ? Number(got.sugars)
+      : undefined;
 
-function EmptyHint({ text }: { text: string }) {
-  const { colors } = useTheme();
-  return (
-    <View
-      style={{
-        padding: 16,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.card,
-      }}
-    >
-      <Text style={{ color: colors.muted }}>{text}</Text>
-    </View>
-  );
-}
+  const fiber =
+    got.fiber != null
+      ? Number(got.fiber)
+      : got.fibre != null
+      ? Number(got.fibre)
+      : undefined;
 
-/* ───────────── Main ───────────── */
+  return { name, unit, qty, calories, protein, carbs, fat, sugar, fiber };
+}
 
 export default function AddMealModal() {
-  const { colors, isDark } = useTheme();
+  const { colors, isDark } = useTheme() as any;
+  const { user } = useAuth();
   const router = useRouter();
   const navigation = useNavigation();
-  const insets = useSafeAreaInsets();
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     navigation.setOptions?.({ headerShown: false });
   }, [navigation]);
 
   const params = useLocalSearchParams<{ meal?: string; date?: string }>();
-  const [meal, setMeal] = useState<Meal>(
-    (params.meal as Meal) || "breakfast"
-  );
-  const date = params.date || new Date().toISOString().slice(0, 10);
+  const meal = (params.meal as MealKey) || "breakfast";
+  const date = (params.date as string) || new Date().toISOString().slice(0, 10);
 
-  const [tab, setTab] = useState<"scan" | "search" | "describe" | "manual">(
-    "search"
-  );
+  const [tab, setTab] = useState<
+    "recents" | "search" | "scan" | "describe" | "manual"
+  >("recents");
 
-  // Top-level scroll
-  const scrollRef = useRef<ScrollView>(null);
+  // My recents (Firestore)
+  const [myRecents, setMyRecents] = useState<RecentFood[]>([]);
+  const [recentsLoading, setRecentsLoading] = useState(false);
 
-  // SCAN state
-  const [permission, requestPermission] = useCameraPermissions();
-  const [scanBusy, setScanBusy] = useState(false);
-  const [lastCode, setLastCode] = useState<string | null>(null);
-  const [scanError, setScanError] = useState<string>("");
-  const [manualBarcode, setManualBarcode] = useState("");
+  // Popular (community catalog)
+  const [popular, setPopular] = useState<any[]>([]);
+  const [popularLoading, setPopularLoading] = useState(false);
 
-  // Picker for multiple candidates
-  const [pickOpen, setPickOpen] = useState(false);
-  const [candidates, setCandidates] = useState<ResolvedProduct[]>([]);
-  const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (tab === "scan" && !permission?.granted) requestPermission();
-  }, [tab, permission, requestPermission]);
-
-  // SEARCH
+  // search
   const [q, setQ] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const debounce = useRef<any>(null);
 
-  type CatalogItem = {
-    id?: string;
-    name: string;
-    unit?: string;
-    per?: number;
-    nutrients?: {
-      calories?: number;
-      protein?: number;
-      carbs?: number;
-      fat?: number;
-      sugar?: number;
-      fiber?: number;
-    };
-    brand?: string | null;
-  };
-
-  const [catalogResults, setCatalogResults] = useState<CatalogItem[]>([]);
-  const [fdcResults, setFdcResults] = useState<FdcItem[]>([]);
-
-  function normalizeCatalogResponse(r: any): any[] {
-    if (!r) return [];
-    if (Array.isArray(r)) return r;
-    if (Array.isArray(r.items)) return r.items;
-    if (Array.isArray(r.top)) return r.top;
-    if (Array.isArray(r.results)) return r.results;
-    if (Array.isArray(r.data)) return r.data;
-    return [];
-  }
-
-  let getPopularCatalog:
-    | undefined
-    | ((limit?: number, opts?: any) => Promise<any>);
-  try {
-    // @ts-ignore
-    const fc = require("@/services/foodCatalog");
-    if (typeof fc.getPopularCatalog === "function")
-      getPopularCatalog = fc.getPopularCatalog;
-  } catch {}
-
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    setLoading(true);
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-
-    searchDebounceRef.current = setTimeout(async () => {
-      try {
-        const queryText = q.trim();
-
-        let idToken: string | undefined;
-        try {
-          const auth = getAuth();
-          idToken = await auth.currentUser?.getIdToken?.(true);
-        } catch {}
-
-        const opts = idToken
-          ? { headers: { Authorization: `Bearer ${idToken}` } }
-          : undefined;
-
-        let cat: any[] = [];
-
-        if (queryText) {
-          try {
-            const res = await (searchCatalog as any)(queryText, 30, opts);
-            cat = normalizeCatalogResponse(res);
-          } catch (e) {
-            console.warn("[catalog] searchCatalog failed:", e);
-          }
-        } else {
-          let res: any = null;
-          if (getPopularCatalog) {
-            try {
-              res = await getPopularCatalog(30, opts);
-            } catch (e) {
-              console.warn("[catalog] getPopularCatalog failed:", e);
-            }
-          }
-          if (!res) {
-            try {
-              res = await (searchCatalog as any)("*", 30, opts);
-            } catch (e) {
-              console.warn("[catalog] wildcard searchCatalog failed:", e);
-            }
-          }
-          cat = normalizeCatalogResponse(res);
-        }
-
-        let fdc: any[] = [];
-        if (queryText) {
-          try {
-            fdc = await searchFDC(queryText);
-          } catch (e) {
-            console.warn("[fdc] searchFDC failed:", e);
-          }
-        }
-
-        const fixed = (cat || []).map((c: any) => {
-          const n = c?.nutrients || c?.nutrition || {};
-          return {
-            id: c?.id || c?.docId || c?._id,
-            name: String(c?.name || c?.title || "Food"),
-            unit: c?.unit || c?.servingUnit || "serving",
-            per: Number(c?.qty ?? c?.per ?? c?.servingSize ?? 1),
-            nutrients: {
-              calories: Number(
-                n.calories ?? n.kcal ?? n.energy ?? c?.calories ?? 0
-              ),
-              protein: Number(n.protein ?? c?.protein ?? 0),
-              carbs: Number(n.carbs ?? n.carbohydrates ?? c?.carbs ?? 0),
-              fat: Number(n.fat ?? c?.fat ?? 0),
-              sugar: Number(n.sugar ?? n.sugars ?? c?.sugar ?? 0),
-              fiber: Number(n.fiber ?? c?.fiber ?? 0),
-            },
-            brand: c?.brand ?? c?.brandOwner ?? null,
-          };
-        });
-
-        setCatalogResults(fixed);
-        setFdcResults(Array.isArray(fdc) ? fdc : []);
-      } finally {
-        setLoading(false);
-      }
-    }, 300);
-
-    return () => {
-      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    };
-  }, [q]);
-
-  // DESCRIBE
-  const [descText, setDescText] = useState("");
-  const [calcLoading, setCalcLoading] = useState(false);
-  const [calcError, setCalcError] = useState("");
-
-  const AI_URL = process.env.EXPO_PUBLIC_AI_DESCRIBE_URL; // optional
-
-  function numstr(x: any) {
-    const n = Number(x);
-    return Number.isFinite(n) ? String(n) : "";
-  }
-
-  // Probe catalog (unchanged)
-  useEffect(() => {
-    (async () => {
-      try {
-        // probe catalog
-        // @ts-ignore
-        const fc = require("@/services/foodCatalog");
-        const search = fc.searchCatalog || fc.search || fc.default;
-        const getPopular = fc.getPopularCatalog;
-        let res: any;
-
-        if (typeof getPopular === "function") {
-          res = await getPopular(5);
-        } else if (typeof search === "function") {
-          res = await search("", 5);
-          if (!res || (Array.isArray(res) && res.length === 0)) {
-            res = await search("*", 5);
-          }
-        } else {
-          console.log(
-            "foodCatalog service not wired: no search function exported"
-          );
-          return;
-        }
-
-        const _items = Array.isArray(res)
-          ? res
-          : res?.items || res?.top || res?.results || res?.data || [];
-        void _items;
-      } catch (e) {
-        console.warn("CATALOG_PROBE error:", e);
-      }
-    })();
-  }, []);
-
-  // MANUAL (basic details only – macros handled in shared editor)
+  // manual
   const [name, setName] = useState("");
   const [qty, setQty] = useState("1");
   const [unit, setUnit] = useState("serving");
+  const [calories, setCalories] = useState("");
+  const [protein, setProtein] = useState("");
+  const [carbs, setCarbs] = useState("");
+  const [fat, setFat] = useState("");
 
-  // EDIT SHEET (shared macro editor for Catalog, FDC, Barcode, Describe, Manual)
-  const [editOpen, setEditOpen] = useState(false);
-  const [editSource, setEditSource] = useState<
-    "fdc" | "catalog" | "barcode" | "manual" | "describe" | null
-  >(null);
-  const [barcodeSource, setBarcodeSource] = useState<SourceTag | null>(null);
-  const [eName, setEName] = useState("");
-  const [eQty, setEQty] = useState("1");
-  const [eUnit, setEUnit] = useState("serving");
-  const [eCalories, setECalories] = useState("");
-  const [eProtein, setEProtein] = useState("");
-  const [eCarbs, setECarbs] = useState("");
-  const [eFat, setEFat] = useState("");
-  const [eSugar, setESugar] = useState("");
-  const [eFiber, setEFiber] = useState("");
-  const [eFdcId, setEFdcId] = useState<string | null>(null);
-  const [eScore, setEScore] = useState(0);
+  // describe
+  const [descText, setDescText] = useState("");
+  const [descLoading, setDescLoading] = useState(false);
+  const [descError, setDescError] = useState<string | null>(null);
 
-  const lastQtyRef = useRef<number>(1);
+  // ✅ Confirm sheet state
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmDraft, setConfirmDraft] = useState<DraftItem | null>(null);
+  const [confirmEdits, setConfirmEdits] = useState({
+    name: "",
+    qty: "1",
+    unit: "serving",
+    calories: "0",
+    protein: "0",
+    carbs: "0",
+    fat: "0",
+    sugar: "",
+    fiber: "",
+  });
 
+  // ✅ Scan tab state
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanBusy, setScanBusy] = useState(false);
+  const [lastCode, setLastCode] = useState<string | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [manualBarcode, setManualBarcode] = useState("");
+  const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
+
+  // Candidate picker for multiple matches (scan)
+  const [pickOpen, setPickOpen] = useState(false);
+  const [candidates, setCandidates] = useState<ResolvedProduct[]>([]);
+  const [candidatePending, setCandidatePending] = useState(false);
+
+  // Ask for permission when entering scan tab
   useEffect(() => {
-    setEScore(
-      computeMealScore({
-        calories: Number(eCalories || 0),
-        protein: Number(eProtein || 0),
-        carbs: Number(eCarbs || 0),
-        fat: Number(eFat || 0),
-        sugar: Number(eSugar || 0),
-        fiber: Number(eFiber || 0),
-      })
-    );
-  }, [eCalories, eProtein, eCarbs, eFat, eSugar, eFiber]);
+    if (tab !== "scan") return;
+    if (!permission) return;
+    if (!permission.granted) {
+      requestPermission().catch(() => {});
+    }
+  }, [tab, permission, requestPermission]);
 
-  // Bottom sheet animation (shared by macro editor + candidate picker)
-  const sheetProgress = useRef(new Animated.Value(0)).current; // 0 closed, 1 open
-  const H = Dimensions.get("window").height;
-  const scrimOpacity = sheetProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 0.6],
-  });
-  const translateY = sheetProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [H * 0.5, 0],
-  });
+  function done(payload: AddPayload) {
+    AsyncStorage.setItem("@pending_add_meal", JSON.stringify(payload))
+      .catch(() => {})
+      .finally(() => router.back());
+  }
 
-  function animateSheet(to: 0 | 1, after?: () => void) {
-    Animated.timing(sheetProgress, {
-      toValue: to,
-      duration: 220,
-      easing: to ? Easing.out(Easing.quad) : Easing.in(Easing.quad),
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (finished && after) after();
+  function openConfirm(item: DraftItem) {
+    setConfirmDraft(item);
+    setConfirmEdits({
+      name: item.name ?? "",
+      qty: String(item.qty ?? 1),
+      unit: item.unit ?? "serving",
+      calories: String(item.calories ?? 0),
+      protein: String(item.protein ?? 0),
+      carbs: String(item.carbs ?? 0),
+      fat: String(item.fat ?? 0),
+      sugar: item.sugar != null ? String(item.sugar) : "",
+      fiber: item.fiber != null ? String(item.fiber) : "",
     });
-  }
-  function openEdit() {
-    setEditOpen(true);
-    requestAnimationFrame(() => animateSheet(1));
-  }
-  function closeEdit() {
-    animateSheet(0, () => setEditOpen(false));
+    requestAnimationFrame(() => setConfirmOpen(true));
   }
 
-  // When quantity changes in macro editor, scale all macros accordingly
-  const handleEditQtyChange = (t: string) => {
-    const cleaned = t.replace(/[^0-9.]/g, "");
-    setEQty(cleaned);
+  function closeConfirm() {
+    Keyboard.dismiss();
+    setConfirmOpen(false);
+    setConfirmDraft(null);
+  }
 
-    const newQty = parseFloat(cleaned);
-    if (!isFinite(newQty) || newQty <= 0) {
-      // User is still typing / cleared the field – don't scale yet
-      return;
-    }
+  function confirmAndAdd() {
+    if (!confirmDraft) return;
 
-    const prevQty = lastQtyRef.current || 1;
-    const factor = newQty / prevQty;
-    if (!isFinite(factor) || factor <= 0) {
-      lastQtyRef.current = newQty;
-      return;
-    }
-
-    const scale = (val: string) => {
-      const num = parseFloat(val || "0");
-      if (!isFinite(num)) return val;
-      const scaled = num * factor;
-      const rounded = Math.round(scaled * 10) / 10; // 1 decimal
-      return rounded ? String(rounded) : "";
+    const payload: AddPayload = {
+      date,
+      meal,
+      name: (confirmEdits.name || confirmDraft.name || "Food").trim(),
+      unit: (confirmEdits.unit || confirmDraft.unit || "serving").trim(),
+      qty: clamp0(toNum(confirmEdits.qty)) || 1,
+      calories: clamp0(toNum(confirmEdits.calories)),
+      protein: clamp0(toNum(confirmEdits.protein)),
+      carbs: clamp0(toNum(confirmEdits.carbs)),
+      fat: clamp0(toNum(confirmEdits.fat)),
+      sugar:
+        confirmEdits.sugar.trim().length > 0
+          ? clamp0(toNum(confirmEdits.sugar))
+          : confirmDraft.sugar,
+      fiber:
+        confirmEdits.fiber.trim().length > 0
+          ? clamp0(toNum(confirmEdits.fiber))
+          : confirmDraft.fiber,
+      source: confirmDraft.source,
     };
 
-    setECalories(scale(eCalories));
-    setEProtein(scale(eProtein));
-    setECarbs(scale(eCarbs));
-    setEFat(scale(eFat));
-    setESugar(scale(eSugar));
-    setEFiber(scale(eFiber));
-
-    // Remember latest numeric qty for the next change
-    lastQtyRef.current = newQty;
-  };
-
-  function startEditFromFdc(item: FdcItem) {
-    const ln = item.labelNutrients || {};
-    setEditSource("fdc");
-    setBarcodeSource(null);
-    setEName(item.description || "Food");
-    setEQty("1");
-    lastQtyRef.current = 1;
-    setEUnit("serving");
-    setECalories(String(ln.calories?.value ?? 0));
-    setEProtein(String(ln.protein?.value ?? 0));
-    setECarbs(String(ln.carbohydrates?.value ?? 0));
-    setEFat(String(ln.fat?.value ?? 0));
-    setESugar(String(ln.sugars?.value ?? 0));
-    setEFiber(String(ln.fiber?.value ?? 0));
-    setEFdcId(String(item.fdcId));
-    openEdit();
-    setTab("search");
-  }
-
-  function startEditFromCatalog(item: any) {
-    if (item?.id) {
-      try {
-        bumpUse(item.id);
-      } catch {}
+    // ✅ optional: if this confirm came from barcode scan, remember any edits
+    if (confirmDraft.source === "barcode" && scannedBarcode) {
+      cacheSave(scannedBarcode, {
+        name: payload.name,
+        unit: payload.unit,
+        per: payload.qty,
+        nutrients: {
+          calories: payload.calories,
+          protein: payload.protein,
+          carbs: payload.carbs,
+          fat: payload.fat,
+          sugar: payload.sugar,
+          fiber: payload.fiber,
+        },
+        fdcId: null,
+        source: "OFF",
+      }).catch(() => {});
     }
-    const n = item?.nutrients || {};
-    const baseQty = Number(item?.per ?? 1) || 1;
-    setEditSource("catalog");
-    setBarcodeSource(null);
-    setEName(item?.name || "Food");
-    setEQty(String(baseQty));
-    lastQtyRef.current = baseQty;
-    setEUnit(item?.unit || "serving");
-    setECalories(String(Number(n.calories || 0)));
-    setEProtein(String(Number(n.protein || 0)));
-    setECarbs(String(Number(n.carbs || 0)));
-    setEFat(String(Number(n.fat || 0)));
-    setESugar(String(Number(n.sugar || 0)));
-    setEFiber(String(Number(n.fiber || 0)));
-    setEFdcId(null);
-    openEdit();
-    setTab("search");
+
+    closeConfirm();
+    done(payload);
   }
 
-  function startEditFromBarcode(r: ResolvedProduct) {
-    const baseQty = Number(r.per ?? 1) || 1;
-    setEditSource("barcode");
-    setBarcodeSource(r.source ?? null);
-    setEName(r.name || "Food");
-    setEQty(String(baseQty)); // 1 (serving) or 100
-    lastQtyRef.current = baseQty;
-    setEUnit(r.unit || "serving");
-    setECalories(String(Number(r.nutrients.calories || 0)));
-    setEProtein(String(Number(r.nutrients.protein || 0)));
-    setECarbs(String(Number(r.nutrients.carbs || 0)));
-    setEFat(String(Number(r.nutrients.fat || 0)));
-    setESugar(String(Number(r.nutrients.sugar || 0)));
-    setEFiber(String(Number(r.nutrients.fiber || 0)));
-    setEFdcId(r.fdcId ?? null);
-    openEdit();
-    setScanBusy(false);
-  }
+  // This used to immediately add. Now it decides:
+  // - recents => immediate add
+  // - everything else => open confirm sheet
+  function pick(item: any, source: AddPayload["source"]) {
+    const draft: DraftItem = {
+      name: String(item.name || item.title || "Food").trim(),
+      unit: String(item.unit || "serving"),
+      qty: Number(item.qty || item.per || 1),
+      calories: Number(item.calories ?? item?.nutrients?.calories ?? 0),
+      protein: Number(item.protein ?? item?.nutrients?.protein ?? 0),
+      carbs: Number(item.carbs ?? item?.nutrients?.carbs ?? 0),
+      fat: Number(item.fat ?? item?.nutrients?.fat ?? 0),
+      sugar:
+        item.sugar != null
+          ? Number(item.sugar)
+          : item?.nutrients?.sugar != null
+          ? Number(item.nutrients.sugar)
+          : undefined,
+      fiber:
+        item.fiber != null
+          ? Number(item.fiber)
+          : item?.nutrients?.fiber != null
+          ? Number(item.nutrients.fiber)
+          : undefined,
+      source,
+    };
 
-  // Start macro editor from Manual tab
-  function startManualEdit() {
-    if (!name.trim()) {
-      Alert.alert("Add a name", "Please enter a meal name first.");
+    if (source === "recent") {
+      // ✅ 1-tap add for recents
+      done({
+        date,
+        meal,
+        ...draft,
+        qty: clamp0(draft.qty) || 1,
+        calories: clamp0(draft.calories),
+        protein: clamp0(draft.protein),
+        carbs: clamp0(draft.carbs),
+        fat: clamp0(draft.fat),
+      });
       return;
     }
 
-    const baseQty = parseFloat(qty || "1") || 1;
-
-    setEditSource("manual");
-    setBarcodeSource(null);
-    setEName(name.trim());
-    setEQty(String(baseQty));
-    lastQtyRef.current = baseQty;
-    setEUnit(unit || "serving");
-
-    // Always start with empty macros for manual mode
-    setECalories("");
-    setEProtein("");
-    setECarbs("");
-    setEFat("");
-    setESugar("");
-    setEFiber("");
-    setEFdcId(null);
-
-    openEdit();
+    openConfirm(draft);
   }
 
-  function startScanFallbackManual() {
-    const trimmed = manualBarcode.trim();
-
-    // If user typed digits, treat it as a barcode (so we can cache + submit suggestion)
-    if (trimmed) {
-      setScannedBarcode(trimmed);
-      setEditSource("barcode");
-      setBarcodeSource(null);
-    } else {
-      setEditSource("manual");
-      setBarcodeSource(null);
-    }
-
-    setEName("");
-    setEQty("1");
-    lastQtyRef.current = 1;
-    setEUnit("serving");
-
-    // Start with empty macros – user fills them from the label
-    setECalories("");
-    setEProtein("");
-    setECarbs("");
-    setEFat("");
-    setESugar("");
-    setEFiber("");
-    setEFdcId(null);
-
-    openEdit();
+  // ✅ Scan handlers (wired to new confirm flow)
+  async function startEditFromBarcodeResolved(r: ResolvedProduct) {
+    const draft: DraftItem = {
+      name: String(r.name || "Food").trim(),
+      unit: String(r.unit || "serving"),
+      qty: Number(r.per || 1),
+      calories: Number(r.nutrients.calories || 0),
+      protein: Number(r.nutrients.protein || 0),
+      carbs: Number(r.nutrients.carbs || 0),
+      fat: Number(r.nutrients.fat || 0),
+      sugar: r.nutrients.sugar != null ? Number(r.nutrients.sugar) : undefined,
+      fiber: r.nutrients.fiber != null ? Number(r.nutrients.fiber) : undefined,
+      source: "barcode",
+    };
+    // Open confirm sheet (premium “review & confirm”)
+    openConfirm(draft);
   }
 
-  // Describe → fill macro editor and open sheet
-  async function onCalculateMacros() {
-    setCalcError("");
-    const text = descText.trim();
-    if (!text) {
-      setCalcError("Please describe your meal first.");
-      return;
-    }
+  async function onBarcodeScanned(res: BarcodeScanningResult) {
+    if (scanBusy) return;
+    const code = res?.data?.trim();
+    if (!code) return;
+    if (code === lastCode) return;
 
-    setCalcLoading(true);
+    setScanBusy(true);
+    setLastCode(code);
+    setScannedBarcode(code);
+    setScanError(null);
+
     try {
-      const token = await getAuth().currentUser?.getIdToken(true);
-      if (!AI_URL) {
-        setCalcError("AI endpoint is not configured.");
+      const list = await resolveBarcodeCandidates(code);
+      if (!list.length) {
+        setScanError("No nutrition match found for this barcode.");
         return;
       }
+      if (list.length === 1) {
+        await startEditFromBarcodeResolved(list[0]);
+      } else {
+        setCandidates(list);
+        setPickOpen(true);
+      }
+    } catch {
+      setScanError("Scan lookup failed. Please try again.");
+    } finally {
+      setScanBusy(false);
+    }
+  }
 
+  async function onManualBarcodeLookup() {
+    const code = manualBarcode.trim();
+    if (!code) {
+      setScanError("Enter the digits under the barcode first.");
+      return;
+    }
+    if (scanBusy) return;
+
+    setScanBusy(true);
+    setScanError(null);
+    setScannedBarcode(code);
+    setLastCode(null);
+
+    try {
+      const list = await resolveBarcodeCandidates(code);
+      if (!list.length) {
+        setScanError(
+          "We couldn’t find this barcode. Double-check the digits, or add it manually."
+        );
+        return;
+      }
+      if (list.length === 1) {
+        await startEditFromBarcodeResolved(list[0]);
+        setManualBarcode("");
+      } else {
+        setCandidates(list);
+        setPickOpen(true);
+      }
+    } catch {
+      setScanError(
+        "Barcode lookup failed. Check your connection and try again."
+      );
+    } finally {
+      setScanBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    setRecentsLoading(true);
+    fetchMyRecentFoods(user.uid, 18)
+      .then(setMyRecents)
+      .finally(() => setRecentsLoading(false));
+  }, [user?.uid]);
+
+  useEffect(() => {
+    let alive = true;
+    setPopularLoading(true);
+
+    (async () => {
+      try {
+        // optional: if your service exports a popular function, use it
+        // @ts-ignore
+        const fc = require("@/services/foodCatalog");
+        const getPopular = fc.getPopularCatalog || fc.getPopular;
+        let res: any;
+
+        if (typeof getPopular === "function") {
+          res = await getPopular(10);
+        } else {
+          res = await searchCatalog("", 10);
+        }
+
+        const items = Array.isArray(res)
+          ? res
+          : res?.items || res?.top || res?.results || res?.data || [];
+        if (alive) setPopular(items || []);
+      } catch {
+        if (alive) setPopular([]);
+      } finally {
+        if (alive) setPopularLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (tab !== "search") return;
+    if (debounce.current) clearTimeout(debounce.current);
+
+    debounce.current = setTimeout(async () => {
+      const qq = q.trim();
+      if (!qq) {
+        setResults([]);
+        return;
+      }
+      setSearchLoading(true);
+      try {
+        const res: any = await searchCatalog(qq, 20);
+        const items = Array.isArray(res)
+          ? res
+          : res?.items || res?.top || res?.results || res?.data || [];
+        setResults(items || []);
+      } catch {
+        setResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 260);
+
+    return () => {
+      if (debounce.current) clearTimeout(debounce.current);
+    };
+  }, [q, tab]);
+
+  const quickTiles = useMemo(
+    () => [
+      {
+        name: "Protein shake",
+        unit: "serving",
+        qty: 1,
+        calories: 220,
+        protein: 42,
+        carbs: 6,
+        fat: 4,
+      },
+      {
+        name: "Greek yogurt",
+        unit: "serving",
+        qty: 1,
+        calories: 150,
+        protein: 17,
+        carbs: 10,
+        fat: 4,
+      },
+      {
+        name: "Chicken breast",
+        unit: "serving",
+        qty: 1,
+        calories: 180,
+        protein: 35,
+        carbs: 0,
+        fat: 4,
+      },
+      {
+        name: "Eggs",
+        unit: "2 eggs",
+        qty: 1,
+        calories: 140,
+        protein: 12,
+        carbs: 1,
+        fat: 10,
+      },
+      {
+        name: "Banana",
+        unit: "1 medium",
+        qty: 1,
+        calories: 105,
+        protein: 1,
+        carbs: 27,
+        fat: 0,
+      },
+      {
+        name: "Rice",
+        unit: "1 cup",
+        qty: 1,
+        calories: 205,
+        protein: 4,
+        carbs: 45,
+        fat: 0,
+      },
+    ],
+    []
+  );
+
+  function commitManual() {
+    if (!name.trim()) return;
+    pick(
+      {
+        name: name.trim(),
+        unit: unit || "serving",
+        qty: toNum(qty) || 1,
+        calories: toNum(calories),
+        protein: toNum(protein),
+        carbs: toNum(carbs),
+        fat: toNum(fat),
+      },
+      "manual"
+    );
+  }
+
+  const AI_URL =
+    process.env.EXPO_PUBLIC_AI_DESCRIBE_URL ||
+    "https://us-central1-fitness-tracker-25254.cloudfunctions.net/describe";
+
+  async function calculateFromDescription() {
+    const text = descText.trim();
+    if (!text) return;
+
+    setDescLoading(true);
+    setDescError(null);
+
+    try {
+      const token = await getAuth().currentUser?.getIdToken(true);
+
+      // Try your current mode first
       const payload = {
         mode: "meal:v2",
         query: text,
@@ -1149,669 +1093,1193 @@ export default function AddMealModal() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Accept: "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(payload),
       });
 
       if (res.status === 401) {
-        setCalcError("Please sign in to use Describe.");
+        setDescError("Please sign in to use Describe.");
         return;
       }
 
-      const got = await res.json();
-
-      const nName = String(got.name || text);
-      const qVal = got.quantity;
-      const nQty = Number.isFinite(Number(qVal)) ? String(qVal) : "1";
-      const nUnit = String(got.unit || "serving");
-
-      const nCalories = numstr(got.calories);
-      const nProtein = numstr(got.protein);
-      const nCarbs = numstr(got.carbs);
-      const nFat = numstr(got.fat);
-      const nSugar = numstr(got.sugar);
-      const nFiber = numstr(got.fiber);
-
-      setEditSource("describe");
-      setBarcodeSource(null);
-      setEName(nName);
-      setEQty(nQty || "1");
-      lastQtyRef.current = parseFloat(nQty || "1") || 1;
-      setEUnit(nUnit);
-      setECalories(nCalories);
-      setEProtein(nProtein);
-      setECarbs(nCarbs);
-      setEFat(nFat);
-      setESugar(nSugar);
-      setEFiber(nFiber);
-      setEFdcId(null);
-
-      openEdit();
-    } catch {
-      setCalcError("Describe service unavailable. Please try again.");
-    } finally {
-      setCalcLoading(false);
-    }
-  }
-
-  // Back with payload (pairs with nutrition.tsx AsyncStorage reader)
-  function done(payload: AddPayload) {
-    AsyncStorage.setItem("@pending_add_meal", JSON.stringify(payload))
-      .catch(() => {})
-      .finally(() => {
-        router.back();
-      });
-  }
-
-  async function addFromEditDraft() {
-    if (!eName.trim()) return;
-
-    const healthScore = computeMealScore({
-      calories: Number(eCalories || 0),
-      protein: Number(eProtein || 0),
-      carbs: Number(eCarbs || 0),
-      fat: Number(eFat || 0),
-      sugar: Number(eSugar || 0),
-      fiber: Number(eFiber || 0),
-    });
-
-    // Save user correction locally for this barcode
-    if (editSource === "barcode" && scannedBarcode) {
-      await cacheSave(scannedBarcode, {
-        name: eName,
-        unit: eUnit,
-        per: Number(eQty || 1),
-        nutrients: {
-          calories: Number(eCalories || 0),
-          protein: Number(eProtein || 0),
-          carbs: Number(eCarbs || 0),
-          fat: Number(eFat || 0),
-          sugar: Number(eSugar || 0),
-          fiber: Number(eFiber || 0),
-        },
-        fdcId: eFdcId ?? null,
-        source: "OFF",
-      });
-
-      // ALSO push to Community DB + link barcode -> foodId
-      try {
-        const uid = getAuth().currentUser?.uid || null;
-        await submitSuggestionFromScan({
-          barcode: scannedBarcode,
-          name: eName,
-          unit: eUnit,
-          qty: Number(eQty || 1),
-          calories: Number(eCalories || 0),
-          protein: Number(eProtein || 0),
-          carbs: Number(eCarbs || 0),
-          fat: Number(eFat || 0),
-          sugar: Number(eSugar || 0),
-          fiber: Number(eFiber || 0),
-          submitterUid: uid,
-          verified: false,
-          bumpPopularity: true,
-        });
-      } catch {}
-    }
-
-    done({
-      date,
-      meal,
-      name: eName.trim(),
-      unit: eUnit || "serving",
-      qty: Number(eQty || 1),
-      calories: Number(eCalories || 0),
-      protein: Number(eProtein || 0),
-      carbs: Number(eCarbs || 0),
-      fat: Number(eFat || 0),
-      sugar: Number(eSugar || 0),
-      fiber: Number(eFiber || 0),
-      source: (editSource as any) ?? "catalog",
-      fdcId: editSource === "fdc" ? eFdcId : null,
-      healthScore,
-    });
-
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
-      () => {}
-    );
-  }
-
-  // --- Scan handler with candidates/picker ---
-  async function onBarcodeScanned(res: BarcodeScanningResult) {
-    if (scanBusy) return;
-    const code = res?.data;
-    if (!code || code === lastCode) return;
-
-    setScanBusy(true);
-    setLastCode(code);
-    setScannedBarcode(code);
-    setScanError("");
-
-    try {
-      const list = await resolveBarcodeCandidates(code);
-      if (!list.length) {
-        setScanError("No nutrition match found for this barcode.");
-        setScanBusy(false);
-        return;
-      }
-      if (list.length === 1) {
-        startEditFromBarcode(list[0]);
-        setScanBusy(false);
-      } else {
-        setCandidates(list);
-        setPickOpen(true);
-        setScanBusy(false);
-      }
-    } catch {
-      setScanError("Scan lookup failed. Please try again.");
-      setScanBusy(false);
-    }
-  }
-
-  async function onManualBarcodeLookup() {
-    const code = manualBarcode.trim();
-    if (!code) {
-      setScanError("Please enter the digits from the barcode first.");
-      return;
-    }
-    if (scanBusy) return;
-
-    setScanBusy(true);
-    setScanError("");
-    setScannedBarcode(code); // so edits still tie back to this barcode
-    setLastCode(null);
-
-    try {
-      const list = await resolveBarcodeCandidates(code);
-
-      if (!list.length) {
-        setScanError(
-          "We couldn’t find this barcode. Double-check the digits and try again, or add it manually in the Manual tab."
+      const raw = await res.text(); // ✅ never throws
+      if (!res.ok) {
+        // Show status + a tiny snippet to help debug quickly
+        const snippet = raw?.trim()?.slice(0, 160);
+        setDescError(
+          `Describe failed (${res.status}). ${
+            snippet ? `Server says: ${snippet}` : "No response body."
+          }`
         );
         return;
       }
 
-      if (list.length === 1) {
-        // Same behavior as a successful camera scan
-        startEditFromBarcode(list[0]); // opens macro popup with values
-        setManualBarcode("");
-      } else {
-        // Reuse the candidate picker sheet
-        setCandidates(list);
-        setPickOpen(true);
+      // Try parse raw JSON; if not JSON, attempt extraction
+      const parsed = safeJsonParse(raw) ?? extractJsonFromText(raw);
+      if (!parsed) {
+        const snippet = raw?.trim()?.slice(0, 160);
+        setDescError(
+          `Describe returned non-JSON. ${
+            snippet ? `Response: ${snippet}` : "Empty response."
+          }`
+        );
+        return;
       }
-    } catch (e) {
-      setScanError(
-        "Barcode lookup failed. Check your connection and try again."
+
+      const item = normalizeDescribeItem(parsed, text);
+
+      // If the model gave basically nothing, call it out
+      const hasAnyMacros =
+        Number.isFinite(item.calories) ||
+        Number.isFinite(item.protein) ||
+        Number.isFinite(item.carbs) ||
+        Number.isFinite(item.fat);
+
+      if (!hasAnyMacros) {
+        setDescError(
+          "Describe returned an unexpected format (no macros found)."
+        );
+        return;
+      }
+
+      requestAnimationFrame(() => pick(item, "describe"));
+    } catch (e: any) {
+      setDescError(
+        e?.message || "Describe service unavailable. Please try again."
       );
     } finally {
-      setScanBusy(false);
+      setDescLoading(false);
     }
   }
 
-  // helper for per-100g/ml warning
-  const perIs100 = (() => {
-    const qNum = Number(eQty);
-    const u = (eUnit || "").toLowerCase();
-    return (
-      qNum === 100 &&
-      (u.includes("100 g") ||
-        u === "100 g" ||
-        u.includes("100 ml") ||
-        u === "100 ml")
-    );
-  })();
-
-  const sourceLabel = (() => {
-    if (!editSource) return null;
-    if (editSource === "describe") return "AI parsed";
-    if (editSource === "barcode") {
-      if (barcodeSource === "OFF") return "OpenFoodFacts";
-      if (barcodeSource === "FDC") return "FDC fallback";
-      return "Barcode scan";
-    }
-    if (editSource === "fdc") return "USDA FDC";
-    if (editSource === "catalog") return "Community catalog";
-    return "Manual entry";
-  })();
-
-  const headerHeight = insets.top + 120;
-  const mealOptions: Meal[] = ["breakfast", "lunch", "dinner", "snacks"];
-  const accessoryId = "macroAccessory";
-  const showAccessory = Platform.OS === "ios";
-  const formatMeal = (m: Meal) => m.charAt(0).toUpperCase() + m.slice(1);
+  const scanTypes = useMemo(
+    () =>
+      [
+        "ean13",
+        "ean8",
+        "upc_a",
+        "upc_e",
+        "code128",
+        "code39",
+        "qr",
+      ] as BarcodeType[],
+    []
+  );
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      edges={["top", "left", "right"]}
-    >
-      <StatusBar
-        style={isDark ? "light" : "dark"}
-        backgroundColor={colors.background}
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <TopBar
+        title="Add food"
+        subtitle={`${meal.toUpperCase()} • ${date}`}
+        onClose={() => router.back()}
+        colors={colors}
+        isDark={isDark}
       />
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+
+      {/* ✅ Confirm sheet */}
+      <Modal
+        visible={confirmOpen}
+        transparent
+        animationType="fade"
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        onRequestClose={closeConfirm}
       >
-        {/* iOS-style blurred header with large title */}
-        <View
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: headerHeight,
-            zIndex: 30,
-            overflow: "hidden",
-          }}
-          pointerEvents="box-none"
-        >
-          <View style={{ flex: 1 }}>
-            {BlurView ? (
-              <BlurView
-                intensity={28}
-                tint={isDark ? "dark" : "light"}
-                style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-              />
-            ) : (
-              <LinearGradient
-                colors={
-                  isDark
-                    ? ["rgba(12,14,20,0.95)", "rgba(12,14,20,0.75)"]
-                    : ["rgba(247,249,255,0.95)", "rgba(235,240,255,0.75)"]
-                }
-                style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-              />
-            )}
-
-            <View
-              style={{
-                flex: 1,
-                paddingTop: insets.top + 10,
-                paddingHorizontal: 16,
-                gap: 12,
-                justifyContent: "center",
-              }}
-            >
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <View>
-                  <Text
-                    style={{
-                      color: colors.text,
-                      fontSize: 28,
-                      fontWeight: "900",
-                      letterSpacing: -0.3,
-                    }}
-                  >
-                    Add meal
-                  </Text>
-                  <Text
-                    style={{
-                      color: colors.muted,
-                      marginTop: 2,
-                      fontSize: 13,
-                    }}
-                  >
-                    {date} · {formatMeal(meal)}
-                  </Text>
-                </View>
-
-                <Pressable
-                  onPress={() => router.back()}
-                  hitSlop={10}
-                  accessibilityLabel="Close"
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 12,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: withAlpha(colors.card, 0.9),
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                  }}
-                >
-                  <Ionicons name="close" size={18} color={colors.text} />
-                </Pressable>
-              </View>
-
-                <View style={{ gap: 10 }}>
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <ContextTile label="Date" value={date} mono />
-                    <ContextTile label="Meal" value={formatMeal(meal)} />
-                  </View>
-                  <Segmented
-                    value={meal}
-                    onChange={(val) => {
-                      Haptics.selectionAsync().catch(() => {});
-                      setMeal(val as Meal);
-                    }}
-                    items={mealOptions.map((m) => ({
-                      key: m,
-                      label: formatMeal(m),
-                    }))}
-                    size="compact"
-                  />
-                </View>
-            </View>
-          </View>
-        </View>
-
-        <ScrollView
-          ref={scrollRef}
-          contentContainerStyle={{
-            padding: 16,
-            gap: 14,
-            paddingBottom: 24,
-            paddingTop: headerHeight + 10,
-          }}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode={
-            Platform.OS === "ios" ? "interactive" : "on-drag"
-          }
-          automaticallyAdjustKeyboardInsets
-        >
-          {/* spacer covered by header */}
-
-          {/* AI meal ideas entrypoint (complete today's macros) */}
+        <View style={{ flex: 1, justifyContent: "flex-end" }}>
+          {/* Backdrop */}
           <Pressable
-            onPress={() =>
-              router.push({
-                pathname: "/(modals)/ai-meal-suggestions",
-                params: { date, meal },
-              })
-            }
-            accessibilityLabel="Generate meal ideas to hit today's macros"
-            style={{
-              borderRadius: 14,
-              overflow: "hidden",
-              shadowColor: "#000",
-              shadowOpacity: isDark ? 0.3 : 0.08,
-              shadowRadius: 12,
-              shadowOffset: { width: 0, height: 6 },
-            }}
-          >
-            <LinearGradient
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              colors={isDark ? ["#a78bfa", "#8b5cf6"] : ["#22c55e", "#16a34a"]}
-              style={{
-                height: 48,
-                alignItems: "center",
-                justifyContent: "center",
-                paddingHorizontal: 14,
-                flexDirection: "row",
-                gap: 8,
-              }}
-            >
-              <Ionicons name="sparkles-outline" size={20} color={"#fff"} />
-              <Text
-                style={{ color: "#fff", fontWeight: "900", letterSpacing: 0.3 }}
-              >
-                AI meal ideas
-              </Text>
-            </LinearGradient>
-          </Pressable>
-
-          {/* Optional: quick notes/restrictions chip */}
-          <Pressable
-            onPress={() =>
-              router.push({
-                pathname: "/(modals)/ai-meal-suggestions",
-                params: { date, meal, focus: "notes" },
-              })
-            }
-            accessibilityLabel="Add notes or dietary restrictions"
-            style={{
-              alignSelf: "flex-start",
-              marginTop: 8,
-              borderRadius: 999,
-              paddingVertical: 8,
-              paddingHorizontal: 12,
-              backgroundColor: isDark
-                ? "rgba(255,255,255,0.06)"
-                : "rgba(0,0,0,0.04)",
-              borderWidth: 1,
-              borderColor: colors.border,
-              flexDirection: "row",
-              gap: 6,
-              alignItems: "center",
-            }}
-          >
-            <Ionicons name="create-outline" size={16} color={colors.text} />
-            <Text
-              style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}
-            >
-              Notes / restrictions
-            </Text>
-          </Pressable>
-
-          {/* Tabs */}
-          <Segmented
-            value={tab}
-            onChange={(k) => setTab(k as any)}
-            items={[
-              { key: "scan", label: "Scan", icon: "barcode-outline" },
-              { key: "search", label: "Search", icon: "search-outline" },
-              {
-                key: "describe",
-                label: "Describe",
-                icon: "chatbox-ellipses-outline",
-              },
-              { key: "manual", label: "Manual", icon: "apps-outline" },
+            onPress={closeConfirm}
+            style={[
+              StyleSheet.absoluteFillObject,
+              { backgroundColor: "rgba(0,0,0,0.35)", zIndex: 0, elevation: 0 },
             ]}
           />
 
-          {/* SCAN */}
-          {tab === "scan" && (
-            <View style={{ gap: 12 }}>
-              <GlassPanel>
-                <SectionTitle>Scan a barcode</SectionTitle>
+          {/* Sheet */}
+          <View
+            style={{
+              borderTopLeftRadius: 26,
+              borderTopRightRadius: 26,
+              overflow: "hidden",
+              borderWidth: 1,
+              borderColor: withAlpha(colors.border, 0.95),
+              backgroundColor: withAlpha(colors.card, 0.98),
+              height: "78%",
+              maxHeight: "90%",
+              zIndex: 2,
+              elevation: 20,
+            }}
+          >
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+              keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
+              style={{ flex: 1 }}
+            >
+              {Platform.OS === "ios" ? (
+                <BlurView
+                  intensity={28}
+                  tint={
+                    isDark
+                      ? "systemThinMaterialDark"
+                      : "systemThinMaterialLight"
+                  }
+                  style={{ flex: 1 }}
+                >
+                  <LinearGradient
+                    colors={[
+                      withAlpha(colors.primary, 0.18),
+                      withAlpha(colors.card, 0.24),
+                    ]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{ position: "absolute", inset: 0 }}
+                  />
 
-                {!permission ? (
-                  <EmptyHint text="Requesting camera permission…" />
-                ) : !permission.granted ? (
-                  <View style={{ gap: 10 }}>
-                    <EmptyHint text="Camera access is blocked. Grant access to scan barcodes." />
-                    <PrimaryButton
-                      label="Grant Camera Access"
-                      onPress={() => requestPermission()}
-                    />
-                  </View>
-                ) : (
+                  <ConfirmSheetContent
+                    colors={colors}
+                    isDark={isDark}
+                    edits={confirmEdits}
+                    setEdits={setConfirmEdits}
+                    onCancel={closeConfirm}
+                    onConfirm={confirmAndAdd}
+                  />
+                </BlurView>
+              ) : (
+                <ConfirmSheetContent
+                  colors={colors}
+                  isDark={isDark}
+                  edits={confirmEdits}
+                  setEdits={setConfirmEdits}
+                  onCancel={closeConfirm}
+                  onConfirm={confirmAndAdd}
+                />
+              )}
+            </KeyboardAvoidingView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ✅ Candidate picker for scan matches */}
+      <Modal
+        visible={pickOpen}
+        transparent
+        animationType="fade"
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        onRequestClose={() => setPickOpen(false)}
+      >
+        <View style={{ flex: 1, justifyContent: "flex-end" }}>
+          <Pressable
+            onPress={() => setPickOpen(false)}
+            style={[
+              StyleSheet.absoluteFillObject,
+              { backgroundColor: "rgba(0,0,0,0.35)" },
+            ]}
+          />
+
+          <View
+            style={{
+              borderTopLeftRadius: 26,
+              borderTopRightRadius: 26,
+              overflow: "hidden",
+              borderWidth: 1,
+              borderColor: withAlpha(colors.border, 0.95),
+              backgroundColor: withAlpha(colors.card, 0.98),
+              maxHeight: "70%",
+              zIndex: 2,
+              elevation: 20,
+            }}
+          >
+            {Platform.OS === "ios" ? (
+              <BlurView
+                intensity={28}
+                tint={
+                  isDark ? "systemThinMaterialDark" : "systemThinMaterialLight"
+                }
+                style={{ flex: 1 }}
+              >
+                <LinearGradient
+                  colors={[
+                    withAlpha(colors.primary, 0.14),
+                    withAlpha(colors.card, 0.22),
+                  ]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{ position: "absolute", inset: 0 }}
+                />
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ padding: 16, paddingBottom: 28 }}
+                >
                   <View
                     style={{
-                      overflow: "hidden",
-                      borderRadius: 16,
-                      borderWidth: 1,
-                      borderColor: colors.border,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: 10,
                     }}
                   >
-                    <View style={{ aspectRatio: 3 / 4 }}>
-                      <CameraView
-                        style={{ width: "100%", height: "100%" }}
-                        facing="back"
-                        barcodeScannerSettings={{
-                          barcodeTypes: [
-                            "ean13",
-                            "ean8",
-                            "upc_a",
-                            "upc_e",
-                            "code128",
-                            "code39",
-                            "qr",
-                          ] as BarcodeType[],
+                    <View style={{ gap: 2 }}>
+                      <Text
+                        style={{
+                          color: colors.text,
+                          fontWeight: "900",
+                          fontSize: 16,
                         }}
-                        onBarcodeScanned={onBarcodeScanned}
-                      />
-
-                      {/* Improved overlay tip + frame */}
-                      <View
-                        pointerEvents="none"
-                        style={{ position: "absolute", inset: 0 }}
                       >
+                        Select a match
+                      </Text>
+                      <Text
+                        style={{
+                          color: colors.muted,
+                          fontWeight: "800",
+                          fontSize: 12,
+                        }}
+                      >
+                        Pick the closest label. You’ll confirm next.
+                      </Text>
+                    </View>
+
+                    <Pressable
+                      onPress={() => setPickOpen(false)}
+                      hitSlop={10}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 16,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        backgroundColor: withAlpha(colors.card, 0.35),
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Ionicons name="close" size={18} color={colors.text} />
+                    </Pressable>
+                  </View>
+
+                  <View style={{ gap: 8 }}>
+                    {candidates.map((c, i) => (
+                      <Pressable
+                        key={`${c.name}-${c.brand || ""}-${c.unit}-${i}`}
+                        onPress={async () => {
+                          setPickOpen(false);
+                          await startEditFromBarcodeResolved(c);
+                        }}
+                        style={{
+                          borderRadius: 18,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          backgroundColor: withAlpha(colors.card, 0.35),
+                          padding: 12,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <View style={{ flex: 1, paddingRight: 10 }}>
+                          <Text
+                            style={{ color: colors.text, fontWeight: "900" }}
+                            numberOfLines={1}
+                          >
+                            {c.name}
+                            {c.brand ? ` • ${c.brand}` : ""}
+                          </Text>
+                          <Text
+                            style={{
+                              color: colors.muted,
+                              fontWeight: "800",
+                              fontSize: 12,
+                              marginTop: 2,
+                            }}
+                            numberOfLines={1}
+                          >
+                            {c.source} • per {c.per} {c.unit}
+                          </Text>
+                        </View>
+                        <Ionicons
+                          name="chevron-forward"
+                          size={18}
+                          color={colors.text}
+                        />
+                      </Pressable>
+                    ))}
+                  </View>
+                </ScrollView>
+              </BlurView>
+            ) : (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ padding: 16, paddingBottom: 28 }}
+              >
+                <Text style={{ color: colors.text, fontWeight: "900" }}>
+                  Select a match
+                </Text>
+                <View style={{ height: 10 }} />
+                <View style={{ gap: 8 }}>
+                  {candidates.map((c, i) => (
+                    <Pressable
+                      key={`${c.name}-${c.brand || ""}-${c.unit}-${i}`}
+                      onPress={async () => {
+                        setPickOpen(false);
+                        await startEditFromBarcodeResolved(c);
+                      }}
+                      style={{
+                        borderRadius: 18,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        backgroundColor: withAlpha(colors.card, 0.35),
+                        padding: 12,
+                      }}
+                    >
+                      <Text style={{ color: colors.text, fontWeight: "900" }}>
+                        {c.name}
+                        {c.brand ? ` • ${c.brand}` : ""}
+                      </Text>
+                      <Text
+                        style={{
+                          color: colors.muted,
+                          fontWeight: "800",
+                          fontSize: 12,
+                        }}
+                      >
+                        {c.source} • per {c.per} {c.unit}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+      >
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 10,
+              marginBottom: 14,
+              flexWrap: "wrap",
+            }}
+          >
+            <Chip
+              label="Recents"
+              active={tab === "recents"}
+              onPress={() => setTab("recents")}
+              colors={colors}
+            />
+            <Chip
+              label="Search"
+              active={tab === "search"}
+              onPress={() => setTab("search")}
+              colors={colors}
+            />
+            <Chip
+              label="Scan"
+              active={tab === "scan"}
+              onPress={() => setTab("scan")}
+              colors={colors}
+            />
+            <Chip
+              label="Describe"
+              active={tab === "describe"}
+              onPress={() => setTab("describe")}
+              colors={colors}
+            />
+            <Chip
+              label="Manual"
+              active={tab === "manual"}
+              onPress={() => setTab("manual")}
+              colors={colors}
+            />
+          </View>
+
+          {/* SCAN (NEW, matches vibe) */}
+          {tab === "scan" && (
+            <View style={{ gap: 14 }}>
+              <MotiView
+                from={{ opacity: 0, translateY: 10 }}
+                animate={{ opacity: 1, translateY: 0 }}
+                transition={{ type: "timing", duration: 320 }}
+              >
+                <View
+                  style={{
+                    borderRadius: 22,
+                    overflow: "hidden",
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    ...softShadow,
+                  }}
+                >
+                  <LinearGradient
+                    colors={[
+                      withAlpha("#22c55e", isDark ? 0.12 : 0.16),
+                      withAlpha(colors.primary, 0.12),
+                      withAlpha(colors.card, 0.12),
+                    ]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{ padding: 14 }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: 10,
+                      }}
+                    >
+                      <View style={{ flexDirection: "row", gap: 10, flex: 1 }}>
                         <View
                           style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            height: 48,
-                            backgroundColor: "#00000033",
+                            width: 42,
+                            height: 42,
+                            borderRadius: 16,
+                            borderWidth: 1,
+                            borderColor: withAlpha(colors.primary, 0.25),
+                            backgroundColor: withAlpha(colors.primary, 0.12),
                             alignItems: "center",
                             justifyContent: "center",
                           }}
                         >
-                          <Text style={{ color: "white", fontWeight: "800" }}>
-                            Hold steady • Avoid glare • Fill the frame
+                          <Ionicons
+                            name="barcode-outline"
+                            size={18}
+                            color={colors.text}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={{
+                              color: colors.text,
+                              fontWeight: "900",
+                              fontSize: 16,
+                            }}
+                          >
+                            Scan barcode
+                          </Text>
+                          <Text
+                            style={{
+                              color: colors.muted,
+                              fontWeight: "800",
+                              marginTop: 2,
+                            }}
+                          >
+                            We’ll find a match — then you confirm macros.
                           </Text>
                         </View>
-                        <View
-                          style={{
-                            position: "absolute",
-                            left: "10%",
-                            right: "10%",
-                            top: "30%",
-                            bottom: "30%",
-                            borderWidth: 2,
-                            borderColor: "#ffffff88",
-                            borderRadius: 12,
-                          }}
-                        />
                       </View>
 
-                      {scanBusy && (
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        <Pill
+                          icon="shield-checkmark-outline"
+                          text="Private"
+                          colors={colors}
+                        />
+                      </View>
+                    </View>
+
+                    {/* Permission / Camera */}
+                    {!permission ? (
+                      <View
+                        style={{
+                          borderRadius: 18,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          backgroundColor: withAlpha(colors.card, 0.35),
+                          padding: 14,
+                        }}
+                      >
+                        <Text
+                          style={{ color: colors.muted, fontWeight: "800" }}
+                        >
+                          Checking camera permission…
+                        </Text>
+                      </View>
+                    ) : !permission.granted ? (
+                      <View style={{ gap: 10 }}>
                         <View
                           style={{
-                            position: "absolute",
-                            bottom: 12,
-                            left: 12,
-                            right: 12,
-                            height: 40,
-                            borderRadius: 999,
-                            backgroundColor: "#00000066",
-                            alignItems: "center",
-                            justifyContent: "center",
+                            borderRadius: 18,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            backgroundColor: withAlpha(colors.card, 0.35),
+                            padding: 14,
                           }}
                         >
-                          <Text style={{ color: "white", fontWeight: "800" }}>
-                            Looking up nutrition…
+                          <Text
+                            style={{ color: colors.text, fontWeight: "900" }}
+                          >
+                            Camera access needed
+                          </Text>
+                          <Text
+                            style={{
+                              color: colors.muted,
+                              fontWeight: "800",
+                              marginTop: 4,
+                            }}
+                          >
+                            Enable camera to scan barcodes. You can also type
+                            the digits below.
                           </Text>
                         </View>
-                      )}
+
+                        <Pressable
+                          onPress={() => requestPermission().catch(() => {})}
+                          style={{
+                            height: 52,
+                            borderRadius: 18,
+                            borderWidth: 1,
+                            borderColor: withAlpha(colors.primary, 0.35),
+                            backgroundColor: withAlpha(colors.primary, 0.16),
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexDirection: "row",
+                            gap: 10,
+                          }}
+                        >
+                          <Ionicons
+                            name="camera-outline"
+                            size={18}
+                            color={colors.text}
+                          />
+                          <Text
+                            style={{ color: colors.text, fontWeight: "900" }}
+                          >
+                            Grant camera access
+                          </Text>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <View
+                        style={{
+                          borderRadius: 18,
+                          overflow: "hidden",
+                          borderWidth: 1,
+                          borderColor: withAlpha(colors.border, 0.95),
+                          backgroundColor: withAlpha(colors.card, 0.35),
+                        }}
+                      >
+                        <View style={{ aspectRatio: 3 / 4 }}>
+                          <CameraView
+                            style={{ width: "100%", height: "100%" }}
+                            facing="back"
+                            barcodeScannerSettings={{ barcodeTypes: scanTypes }}
+                            onBarcodeScanned={onBarcodeScanned}
+                          />
+
+                          {/* Premium overlay */}
+                          <View
+                            pointerEvents="none"
+                            style={{ position: "absolute", inset: 0 }}
+                          >
+                            {/* top hint bar */}
+                            <View
+                              style={{
+                                position: "absolute",
+                                left: 10,
+                                right: 10,
+                                top: 10,
+                                borderRadius: 999,
+                                overflow: "hidden",
+                                borderWidth: 1,
+                                borderColor: "#ffffff33",
+                              }}
+                            >
+                              <LinearGradient
+                                colors={["#00000066", "#00000033"]}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                                style={{
+                                  paddingHorizontal: 12,
+                                  paddingVertical: 10,
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  gap: 8,
+                                }}
+                              >
+                                <Ionicons
+                                  name="scan-outline"
+                                  size={16}
+                                  color={"white"}
+                                />
+                                <Text
+                                  style={{
+                                    color: "white",
+                                    fontWeight: "900",
+                                    fontSize: 12,
+                                  }}
+                                >
+                                  Hold steady • Avoid glare • Fill the frame
+                                </Text>
+                              </LinearGradient>
+                            </View>
+
+                            {/* scanning frame */}
+                            <View
+                              style={{
+                                position: "absolute",
+                                left: "10%",
+                                right: "10%",
+                                top: "30%",
+                                bottom: "30%",
+                                borderRadius: 16,
+                                borderWidth: 2,
+                                borderColor: "#ffffff88",
+                                backgroundColor: "transparent",
+                              }}
+                            />
+
+                            {/* corner accents */}
+                            <View
+                              style={{
+                                position: "absolute",
+                                left: "10%",
+                                top: "30%",
+                                width: 22,
+                                height: 22,
+                                borderLeftWidth: 3,
+                                borderTopWidth: 3,
+                                borderColor: "#ffffffcc",
+                                borderTopLeftRadius: 14,
+                              }}
+                            />
+                            <View
+                              style={{
+                                position: "absolute",
+                                right: "10%",
+                                top: "30%",
+                                width: 22,
+                                height: 22,
+                                borderRightWidth: 3,
+                                borderTopWidth: 3,
+                                borderColor: "#ffffffcc",
+                                borderTopRightRadius: 14,
+                              }}
+                            />
+                            <View
+                              style={{
+                                position: "absolute",
+                                left: "10%",
+                                bottom: "30%",
+                                width: 22,
+                                height: 22,
+                                borderLeftWidth: 3,
+                                borderBottomWidth: 3,
+                                borderColor: "#ffffffcc",
+                                borderBottomLeftRadius: 14,
+                              }}
+                            />
+                            <View
+                              style={{
+                                position: "absolute",
+                                right: "10%",
+                                bottom: "30%",
+                                width: 22,
+                                height: 22,
+                                borderRightWidth: 3,
+                                borderBottomWidth: 3,
+                                borderColor: "#ffffffcc",
+                                borderBottomRightRadius: 14,
+                              }}
+                            />
+
+                            {/* busy pill */}
+                            {scanBusy && (
+                              <View
+                                style={{
+                                  position: "absolute",
+                                  left: 12,
+                                  right: 12,
+                                  bottom: 12,
+                                  borderRadius: 999,
+                                  overflow: "hidden",
+                                  borderWidth: 1,
+                                  borderColor: "#ffffff33",
+                                }}
+                              >
+                                <LinearGradient
+                                  colors={["#00000066", "#00000033"]}
+                                  start={{ x: 0, y: 0 }}
+                                  end={{ x: 1, y: 0 }}
+                                  style={{
+                                    height: 44,
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    flexDirection: "row",
+                                    gap: 10,
+                                  }}
+                                >
+                                  <ActivityIndicator color="#fff" />
+                                  <Text
+                                    style={{
+                                      color: "white",
+                                      fontWeight: "900",
+                                      fontSize: 12,
+                                    }}
+                                  >
+                                    Looking up nutrition…
+                                  </Text>
+                                </LinearGradient>
+                              </View>
+                            )}
+                          </View>
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Error */}
+                    {scanError ? (
+                      <View
+                        style={{
+                          marginTop: 10,
+                          borderRadius: 16,
+                          borderWidth: 1,
+                          borderColor: withAlpha("#EF4444", 0.35),
+                          backgroundColor: withAlpha("#EF4444", 0.12),
+                          padding: 12,
+                        }}
+                      >
+                        <Text style={{ color: colors.text, fontWeight: "900" }}>
+                          Couldn’t find a match
+                        </Text>
+                        <Text
+                          style={{
+                            color: colors.text,
+                            fontWeight: "800",
+                            marginTop: 4,
+                            opacity: 0.9,
+                          }}
+                        >
+                          {scanError}
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    {/* Manual fallback digits */}
+                    <View style={{ marginTop: 12, gap: 10 }}>
+                      <Text
+                        style={{
+                          color: colors.muted,
+                          fontWeight: "900",
+                          fontSize: 12,
+                          letterSpacing: 0.5,
+                        }}
+                      >
+                        FALLBACK
+                      </Text>
+
+                      <View
+                        style={{
+                          borderRadius: 18,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          backgroundColor: withAlpha(colors.card, 0.32),
+                          padding: 12,
+                        }}
+                      >
+                        <Text
+                          style={{ color: colors.muted, fontWeight: "800" }}
+                        >
+                          Having trouble scanning? Type the digits under the
+                          barcode.
+                        </Text>
+
+                        <View style={{ height: 10 }} />
+
+                        <TextInput
+                          value={manualBarcode}
+                          onChangeText={(t) =>
+                            setManualBarcode(t.replace(/[^0-9]/g, ""))
+                          }
+                          keyboardType="numeric"
+                          placeholder="e.g. 060383123456"
+                          placeholderTextColor={colors.placeholder}
+                          style={{
+                            height: 46,
+                            borderRadius: 14,
+                            borderWidth: 1,
+                            borderColor: colors.inputBorder,
+                            backgroundColor: colors.inputBg,
+                            color: colors.text,
+                            paddingHorizontal: 12,
+                            fontWeight: "900",
+                          }}
+                        />
+
+                        <Pressable
+                          onPress={onManualBarcodeLookup}
+                          disabled={scanBusy || manualBarcode.trim().length < 8}
+                          style={{
+                            marginTop: 10,
+                            height: 52,
+                            borderRadius: 18,
+                            borderWidth: 1,
+                            borderColor: withAlpha(colors.primary, 0.35),
+                            backgroundColor: scanBusy
+                              ? withAlpha(colors.card, 0.35)
+                              : withAlpha(colors.primary, 0.16),
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexDirection: "row",
+                            gap: 10,
+                            opacity:
+                              scanBusy || manualBarcode.trim().length < 8
+                                ? 0.6
+                                : 1,
+                          }}
+                        >
+                          {scanBusy ? (
+                            <ActivityIndicator />
+                          ) : (
+                            <Ionicons
+                              name="search-outline"
+                              size={18}
+                              color={colors.text}
+                            />
+                          )}
+                          <Text
+                            style={{ color: colors.text, fontWeight: "900" }}
+                          >
+                            {scanBusy ? "Looking up…" : "Look up barcode"}
+                          </Text>
+                        </Pressable>
+
+                        <Text
+                          style={{
+                            color: colors.muted,
+                            fontWeight: "800",
+                            fontSize: 12,
+                            marginTop: 8,
+                          }}
+                        >
+                          Data sources: Open Food Facts (primary), USDA FDC
+                          (fallback).
+                        </Text>
+                      </View>
                     </View>
-                  </View>
-                )}
+                  </LinearGradient>
+                </View>
+              </MotiView>
+            </View>
+          )}
 
-                {!!scanError && (
-                  <Text
-                    style={{ color: "#ef4444", marginTop: 8, fontSize: 12 }}
+          {/* RECENTS */}
+          {tab === "recents" && (
+            <View style={{ gap: 14 }}>
+              <MotiView
+                from={{ opacity: 0, translateY: 10 }}
+                animate={{ opacity: 1, translateY: 0 }}
+                transition={{ type: "timing", duration: 320 }}
+              >
+                <View
+                  style={{
+                    borderRadius: 22,
+                    overflow: "hidden",
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    ...softShadow,
+                  }}
+                >
+                  <LinearGradient
+                    colors={[
+                      withAlpha(colors.primary, 0.2),
+                      withAlpha(colors.card, 0.14),
+                    ]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{ padding: 14 }}
                   >
-                    {scanError}
-                  </Text>
-                )}
-                {permission?.granted && (
-                  <Text
-                    style={{ color: colors.muted, fontSize: 12, marginTop: 8 }}
-                  >
-                    Data sources: Open Food Facts (primary), USDA FDC
-                    (fallback).
-                  </Text>
-                )}
+                    <Text
+                      style={{
+                        color: colors.text,
+                        fontWeight: "900",
+                        fontSize: 16,
+                      }}
+                    >
+                      Quick add
+                    </Text>
+                    <Text
+                      style={{
+                        color: colors.muted,
+                        fontWeight: "800",
+                        marginTop: 4,
+                      }}
+                    >
+                      Tap once → confirm macros → add.
+                    </Text>
 
-                {/* Fallback: manual barcode digits → same lookup as camera */}
-                <View style={{ marginTop: 12, gap: 8 }}>
-                  <Text style={{ color: colors.muted, fontSize: 12 }}>
-                    Having trouble scanning? Type the digits printed under the
-                    barcode and we’ll look it up. If we find a match, we’ll
-                    autofill calories, protein, carbs, fat, sugar and fiber —
-                    you can still tweak everything before adding.
-                  </Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        flexWrap: "wrap",
+                        gap: 10,
+                        marginTop: 12,
+                      }}
+                    >
+                      {quickTiles.map((t) => (
+                        <Pressable
+                          key={t.name}
+                          onPress={() => pick(t, "manual")}
+                          style={{
+                            width: "48%",
+                            borderRadius: 18,
+                            borderWidth: 1,
+                            borderColor: withAlpha(colors.border, 0.9),
+                            backgroundColor: withAlpha(colors.card, 0.35),
+                            padding: 12,
+                          }}
+                        >
+                          <Text
+                            style={{ color: colors.text, fontWeight: "900" }}
+                            numberOfLines={1}
+                          >
+                            {t.name}
+                          </Text>
+                          <Text
+                            style={{
+                              color: colors.muted,
+                              fontWeight: "800",
+                              marginTop: 4,
+                              fontSize: 12,
+                            }}
+                          >
+                            {Math.round(t.calories)} kcal • P{" "}
+                            {Math.round(t.protein)}g
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </LinearGradient>
+                </View>
+              </MotiView>
 
-                  <Field
-                    label="Barcode digits"
-                    value={manualBarcode}
-                    onChangeText={(t) =>
-                      setManualBarcode(t.replace(/[^0-9]/g, ""))
-                    }
-                    keyboardType="numeric"
-                    inputAccessoryViewID={showAccessory ? accessoryId : undefined}
-                    placeholder="e.g., 060383123456"
-                  />
+              <Text
+                style={{
+                  color: colors.muted,
+                  fontWeight: "900",
+                  fontSize: 12,
+                  letterSpacing: 0.6,
+                }}
+              >
+                MY RECENTS (1-tap add)
+              </Text>
 
-                  <PrimaryButton
-                    label={scanBusy ? "Looking up…" : "Look up barcode"}
-                    onPress={onManualBarcodeLookup}
-                    disabled={scanBusy || !manualBarcode.trim()}
-                  />
-
-                  <Text style={{ color: colors.muted, fontSize: 11 }}>
-                    Tip: Use all the numbers directly under the barcode. Once
-                    the product is found, check the serving size and macros
-                    against the nutrition label so everything matches.
+              {recentsLoading ? (
+                <View style={{ paddingVertical: 10 }}>
+                  <ActivityIndicator />
+                </View>
+              ) : myRecents.length === 0 ? (
+                <View
+                  style={{
+                    borderRadius: 18,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    padding: 14,
+                    backgroundColor: withAlpha(colors.card, 0.35),
+                  }}
+                >
+                  <Text style={{ color: colors.muted, fontWeight: "800" }}>
+                    Your recent foods (from Firestore) show here after you log
+                    some.
                   </Text>
                 </View>
-              </GlassPanel>
+              ) : (
+                <View style={{ gap: 8 }}>
+                  {myRecents.map((r, i) => (
+                    <Pressable
+                      key={`${r.name}-${i}`}
+                      onPress={() => pick(r, "recent")}
+                      style={{
+                        borderRadius: 18,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        backgroundColor: withAlpha(colors.card, 0.35),
+                        padding: 12,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <View style={{ flex: 1, paddingRight: 10 }}>
+                        <Text
+                          style={{ color: colors.text, fontWeight: "900" }}
+                          numberOfLines={1}
+                        >
+                          {r.name}
+                        </Text>
+                        <Text
+                          style={{
+                            color: colors.muted,
+                            fontWeight: "800",
+                            fontSize: 12,
+                          }}
+                        >
+                          {Math.round(r.qty)} {r.unit} •{" "}
+                          {Math.round(r.calories)} kcal
+                        </Text>
+                      </View>
+                      <Ionicons
+                        name="add-circle-outline"
+                        size={18}
+                        color={colors.text}
+                      />
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+
+              <Text
+                style={{
+                  color: colors.muted,
+                  fontWeight: "900",
+                  fontSize: 12,
+                  letterSpacing: 0.6,
+                  marginTop: 8,
+                }}
+              >
+                POPULAR (confirm first)
+              </Text>
+
+              {popularLoading ? (
+                <View style={{ paddingVertical: 10 }}>
+                  <ActivityIndicator />
+                </View>
+              ) : popular.length === 0 ? (
+                <View
+                  style={{
+                    borderRadius: 18,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    padding: 14,
+                    backgroundColor: withAlpha(colors.card, 0.35),
+                  }}
+                >
+                  <Text style={{ color: colors.muted, fontWeight: "800" }}>
+                    No popular items yet.
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ gap: 8 }}>
+                  {popular.slice(0, 10).map((p: any, idx: number) => (
+                    <Pressable
+                      key={`${p?.id || p?.name || "p"}-${idx}`}
+                      onPress={() => pick(p, "popular")}
+                      style={{
+                        borderRadius: 18,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        backgroundColor: withAlpha(colors.card, 0.35),
+                        padding: 12,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <View style={{ flex: 1, paddingRight: 10 }}>
+                        <Text
+                          style={{ color: colors.text, fontWeight: "900" }}
+                          numberOfLines={1}
+                        >
+                          {String(p?.name || p?.title || "Food")}
+                        </Text>
+                        <Text
+                          style={{
+                            color: colors.muted,
+                            fontWeight: "800",
+                            fontSize: 12,
+                          }}
+                        >
+                          {Math.round(
+                            Number(p?.calories ?? p?.nutrients?.calories ?? 0)
+                          )}{" "}
+                          kcal • P{" "}
+                          {Math.round(
+                            Number(p?.protein ?? p?.nutrients?.protein ?? 0)
+                          )}
+                          g
+                        </Text>
+                      </View>
+                      <Ionicons
+                        name="chevron-up"
+                        size={18}
+                        color={colors.text}
+                      />
+                    </Pressable>
+                  ))}
+                </View>
+              )}
             </View>
           )}
 
           {/* SEARCH */}
           {tab === "search" && (
             <View style={{ gap: 12 }}>
-              <GlassPanel>
+              <View
+                style={{
+                  borderRadius: 20,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: withAlpha(colors.card, 0.35),
+                  padding: 12,
+                }}
+              >
                 <View
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
-                    borderWidth: 1,
-                    borderColor: colors.inputBorder,
-                    borderRadius: 12,
-                    backgroundColor: colors.inputBg,
-                    paddingHorizontal: 12,
-                    height: 48,
+                    gap: 10,
                   }}
                 >
-                  <Ionicons
-                    name="search-outline"
-                    size={18}
-                    color={colors.muted}
-                  />
+                  <View
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      borderColor: withAlpha(colors.primary, 0.25),
+                      backgroundColor: withAlpha(colors.primary, 0.12),
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Ionicons
+                      name="search-outline"
+                      size={18}
+                      color={colors.text}
+                    />
+                  </View>
+
                   <TextInput
                     value={q}
                     onChangeText={setQ}
-                    placeholder="Search the community & USDA…"
+                    placeholder="Search community foods"
                     placeholderTextColor={colors.placeholder}
                     style={{
                       flex: 1,
-                      marginLeft: 8,
+                      height: 44,
                       color: colors.text,
-                      fontSize: 16,
+                      fontWeight: "900",
                     }}
-                    autoCapitalize="none"
-                    onFocus={() =>
-                      setTimeout(
-                        () =>
-                          scrollRef.current?.scrollTo({ y: 0, animated: true }),
-                        60
-                      )
-                    }
+                    returnKeyType="search"
+                    onSubmitEditing={() => Keyboard.dismiss()}
                   />
-                  {loading ? (
-                    <ActivityIndicator />
-                  ) : q ? (
-                    <Pressable
-                      onPress={() => setQ("")}
-                      hitSlop={8}
-                      accessibilityLabel="Clear search"
-                    >
+
+                  {q.length > 0 ? (
+                    <Pressable onPress={() => setQ("")} hitSlop={10}>
                       <Ionicons
                         name="close-circle"
                         size={18}
@@ -1820,614 +2288,805 @@ export default function AddMealModal() {
                     </Pressable>
                   ) : null}
                 </View>
-              </GlassPanel>
+              </View>
 
-              {/* Community catalog */}
-              <GlassPanel>
-                <SectionTitle>
-                  {q.trim()
-                    ? "Community catalog results"
-                    : "Popular in community"}
-                </SectionTitle>
-                {catalogResults.length === 0 ? (
-                  <EmptyHint
-                    text={
-                      loading
-                        ? "Searching…"
-                        : q.trim()
-                        ? "No matches yet."
-                        : "No community items yet."
-                    }
-                  />
-                ) : (
-                  catalogResults.map((c, idx) => {
-                    const n = c.nutrients || {};
-                    const macro =
-                      `per ${c.per ?? 1} ${c.unit || "serving"} • ` +
-                      `${Math.round(Number(n.calories || 0))} kcal • ` +
-                      `P${Math.round(Number(n.protein || 0))} ` +
-                      `C${Math.round(Number(n.carbs || 0))} ` +
-                      `F${Math.round(Number(n.fat || 0))}`;
-                    return (
-                      <ListRow
-                        key={`cat-${idx}-${c.name}-${c.unit}`}
-                        onPress={() => startEditFromCatalog(c)}
-                        title={c.name}
-                        subtitle={macro}
-                        right={
-                          <Ionicons
-                            name="create-outline"
-                            size={20}
-                            color={colors.text}
-                          />
-                        }
+              {searchLoading ? (
+                <View style={{ paddingVertical: 10 }}>
+                  <ActivityIndicator />
+                </View>
+              ) : q.trim().length === 0 ? (
+                <View
+                  style={{
+                    borderRadius: 18,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    padding: 14,
+                    backgroundColor: withAlpha(colors.card, 0.35),
+                  }}
+                >
+                  <Text style={{ color: colors.muted, fontWeight: "800" }}>
+                    Start typing. Example: “quest”, “chicken”, “rice”.
+                  </Text>
+                </View>
+              ) : results.length === 0 ? (
+                <View
+                  style={{
+                    borderRadius: 18,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    padding: 14,
+                    backgroundColor: withAlpha(colors.card, 0.35),
+                  }}
+                >
+                  <Text style={{ color: colors.muted, fontWeight: "800" }}>
+                    No results. Try a simpler term.
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ gap: 8 }}>
+                  {results.slice(0, 20).map((r: any, idx: number) => (
+                    <Pressable
+                      key={`${r?.id || r?.name || "r"}-${idx}`}
+                      onPress={() => pick(r, "catalog")}
+                      style={{
+                        borderRadius: 18,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        backgroundColor: withAlpha(colors.card, 0.35),
+                        padding: 12,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <View style={{ flex: 1, paddingRight: 10 }}>
+                        <Text
+                          style={{ color: colors.text, fontWeight: "900" }}
+                          numberOfLines={1}
+                        >
+                          {String(r?.name || r?.title || "Food")}
+                        </Text>
+                        <Text
+                          style={{
+                            color: colors.muted,
+                            fontWeight: "800",
+                            fontSize: 12,
+                          }}
+                        >
+                          {Math.round(
+                            Number(r?.calories ?? r?.nutrients?.calories ?? 0)
+                          )}{" "}
+                          kcal • P{" "}
+                          {Math.round(
+                            Number(r?.protein ?? r?.nutrients?.protein ?? 0)
+                          )}
+                          g
+                        </Text>
+                      </View>
+                      <Ionicons
+                        name="chevron-up"
+                        size={18}
+                        color={colors.text}
                       />
-                    );
-                  })
-                )}
-              </GlassPanel>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
 
-              {/* USDA */}
-              <GlassPanel>
-                <SectionTitle>USDA FoodData Central</SectionTitle>
-                {!q.trim() ? (
-                  <EmptyHint text="Type above to search the national database." />
-                ) : fdcResults.length === 0 ? (
-                  <EmptyHint
-                    text={loading ? "Searching…" : "No results found."}
-                  />
-                ) : (
-                  fdcResults.map((f) => (
-                    <ListRow
-                      key={f.fdcId}
-                      onPress={() => startEditFromFdc(f)}
-                      title={f.description}
-                      subtitle={f.brandOwner}
-                      right={
+          {/* DESCRIBE */}
+          {tab === "describe" && (
+            <View style={{ gap: 14 }}>
+              <View
+                style={{
+                  borderRadius: 22,
+                  overflow: "hidden",
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  ...softShadow,
+                }}
+              >
+                <LinearGradient
+                  colors={[
+                    withAlpha(colors.accent ?? colors.primary, 0.18),
+                    withAlpha(colors.card, 0.12),
+                  ]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{ padding: 14 }}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: withAlpha(colors.primary, 0.25),
+                        backgroundColor: withAlpha(colors.primary, 0.12),
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Ionicons
+                        name="sparkles-outline"
+                        size={18}
+                        color={colors.text}
+                      />
+                    </View>
+
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={{
+                          color: colors.text,
+                          fontWeight: "900",
+                          fontSize: 16,
+                        }}
+                      >
+                        Describe your meal
+                      </Text>
+                      <Text
+                        style={{
+                          color: colors.muted,
+                          fontWeight: "800",
+                          marginTop: 2,
+                        }}
+                      >
+                        We’ll estimate macros, then you confirm.
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={{ marginTop: 12, gap: 10 }}>
+                    <Field
+                      label="Description"
+                      value={descText}
+                      onChange={setDescText}
+                      colors={colors}
+                      placeholder="e.g. chicken burrito bowl with rice, beans, cheese, salsa"
+                      multiline
+                      minHeight={110}
+                    />
+
+                    {descError ? (
+                      <Text
+                        style={{
+                          color: withAlpha("#EF4444", 0.95),
+                          fontWeight: "800",
+                        }}
+                      >
+                        {descError}
+                      </Text>
+                    ) : null}
+
+                    <Pressable
+                      onPress={calculateFromDescription}
+                      disabled={descLoading || !descText.trim()}
+                      style={{
+                        marginTop: 2,
+                        height: 52,
+                        borderRadius: 18,
+                        borderWidth: 1,
+                        borderColor: withAlpha(colors.primary, 0.35),
+                        backgroundColor: descLoading
+                          ? withAlpha(colors.card, 0.35)
+                          : withAlpha(colors.primary, 0.16),
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexDirection: "row",
+                        gap: 10,
+                        opacity: !descText.trim() ? 0.55 : 1,
+                      }}
+                    >
+                      {descLoading ? (
+                        <ActivityIndicator />
+                      ) : (
                         <Ionicons
-                          name="create-outline"
-                          size={20}
+                          name="calculator-outline"
+                          size={18}
                           color={colors.text}
                         />
-                      }
-                    />
-                  ))
-                )}
-              </GlassPanel>
+                      )}
+                      <Text style={{ color: colors.text, fontWeight: "900" }}>
+                        {descLoading ? "Estimating…" : "Estimate macros"}
+                      </Text>
+                    </Pressable>
+
+                    <View
+                      style={{
+                        padding: 12,
+                        borderRadius: 16,
+                        borderWidth: 1,
+                        borderColor: withAlpha(colors.border, 0.9),
+                        backgroundColor: withAlpha(colors.card, 0.28),
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: colors.muted,
+                          fontWeight: "800",
+                          fontSize: 12,
+                        }}
+                      >
+                        Tip: include quantities (e.g. “2 eggs”, “1 cup rice”).
+                        You’ll edit before confirming.
+                      </Text>
+                    </View>
+                  </View>
+                </LinearGradient>
+              </View>
             </View>
           )}
 
-          {/* DESCRIBE (now only prompt + button; macros handled in shared sheet) */}
-          {tab === "describe" && (
-            <View style={{ gap: 12 }}>
-              <GlassPanel>
-                <SectionTitle>Describe your meal</SectionTitle>
-                <Field
-                  value={descText}
-                  onChangeText={setDescText}
-                  placeholder="e.g., chicken bowl with rice and veggies"
-                  multiline
-                  onFocus={() =>
-                    scrollRef.current?.scrollTo({ y: 0, animated: true })
-                  }
-                />
-                <PrimaryButton
-                  label={
-                    calcLoading ? "Calculating…" : "Calculate & edit macros"
-                  }
-                  onPress={onCalculateMacros}
-                  disabled={calcLoading || !descText.trim()}
-                />
-                {!!calcError && (
-                  <Text style={{ color: "#ef4444", fontSize: 12 }}>
-                    {calcError}
-                  </Text>
-                )}
-                <Text
-                  style={{
-                    marginTop: 6,
-                    fontSize: 12,
-                    color: colors.muted,
-                  }}
-                >
-                  After calculation, a popup will let you tweak quantity and
-                  macros before adding.
-                </Text>
-              </GlassPanel>
-            </View>
-          )}
-
-          {/* MANUAL (basic details → shared macro editor) */}
+          {/* MANUAL */}
           {tab === "manual" && (
-            <View style={{ gap: 12 }}>
-              <GlassPanel>
-                <SectionTitle>Details</SectionTitle>
-                <Field
-                  label="Name"
-                  value={name}
-                  onChangeText={setName}
-                  placeholder="e.g., Greek yogurt"
-                  onFocus={() =>
-                    scrollRef.current?.scrollTo({ y: 0, animated: true })
-                  }
-                />
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <Field
-                    label="Qty"
-                    value={qty}
-                    onChangeText={(t) => setQty(t.replace(/[^0-9.]/g, ""))}
-                    keyboardType="decimal-pad"
-                    inputAccessoryViewID={showAccessory ? accessoryId : undefined}
-                    onFocus={() =>
-                      scrollRef.current?.scrollTo({ y: 120, animated: true })
-                    }
-                  />
-                  <Field
-                    label="Unit"
-                    value={unit}
-                    onChangeText={setUnit}
-                    placeholder="serving / g / ml"
-                    onFocus={() =>
-                      scrollRef.current?.scrollTo({ y: 120, animated: true })
-                    }
-                  />
-                </View>
-
-                <Text
-                  style={{
-                    marginTop: 8,
-                    fontSize: 12,
-                    color: colors.muted,
-                  }}
+            <View style={{ gap: 14 }}>
+              <View
+                style={{
+                  borderRadius: 22,
+                  overflow: "hidden",
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  ...softShadow,
+                }}
+              >
+                <LinearGradient
+                  colors={[
+                    withAlpha(colors.primary, 0.18),
+                    withAlpha(colors.card, 0.12),
+                  ]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{ padding: 14 }}
                 >
-                  You’ll set calories, protein, carbs, fat, sugar and fiber in a
-                  popup next.
-                </Text>
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontWeight: "900",
+                      fontSize: 16,
+                    }}
+                  >
+                    Manual entry
+                  </Text>
+                  <Text
+                    style={{
+                      color: colors.muted,
+                      fontWeight: "800",
+                      marginTop: 4,
+                    }}
+                  >
+                    You’ll confirm before adding.
+                  </Text>
 
-                <PrimaryButton
-                  label="Edit macros"
-                  onPress={startManualEdit}
-                  disabled={!name.trim()}
-                />
-              </GlassPanel>
+                  <View style={{ marginTop: 12, gap: 10 }}>
+                    <Field
+                      label="Name"
+                      value={name}
+                      onChange={setName}
+                      colors={colors}
+                      placeholder="e.g. Chicken burrito bowl"
+                      flex={1}
+                    />
+
+                    <View style={{ flexDirection: "row", gap: 10 }}>
+                      <Field
+                        label="Qty"
+                        value={qty}
+                        onChange={(t) => setQty(t.replace(/[^0-9.]/g, ""))}
+                        colors={colors}
+                        keyboardType="decimal-pad"
+                        placeholder="1"
+                        flex={1}
+                      />
+                      <Field
+                        label="Unit"
+                        value={unit}
+                        onChange={setUnit}
+                        colors={colors}
+                        placeholder="serving"
+                        flex={1}
+                      />
+                    </View>
+
+                    <Text
+                      style={{
+                        color: colors.muted,
+                        fontWeight: "900",
+                        fontSize: 12,
+                        letterSpacing: 0.5,
+                      }}
+                    >
+                      TOTAL MACROS
+                    </Text>
+
+                    <View style={{ flexDirection: "row", gap: 10 }}>
+                      <Field
+                        label="Calories"
+                        value={calories}
+                        onChange={(t) => setCalories(t.replace(/[^0-9.]/g, ""))}
+                        colors={colors}
+                        keyboardType="decimal-pad"
+                        placeholder="0"
+                        flex={1}
+                      />
+                      <Field
+                        label="Protein (g)"
+                        value={protein}
+                        onChange={(t) => setProtein(t.replace(/[^0-9.]/g, ""))}
+                        colors={colors}
+                        keyboardType="decimal-pad"
+                        placeholder="0"
+                        flex={1}
+                      />
+                    </View>
+
+                    <View style={{ flexDirection: "row", gap: 10 }}>
+                      <Field
+                        label="Carbs (g)"
+                        value={carbs}
+                        onChange={(t) => setCarbs(t.replace(/[^0-9.]/g, ""))}
+                        colors={colors}
+                        keyboardType="decimal-pad"
+                        placeholder="0"
+                        flex={1}
+                      />
+                      <Field
+                        label="Fat (g)"
+                        value={fat}
+                        onChange={(t) => setFat(t.replace(/[^0-9.]/g, ""))}
+                        colors={colors}
+                        keyboardType="decimal-pad"
+                        placeholder="0"
+                        flex={1}
+                      />
+                    </View>
+                  </View>
+
+                  <Pressable
+                    onPress={commitManual}
+                    style={{
+                      marginTop: 14,
+                      height: 52,
+                      borderRadius: 18,
+                      borderWidth: 1,
+                      borderColor: withAlpha(colors.primary, 0.35),
+                      backgroundColor: withAlpha(colors.primary, 0.16),
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexDirection: "row",
+                      gap: 10,
+                    }}
+                  >
+                    <Ionicons name="chevron-up" size={18} color={colors.text} />
+                    <Text style={{ color: colors.text, fontWeight: "900" }}>
+                      Review & confirm
+                    </Text>
+                  </Pressable>
+                </LinearGradient>
+              </View>
             </View>
           )}
         </ScrollView>
 
-        {/* Bottom Sheet: Shared Macro Editor */}
-        {editOpen && (
-          <>
-            {/* Scrim */}
-            <Animated.View
-              style={{
-                position: "absolute",
-                inset: 0,
-                backgroundColor: "#000",
-                opacity: scrimOpacity,
-              }}
-            />
-            <Pressable
-              onPress={closeEdit}
-              style={{ position: "absolute", inset: 0 }}
-              accessibilityLabel="Dismiss editor"
-            />
-            {/* Sheet */}
-            <Animated.View
-              style={{
-                position: "absolute",
-                left: 0,
-                right: 0,
-                bottom: 0,
-                transform: [{ translateY }],
-              }}
-            >
-              <SafeAreaView
-                edges={["bottom"]}
-                style={{ padding: 16, paddingTop: 8 }}
-              >
-                {/* Keyboard + scroll handling for popup */}
-                <KeyboardAvoidingView
-                  behavior={Platform.OS === "ios" ? "padding" : undefined}
-                  keyboardVerticalOffset={Platform.OS === "ios" ? 16 : 0}
-                  style={{ maxHeight: H * 0.8 }}
-                >
-                  <GlassPanel>
-                    {/* Header row stays fixed */}
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        marginBottom: 4,
-                      }}
-                    >
-                      <Text style={{ color: colors.text, fontWeight: "800" }}>
-                        Edit details
-                      </Text>
-                      <Pressable
-                        onPress={closeEdit}
-                        hitSlop={8}
-                        accessibilityLabel="Close edit"
-                      >
-                        <Ionicons
-                          name="close-circle"
-                          size={20}
-                          color={colors.muted}
-                        />
-                      </Pressable>
-                    </View>
-
-                    {/* Scrollable content so keyboard doesn't trap the user */}
-                    <ScrollView
-                      keyboardShouldPersistTaps="handled"
-                      keyboardDismissMode={
-                        Platform.OS === "ios" ? "interactive" : "on-drag"
-                      }
-                      contentContainerStyle={{ paddingBottom: 8, gap: 10 }}
-                      showsVerticalScrollIndicator={false}
-                    >
-                      {/* Source + basis badges */}
-                      {(sourceLabel || editSource) && (
-                        <View
-                          style={{
-                            flexDirection: "row",
-                            flexWrap: "wrap",
-                            gap: 8,
-                            alignItems: "center",
-                            marginTop: 2,
-                          }}
-                        >
-                          {sourceLabel && (
-                            <View
-                              style={{
-                                paddingHorizontal: 10,
-                                paddingVertical: 6,
-                                borderRadius: 999,
-                                borderWidth: 1,
-                                backgroundColor:
-                                  editSource === "describe"
-                                    ? withAlpha(colors.primary, 0.14)
-                                    : withAlpha(colors.card, 0.9),
-                                borderColor:
-                                  editSource === "describe"
-                                    ? withAlpha(colors.primary, 0.35)
-                                    : colors.border,
-                              }}
-                            >
-                              <Text
-                                style={{
-                                  fontSize: 12,
-                                  fontWeight: "800",
-                                  color:
-                                    editSource === "describe"
-                                      ? colors.primary
-                                      : colors.text,
-                                }}
-                              >
-                                {sourceLabel}
-                              </Text>
-                            </View>
-                          )}
-                          <View
-                            style={{
-                              paddingHorizontal: 10,
-                              paddingVertical: 6,
-                              borderRadius: 999,
-                              borderWidth: 1,
-                              backgroundColor: withAlpha(colors.card, 0.9),
-                              borderColor: colors.border,
-                            }}
-                          >
-                            <Text
-                              style={{
-                                fontSize: 12,
-                                fontWeight: "700",
-                                color: colors.muted,
-                              }}
-                            >
-                              per {eQty} {eUnit}
-                            </Text>
-                          </View>
-                        </View>
-                      )}
-                      {perIs100 && (
-                        <Text
-                          style={{
-                            marginTop: 4,
-                            fontSize: 12,
-                            color: "#f59e0b",
-                          }}
-                        >
-                          Tip: This entry is per 100{" "}
-                          {eUnit.toLowerCase().includes("ml") ? "ml" : "g"}.
-                          Adjust quantity/unit to match your serving.
-                        </Text>
-                      )}
-
-                      <Field
-                        label="Name"
-                        value={eName}
-                        onChangeText={setEName}
-                        placeholder="Meal name"
-                        autoFocus={editOpen}
-                      />
-                      <View style={{ flexDirection: "row", gap: 8 }}>
-                        <Field
-                          label="Quantity"
-                          value={eQty}
-                          onChangeText={handleEditQtyChange}
-                          keyboardType="decimal-pad"
-                          inputAccessoryViewID={
-                            showAccessory ? accessoryId : undefined
-                          }
-                        />
-                        <Field
-                          label="Unit"
-                          value={eUnit}
-                          onChangeText={setEUnit}
-                          placeholder="serving / g / ml"
-                        />
-                      </View>
-
-                      <SectionTitle>
-                        Macros (totals for the whole meal)
-                      </SectionTitle>
-                      <View style={{ flexDirection: "row", gap: 8 }}>
-                        <Field
-                          label="Calories"
-                          value={eCalories}
-                          onChangeText={(t) =>
-                            setECalories(t.replace(/[^0-9.]/g, ""))
-                          }
-                          keyboardType="decimal-pad"
-                          inputAccessoryViewID={
-                            showAccessory ? accessoryId : undefined
-                          }
-                        />
-                        <Field
-                          label="Protein (g)"
-                          value={eProtein}
-                          onChangeText={(t) =>
-                            setEProtein(t.replace(/[^0-9.]/g, ""))
-                          }
-                          keyboardType="decimal-pad"
-                          inputAccessoryViewID={
-                            showAccessory ? accessoryId : undefined
-                          }
-                        />
-                      </View>
-                      <View style={{ flexDirection: "row", gap: 8 }}>
-                        <Field
-                          label="Carbs (g)"
-                          value={eCarbs}
-                          onChangeText={(t) =>
-                            setECarbs(t.replace(/[^0-9.]/g, ""))
-                          }
-                          keyboardType="decimal-pad"
-                          inputAccessoryViewID={
-                            showAccessory ? accessoryId : undefined
-                          }
-                        />
-                        <Field
-                          label="Fat (g)"
-                          value={eFat}
-                          onChangeText={(t) =>
-                            setEFat(t.replace(/[^0-9.]/g, ""))
-                          }
-                          keyboardType="decimal-pad"
-                          inputAccessoryViewID={
-                            showAccessory ? accessoryId : undefined
-                          }
-                        />
-                      </View>
-                      <View style={{ flexDirection: "row", gap: 8 }}>
-                        <Field
-                          label="Sugar (g)"
-                          value={eSugar}
-                          onChangeText={(t) =>
-                            setESugar(t.replace(/[^0-9.]/g, ""))
-                          }
-                          keyboardType="decimal-pad"
-                          inputAccessoryViewID={
-                            showAccessory ? accessoryId : undefined
-                          }
-                        />
-                        <Field
-                          label="Fiber (g)"
-                          value={eFiber}
-                          onChangeText={(t) =>
-                            setEFiber(t.replace(/[^0-9.]/g, ""))
-                          }
-                          keyboardType="decimal-pad"
-                          inputAccessoryViewID={
-                            showAccessory ? accessoryId : undefined
-                          }
-                        />
-                      </View>
-
-                      <ScoreBar score={eScore} />
-
-                      {/* Report mismatch / update from label */}
-                      <Pressable
-                        onPress={async () => {
-                          try {
-                            // try forwarding to your catalog if available
-                            // @ts-ignore
-                            const fc = require("@/services/foodCatalog");
-                            if (typeof fc.submitSuggestion === "function") {
-                              await fc.submitSuggestion({
-                                barcode: scannedBarcode,
-                                name: eName,
-                                unit: eUnit,
-                                per: Number(eQty || 1),
-                                nutrients: {
-                                  calories: Number(eCalories || 0),
-                                  protein: Number(eProtein || 0),
-                                  carbs: Number(eCarbs || 0),
-                                  fat: Number(eFat || 0),
-                                  sugar: Number(eSugar || 0),
-                                  fiber: Number(eFiber || 0),
-                                },
-                                source: editSource,
-                              });
-                            }
-                            // always cache locally
-                            if (scannedBarcode) {
-                              await cacheSave(scannedBarcode, {
-                                name: eName,
-                                unit: eUnit,
-                                per: Number(eQty || 1),
-                                nutrients: {
-                                  calories: Number(eCalories || 0),
-                                  protein: Number(eProtein || 0),
-                                  carbs: Number(eCarbs || 0),
-                                  fat: Number(eFat || 0),
-                                  sugar: Number(eSugar || 0),
-                                  fiber: Number(eFiber || 0),
-                                },
-                                fdcId: eFdcId ?? null,
-                                source: "OFF",
-                              });
-                            }
-                            Alert.alert("Thanks!", "We saved your correction.");
-                          } catch {
-                            Alert.alert(
-                              "Oops",
-                              "Couldn’t send suggestion. Saved locally."
-                            );
-                          }
-                        }}
-                        style={{ alignSelf: "flex-start", marginBottom: 4 }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            color: colors.muted,
-                            textDecorationLine: "underline",
-                          }}
-                        >
-                          Report mismatch / Update from label
-                        </Text>
-                      </Pressable>
-
-                      <PrimaryButton
-                        label="Add"
-                        onPress={addFromEditDraft}
-                        disabled={!eName.trim()}
-                      />
-                    </ScrollView>
-                  </GlassPanel>
-                </KeyboardAvoidingView>
-              </SafeAreaView>
-            </Animated.View>
-          </>
-        )}
-
-        {/* Candidate Picker Sheet */}
-        {pickOpen && (
-          <>
-            <Animated.View
-              style={{
-                position: "absolute",
-                inset: 0,
-                backgroundColor: "#000",
-                opacity: scrimOpacity,
-              }}
-            />
-            <Pressable
-              onPress={() => setPickOpen(false)}
-              style={{ position: "absolute", inset: 0 }}
-            />
-            <Animated.View
-              style={{
-                position: "absolute",
-                left: 0,
-                right: 0,
-                bottom: 0,
-                transform: [{ translateY }],
-              }}
-            >
-              <SafeAreaView
-                edges={["bottom"]}
-                style={{ padding: 16, paddingTop: 8 }}
-              >
-                <GlassPanel>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <Text style={{ color: colors.text, fontWeight: "800" }}>
-                      Select a match
-                    </Text>
-                    <Pressable onPress={() => setPickOpen(false)}>
-                      <Ionicons
-                        name="close-circle"
-                        size={20}
-                        color={colors.muted}
-                      />
-                    </Pressable>
-                  </View>
-
-                  {candidates.map((c, i) => (
-                    <ListRow
-                      key={i}
-                      onPress={() => {
-                        setPickOpen(false);
-                        startEditFromBarcode(c);
-                      }}
-                      title={`${c.name}${c.brand ? " • " + c.brand : ""}`}
-                      subtitle={`${c.source} • per ${c.per} ${c.unit}`}
-                      right={
-                        <Ionicons
-                          name="chevron-forward"
-                          size={18}
-                          color={colors.muted}
-                        />
-                      }
-                    />
-                  ))}
-                </GlassPanel>
-              </SafeAreaView>
-            </Animated.View>
-          </>
-        )}
-
-        {showAccessory && (
-          <InputAccessoryView nativeID={accessoryId}>
+        {(tab === "recents" || tab === "search") && (
+          <View
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: 16,
+              paddingHorizontal: 16,
+            }}
+          >
             <View
               style={{
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-                borderTopWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.card,
-                flexDirection: "row",
-                justifyContent: "flex-end",
+                borderRadius: 999,
+                overflow: "hidden",
+                borderWidth: 1,
+                borderColor: withAlpha(colors.primary, 0.35),
+                backgroundColor:
+                  Platform.OS === "ios"
+                    ? withAlpha(colors.card, 0.45)
+                    : withAlpha(colors.card, 0.9),
+                ...softShadow,
               }}
             >
               <Pressable
-                onPress={() => Keyboard.dismiss()}
-                hitSlop={8}
+                onPress={() => {
+                  setTab("manual");
+                  setName("");
+                  setQty("1");
+                  setUnit("serving");
+                  setCalories("");
+                  setProtein("");
+                  setCarbs("");
+                  setFat("");
+                  Keyboard.dismiss();
+                }}
                 style={{
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 10,
-                  backgroundColor: withAlpha(colors.primary, 0.15),
-                  borderWidth: 1,
-                  borderColor: withAlpha(colors.primary, 0.35),
+                  height: 54,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexDirection: "row",
+                  gap: 10,
                 }}
               >
-                <Text style={{ color: colors.primary, fontWeight: "800" }}>
-                  Done
+                <Ionicons name="create-outline" size={18} color={colors.text} />
+                <Text style={{ color: colors.text, fontWeight: "900" }}>
+                  Manual entry
+                </Text>
+                <Text style={{ color: colors.muted, fontWeight: "800" }}>
+                  • confirm before add
                 </Text>
               </Pressable>
             </View>
-          </InputAccessoryView>
+          </View>
         )}
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
+  );
+}
+
+function ConfirmSheetContent({
+  colors,
+  isDark,
+  edits,
+  setEdits,
+  onCancel,
+  onConfirm,
+}: {
+  colors: any;
+  isDark: boolean;
+  edits: any;
+  setEdits: (fn: any) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const scrollRef = React.useRef<ScrollView>(null);
+
+  // "Smart lift": keep the sheet fixed, but scroll the focused field into view.
+  const scrollIntoView = React.useCallback((e: any) => {
+    const target = e?.target;
+    if (!target?.measureInWindow) return;
+
+    target.measureInWindow((x: number, y: number, w: number, h: number) => {
+      const desiredTopY = 160;
+      const delta = y - desiredTopY;
+      if (delta > 24) {
+        scrollRef.current?.scrollTo({ y: delta, animated: true });
+      }
+    });
+  }, []);
+
+  const numOnly = (t: string) => t.replace(/[^0-9.]/g, "");
+
+  const RowField = React.useCallback(
+    ({
+      label,
+      value,
+      keyName,
+    }: {
+      label: string;
+      value: string;
+      keyName: string;
+    }) => (
+      <View style={{ flex: 1, gap: 6 }}>
+        <Text style={{ color: colors.muted, fontWeight: "900", fontSize: 11 }}>
+          {label}
+        </Text>
+        <TextInput
+          value={value}
+          onFocus={scrollIntoView}
+          onChangeText={(t) =>
+            setEdits((p: any) => ({ ...p, [keyName]: numOnly(t) }))
+          }
+          keyboardType="decimal-pad"
+          placeholder="0"
+          placeholderTextColor={colors.placeholder}
+          style={{
+            height: 46,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: colors.inputBorder,
+            backgroundColor: colors.inputBg,
+            color: colors.text,
+            paddingHorizontal: 12,
+            fontWeight: "900",
+          }}
+        />
+      </View>
+    ),
+    [colors, setEdits, scrollIntoView]
+  );
+
+  return (
+    <ScrollView
+      ref={scrollRef}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+      automaticallyAdjustKeyboardInsets
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ padding: 16, paddingBottom: 140, flexGrow: 1 }}
+    >
+      <View style={{ gap: 12 }}>
+        {/* grabber */}
+        <View style={{ alignItems: "center", marginTop: 2 }}>
+          <View
+            style={{
+              width: 42,
+              height: 5,
+              borderRadius: 999,
+              backgroundColor: withAlpha(colors.text, isDark ? 0.18 : 0.12),
+            }}
+          />
+        </View>
+
+        {/* header */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <View style={{ gap: 2 }}>
+            <Text
+              style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}
+            >
+              Confirm macros
+            </Text>
+            <Text
+              style={{ color: colors.muted, fontWeight: "800", fontSize: 12 }}
+            >
+              Edit anything — then confirm.
+            </Text>
+          </View>
+
+          <Pressable
+            onPress={onCancel}
+            hitSlop={10}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: withAlpha(colors.card, 0.35),
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Ionicons name="close" size={18} color={colors.text} />
+          </Pressable>
+        </View>
+
+        <View style={{ gap: 10 }}>
+          {/* Name */}
+          <View style={{ gap: 6 }}>
+            <Text
+              style={{ color: colors.muted, fontWeight: "900", fontSize: 11 }}
+            >
+              Name
+            </Text>
+            <TextInput
+              value={edits.name}
+              onFocus={scrollIntoView}
+              onChangeText={(t) => setEdits((p: any) => ({ ...p, name: t }))}
+              placeholder="Food name"
+              placeholderTextColor={colors.placeholder}
+              style={{
+                height: 46,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: colors.inputBorder,
+                backgroundColor: colors.inputBg,
+                color: colors.text,
+                paddingHorizontal: 12,
+                fontWeight: "900",
+              }}
+            />
+          </View>
+
+          {/* Qty + Unit */}
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1, gap: 6 }}>
+              <Text
+                style={{ color: colors.muted, fontWeight: "900", fontSize: 11 }}
+              >
+                Qty
+              </Text>
+              <TextInput
+                value={edits.qty}
+                onFocus={scrollIntoView}
+                onChangeText={(t) =>
+                  setEdits((p: any) => ({ ...p, qty: numOnly(t) }))
+                }
+                keyboardType="decimal-pad"
+                placeholder="1"
+                placeholderTextColor={colors.placeholder}
+                style={{
+                  height: 46,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: colors.inputBorder,
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                  paddingHorizontal: 12,
+                  fontWeight: "900",
+                }}
+              />
+            </View>
+
+            <View style={{ flex: 1, gap: 6 }}>
+              <Text
+                style={{ color: colors.muted, fontWeight: "900", fontSize: 11 }}
+              >
+                Unit
+              </Text>
+              <TextInput
+                value={edits.unit}
+                onFocus={scrollIntoView}
+                onChangeText={(t) => setEdits((p: any) => ({ ...p, unit: t }))}
+                placeholder="serving"
+                placeholderTextColor={colors.placeholder}
+                style={{
+                  height: 46,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: colors.inputBorder,
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                  paddingHorizontal: 12,
+                  fontWeight: "900",
+                }}
+              />
+            </View>
+          </View>
+
+          <Text
+            style={{
+              color: colors.muted,
+              fontWeight: "900",
+              fontSize: 12,
+              letterSpacing: 0.5,
+              marginTop: 2,
+            }}
+          >
+            MACROS
+          </Text>
+
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <RowField
+              label="Calories"
+              value={edits.calories}
+              keyName="calories"
+            />
+            <RowField
+              label="Protein (g)"
+              value={edits.protein}
+              keyName="protein"
+            />
+          </View>
+
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <RowField label="Carbs (g)" value={edits.carbs} keyName="carbs" />
+            <RowField label="Fat (g)" value={edits.fat} keyName="fat" />
+          </View>
+
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1, gap: 6 }}>
+              <Text
+                style={{ color: colors.muted, fontWeight: "900", fontSize: 11 }}
+              >
+                Sugar (optional)
+              </Text>
+              <TextInput
+                value={edits.sugar}
+                onFocus={scrollIntoView}
+                onChangeText={(t) =>
+                  setEdits((p: any) => ({ ...p, sugar: numOnly(t) }))
+                }
+                keyboardType="decimal-pad"
+                placeholder="—"
+                placeholderTextColor={colors.placeholder}
+                style={{
+                  height: 46,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: colors.inputBorder,
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                  paddingHorizontal: 12,
+                  fontWeight: "900",
+                }}
+              />
+            </View>
+
+            <View style={{ flex: 1, gap: 6 }}>
+              <Text
+                style={{ color: colors.muted, fontWeight: "900", fontSize: 11 }}
+              >
+                Fiber (optional)
+              </Text>
+              <TextInput
+                value={edits.fiber}
+                onFocus={scrollIntoView}
+                onChangeText={(t) =>
+                  setEdits((p: any) => ({ ...p, fiber: numOnly(t) }))
+                }
+                keyboardType="decimal-pad"
+                placeholder="—"
+                placeholderTextColor={colors.placeholder}
+                style={{
+                  height: 46,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: colors.inputBorder,
+                  backgroundColor: colors.inputBg,
+                  color: colors.text,
+                  paddingHorizontal: 12,
+                  fontWeight: "900",
+                }}
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* actions */}
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 6 }}>
+          <Pressable
+            onPress={onCancel}
+            style={{
+              flex: 1,
+              height: 52,
+              borderRadius: 18,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: withAlpha(colors.card, 0.35),
+              alignItems: "center",
+              justifyContent: "center",
+              flexDirection: "row",
+              gap: 10,
+            }}
+          >
+            <Text style={{ color: colors.text, fontWeight: "900" }}>
+              Cancel
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={onConfirm}
+            style={{
+              flex: 1.2,
+              height: 52,
+              borderRadius: 18,
+              borderWidth: 1,
+              borderColor: withAlpha(colors.primary, 0.35),
+              backgroundColor: withAlpha(colors.primary, 0.18),
+              alignItems: "center",
+              justifyContent: "center",
+              flexDirection: "row",
+              gap: 10,
+            }}
+          >
+            <Ionicons
+              name="checkmark-circle-outline"
+              size={18}
+              color={colors.text}
+            />
+            <Text style={{ color: colors.text, fontWeight: "900" }}>
+              Confirm & add
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    </ScrollView>
   );
 }
