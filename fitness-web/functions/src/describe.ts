@@ -13,15 +13,12 @@ const OPENAI_SECRET = defineSecret("OPENAI_API_KEY");
 
 // Local dev fallback is okay; production will use OPENAI_SECRET
 function getOpenAIKey(): string {
-  // When deployed, .value() returns the secret. Locally, use env.
   const fromSecret = (OPENAI_SECRET as any)?.value?.();
   const fromEnv = process.env.OPENAI_API_KEY;
   const key = fromSecret || fromEnv || "";
   if (!key) throw new Error("Missing OPENAI_API_KEY");
   return key;
 }
-
-// const OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
 
 /* ───────────────────────────── Types ───────────────────────────── */
 type PlanItem = {
@@ -80,11 +77,11 @@ type MealIdeasResponse = {
 
 /** Suggestion card returned to the client */
 type SuggestionCard = {
-  icon: string; // Ionicons name (e.g., "barbell-outline")
+  icon: string;
   title: string;
   body: string;
   ctaLabel: string;
-  href: string; // app route (e.g., "/(tabs)/workouts")
+  href: string;
   tint: "workout" | "meal" | "recovery" | "ok";
 };
 
@@ -140,6 +137,7 @@ export const describe = onRequest(
         res.status(405).json({ error: "method-not-allowed" });
         return;
       }
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
 
       // 🔒 Firebase auth (ID token required)
       const authHeader = req.headers.authorization || "";
@@ -204,7 +202,7 @@ export const describe = onRequest(
           });
           const plan = (await callOpenAIForJson(prompt, "workout")) as Plan;
           res.set("Cache-Control", "no-store");
-          res.status(200).json(plan); // ✅ return the plan
+          res.status(200).json(plan);
           return;
         } catch (e: any) {
           console.error("[workout_plan:v1] OpenAI failed", e);
@@ -239,10 +237,8 @@ export const describe = onRequest(
         const pRem = Math.max(0, Math.round(proteinGoal - protein));
         const hasWorkout = burned > 0;
 
-        // Gating
         const interesting = isRestDay || !hasWorkout || cRem > 200 || pRem > 20;
 
-        // Cache key (no seed)
         const key = buildBucketKey({
           date,
           hour,
@@ -262,7 +258,6 @@ export const describe = onRequest(
         const forceNew = !!body.forceNew;
         const seed = String(body.seed || body.regenToken || "");
 
-        // Cache read
         if (!forceNew) {
           try {
             const snap = await cacheRef.get();
@@ -284,7 +279,6 @@ export const describe = onRequest(
           }
         }
 
-        // Rule fallback if not interesting
         if (!interesting) {
           const cards = ruleBasedSuggestions({
             count: desiredCount,
@@ -312,7 +306,6 @@ export const describe = onRequest(
           return;
         }
 
-        // Model path
         const listPrompt = buildSuggestionListPrompt({
           date,
           timeOfDay: hour,
@@ -363,7 +356,6 @@ export const describe = onRequest(
 
       // ───────────── MEAL IDEAS ONLY (for your AI Meal Suggestions page) ─────────────
       if (mode === "meal_suggest:v1") {
-        // Inputs
         const meal = (String(
           body?.context?.meal || body?.meal || ""
         ).toLowerCase() || "") as MealIdea["meal"];
@@ -371,10 +363,9 @@ export const describe = onRequest(
         const totals = body?.totals || {};
         const notes = String(body?.notes || body?.context?.notes || "").trim();
         const n = clampCount(body?.count ?? 5);
-        const forceNew = body?.forceNew ?? true; // default TRUE ➜ always bypass cache
+        const forceNew = body?.forceNew ?? true;
         const seed = String(body.seed || body.regenToken || Date.now());
 
-        // Optional profile fetch
         let profile: any = body?.profile ?? null;
         if (!profile) {
           try {
@@ -383,7 +374,6 @@ export const describe = onRequest(
           } catch {}
         }
 
-        // Remaining + buckets
         const remaining = {
           k: Math.max(0, num(goals?.calories, 2200) - num(totals?.calories, 0)),
           p: Math.max(0, num(goals?.protein, 120) - num(totals?.protein, 0)),
@@ -403,7 +393,6 @@ export const describe = onRequest(
         const key = `v2|${m}|K${buckets.k}|P${buckets.p}|C${buckets.c}|F${buckets.f}|${notesHash}|N${n}`;
         const cacheRef = db.collection("aiMealIdeas").doc(key);
 
-        // 1) cache (skip on forceNew)
         if (!forceNew) {
           try {
             const snap = await cacheRef.get();
@@ -417,7 +406,6 @@ export const describe = onRequest(
           }
         }
 
-        // 2) quick daily quota (per user)
         const dayId = new Date().toISOString().slice(0, 10);
         const quotaRef = db.collection("aiQuota").doc(`${uid}_${dayId}_meals`);
         let count = 0;
@@ -463,7 +451,6 @@ export const describe = onRequest(
           return;
         }
 
-        // 3) prompt + call OpenAI
         const prompt = buildMealSuggestPrompt({
           meal,
           goals,
@@ -474,17 +461,14 @@ export const describe = onRequest(
           system: body.system,
         });
 
-        // 3) prompt + call OpenAI
         try {
           const out = await callOpenAIForMealIdeas(prompt, { n, seed });
 
-          // Defensive: if model returned shape but empty array, don't treat as failure.
           if (!out || !Array.isArray(out.meals)) {
             console.error("[meal_suggest] bad-shape", out);
             throw new Error("bad-shape");
           }
 
-          // ✅ cache ONLY when NOT forceNew
           if (!forceNew) {
             try {
               await cacheRef.set({
@@ -497,7 +481,6 @@ export const describe = onRequest(
             }
           }
 
-          // ✅ always bump quota
           try {
             await quotaRef.set({ count: count + 1 }, { merge: true });
           } catch (e: any) {
@@ -508,10 +491,7 @@ export const describe = onRequest(
           res.status(200).json(out);
           return;
         } catch (e: any) {
-          console.error(
-            "[meal_suggest] OpenAI failed => using fallback",
-            e?.message || e
-          );
+          console.error("[meal_suggest] OpenAI failed => using fallback", e);
 
           const fallback: MealIdeasResponse = {
             meals: [
@@ -584,40 +564,127 @@ export const describe = onRequest(
 
       // ───────────── v2 meal (flat totals) ─────────────
       if (mode === "meal:v2") {
-        const prompt = buildMealPromptV2({
-          text: body.query || body.rawText || "",
-          context: body.context ?? {},
-          system: body.system,
+        const text = pickText(body);
+
+        if (!text) {
+          res.set("Cache-Control", "no-store");
+          res.status(400).json({ error: "missing-text" });
+          return;
+        }
+
+        // ✅ per-user throttle (cheap + stops button spam)
+        {
+          const ok = await enforceMinInterval({
+            uid,
+            namespace: "mealv2",
+            minMs: 2500,
+          });
+          if (!ok.allowed) {
+            res.set("Cache-Control", "no-store");
+            res
+              .status(429)
+              .json({ error: "rate-exceeded", retryAfterMs: ok.retryAfterMs });
+            return;
+          }
+        }
+
+        // ✅ cache key: same input -> reuse during the day (cuts OpenAI calls)
+        const dayId = new Date().toISOString().slice(0, 10);
+        const cacheKey = hashKey({
+          v: 3,
+          dayId,
+          text: text.toLowerCase().slice(0, 600),
+          c: stableCtx(body.context),
         });
+        const cacheRef = db
+          .collection("aiMealV2")
+          .doc(uid)
+          .collection("days")
+          .doc(`${dayId}_${cacheKey}`);
 
-        const v2 = (await callOpenAIForMealV2(prompt)) as MealV2;
+        try {
+          // if you pass forceNew=true, bypass cache
+          const forceNew = !!body.forceNew;
+          if (!forceNew) {
+            const snap = await cacheRef.get();
+            if (snap.exists) {
+              res.set("Cache-Control", "no-store");
+              res.status(200).json(snap.data());
+              return;
+            }
+          }
+        } catch (e: any) {
+          console.warn("[meal:v2] cache read error", e);
+        }
 
-        const v1Mirror: MealResultV1 = {
-          items: [
-            {
-              name: v2.name,
-              serving: v2.unit,
-              unit: v2.unit,
-              qty: v2.quantity,
-              calories: v2.calories,
-              protein: v2.protein,
-              carbs: v2.carbs,
-              fat: v2.fat,
-              sugar: v2.sugar,
-              fiber: v2.fiber,
-            },
-          ],
-          rationale: undefined,
-        };
+        // ✅ quota guard (so you don’t burn API by accident)
+        const quotaRef = db.collection("aiQuota").doc(`${uid}_${dayId}_mealv2`);
+        let qCount = 0;
+        try {
+          const qSnap = await quotaRef.get();
+          qCount = (qSnap.exists ? qSnap.data()?.count || 0 : 0) as number;
+        } catch {}
 
-        res.set("Cache-Control", "no-store");
-        res.status(200).json({ ...v2, ...v1Mirror });
-        return;
+        // Hard cap (adjust)
+        if (qCount >= 25) {
+          const fallback = heuristicMealTotals(text, body.context);
+          res.set("Cache-Control", "no-store");
+          res.status(200).json(withMealV1Mirror(fallback));
+          return;
+        }
+
+        try {
+          // ✅ cheaper prompt (no few-shots; minimal instructions; small max_tokens)
+          const prompt = buildMealPromptV2Cheap({
+            text,
+            context: body.context ?? {},
+            system: body.system,
+          });
+
+          const v2 = await callOpenAIForMealV2(prompt);
+
+          const payload = withMealV1Mirror(v2);
+
+          // write cache + bump quota (best-effort)
+          try {
+            await cacheRef.set(
+              {
+                ...payload,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                cacheKey,
+              },
+              { merge: true }
+            );
+            await quotaRef.set({ count: qCount + 1 }, { merge: true });
+          } catch (e: any) {
+            console.warn("[meal:v2] cache/quota write error", e);
+          }
+
+          res.set("Cache-Control", "no-store");
+          res.status(200).json(payload);
+          return;
+        } catch (e: any) {
+          const msg = String(e?.message ?? e);
+          console.error("[meal:v2] failed", msg);
+
+          // ✅ error-proof fallback (always returns a usable macro object)
+          const fallback = heuristicMealTotals(text, body.context);
+
+          // bump quota even on error (optional; prevents tight retry loops)
+          try {
+            await quotaRef.set({ count: qCount + 1 }, { merge: true });
+          } catch {}
+
+          res.set("Cache-Control", "no-store");
+          // If OpenAI rate-limited, still return 200 with fallback so UX stays smooth
+          res.status(200).json(withMealV1Mirror(fallback));
+          return;
+        }
       }
 
       // ───────────── exercise describe (name + calories) ─────────────
       if (mode === "exercise:v1") {
-        const text = String(body.query || body.rawText || "").trim();
+        const text = pickText(body);
         if (!text) {
           res.set("Cache-Control", "no-store");
           res.status(400).json({ error: "missing-text" });
@@ -807,25 +874,20 @@ function buildMealSuggestPrompt(args: {
   meal?: "breakfast" | "lunch" | "dinner" | "snacks";
   goals: { calories?: number; protein?: number; carbs?: number; fat?: number };
   totals: { calories?: number; protein?: number; carbs?: number; fat?: number };
-  notes?: string; // dislikes, dietary rules, appliances/pantry, time, cuisine, budget
-  profile?: any; // optional server-fetched user profile
-  n: number; // 3..5
+  notes?: string;
+  profile?: any;
+  n: number;
   system?: string;
 }) {
   const sys =
     args.system ||
     [
       "You are a concise nutrition planner.",
-      "Task: Generate ONLY MEAL IDEAS (no tips) that help the user reach TODAY'S REMAINING macros.",
-      "Output MUST be strictly JSON with { meals: [...] } where meals is an array of 3–5 items.",
-      "Rules:",
-      "- Each idea must be a concrete meal (food combination), not generic advice.",
-      "- Respect notes when feasible (dietary rules, disliked foods, time, cuisine, appliances).",
-      "- Prioritize protein-forward options; keep sugar modest unless notes say otherwise.",
-      "- Include macros for each idea: calories, protein, carbs, fat (sugar/fiber if helpful).",
-      "- Tailor portion sizes to the REMAINING macros (not the daily goal).",
-      "- Keep names short (≤60 chars). No null/undefined; numbers must be numbers.",
-      "- No workout, sleep, water, or habit suggestions. Only meals.",
+      "Generate ONLY meal ideas to hit TODAY'S REMAINING macros.",
+      "Return strictly JSON: { meals: [...] } (3–5 items).",
+      "Each meal: name + calories/protein/carbs/fat (+ optional sugar/fiber/notes).",
+      "No generic advice, no workouts, no habits. Meals only.",
+      "Names short. Numbers are numbers. No nulls.",
     ].join(" ");
 
   const goals = {
@@ -849,9 +911,7 @@ function buildMealSuggestPrompt(args: {
 
   const user = [
     `Meal slot: ${args.meal || "any"}`,
-    `Goals (kcal/P/C/F): ${goals.k}/${goals.p}/${goals.c}/${goals.f}`,
-    `Current totals: ${totals.k}/${totals.p}/${totals.c}/${totals.f}`,
-    `Remaining target: ${remaining.k}/${remaining.p}/${remaining.c}/${remaining.f}`,
+    `Remaining (kcal/P/C/F): ${remaining.k}/${remaining.p}/${remaining.c}/${remaining.f}`,
     `Notes: ${args.notes || "(none)"}`,
     `Profile (optional): ${JSON.stringify(args.profile || {})}`,
     `n: ${args.n}`,
@@ -861,8 +921,8 @@ function buildMealSuggestPrompt(args: {
   return { system: sys, user };
 }
 
-/** v2 prompt — one flat, totalled meal object (+ few-shots) */
-function buildMealPromptV2(args: {
+/** ✅ CHEAPER v2 prompt — no few-shots, minimal text, still strict JSON */
+function buildMealPromptV2Cheap(args: {
   text: string;
   context: any;
   system?: string;
@@ -870,73 +930,31 @@ function buildMealPromptV2(args: {
   const sys =
     args.system ||
     [
-      "You are a meticulous nutrition analyst.",
-      "Goal: output TOTAL macros for the entire described meal with a realistic, conservative estimate.",
-      "Return ONLY JSON matching the schema exactly.",
-      "Rules:",
-      "- Provide a concise meal name representing the whole description.",
-      "- quantity is a number; unit describes ONE unit plainly.",
-      "- calories/protein/carbs/fat/sugar/fiber are totals for the WHOLE meal.",
-      "- Sum components; include sauces/oils/cheese.",
-      "- No null/undefined/strings for numbers.",
-      "- If serving size is ambiguous, assume a common portion and set quantity=1.",
+      "You estimate TOTAL nutrition for the whole meal.",
+      "Return ONLY JSON matching schema.",
+      "Be conservative; include sauces/oils/cheese.",
+      "If amounts unclear, assume common single serving (quantity=1).",
     ].join(" ");
 
-  const examples = [
-    {
-      user: "Meal description: Chipotle-style bowl with double chicken, white rice, black beans, mild salsa, lettuce, and a small side of guacamole.",
-      assistant: JSON.stringify({
-        name: "Chipotle-style bowl (double chicken, rice, beans, salsa, lettuce) + small guacamole",
-        quantity: 1,
-        unit: "bowl",
-        calories: 920,
-        protein: 70,
-        carbs: 85,
-        fat: 32,
-        sugar: 10,
-        fiber: 17,
-      }),
-    },
-    {
-      user: "Meal description: Two pancakes with maple syrup and a glass of 2% milk (250 ml).",
-      assistant: JSON.stringify({
-        name: "Two pancakes with maple syrup + 2% milk",
-        quantity: 1,
-        unit: "plate",
-        calories: 740,
-        protein: 18,
-        carbs: 108,
-        fat: 25,
-        sugar: 56,
-        fiber: 2,
-      }),
-    },
-  ];
+  // Keep context small (avoid huge objects)
+  const ctx = stableCtx(args.context);
 
-  const user = `Meal description: ${args.text}\nContext: ${JSON.stringify(
-    args.context ?? {}
-  )}`;
+  const user = `Meal: ${String(args.text || "").slice(
+    0,
+    900
+  )}\nContext: ${JSON.stringify(ctx)}`;
 
-  const messages = [
-    { role: "system", content: sys },
-    ...examples.flatMap((ex) => [
-      { role: "user" as const, content: ex.user },
-      { role: "assistant" as const, content: ex.assistant },
-    ]),
-    { role: "user", content: user },
-  ];
-
-  return { system: sys, user, _messages: messages as any };
+  return { system: sys, user };
 }
 
 /** prompt for suggest:v1 — MULTI-card list (unchanged) */
 function buildSuggestionListPrompt(args: {
   date: string;
-  timeOfDay: number; // 0-23
+  timeOfDay: number;
   isRestDay: boolean;
   goals: { calories?: number; protein?: number };
   totals: { calories?: number; protein?: number; burned?: number };
-  count: number; // 3..5
+  count: number;
   system?: string;
 }) {
   const sys =
@@ -997,16 +1015,10 @@ function buildExerciseDescribePrompt(args: {
     args.system ||
     [
       "You are an exercise physiologist.",
-      "Task: Parse the user's description of an exercise session and estimate total calories burned.",
+      "Parse the session and estimate total calories burned.",
       "Return ONLY JSON matching the schema exactly.",
-      "Guidelines:",
-      "- Infer duration from the text if given (e.g., '20 min jog' -> minutes=20).",
-      "- If duration is not explicit, infer a reasonable typical duration from context; keep it conservative.",
-      "- Use profile (sex/age/height_cm/weight_kg/fitnessLevel) to adjust energy cost.",
-      "- If intensity is unclear, assume moderate.",
-      "- Provide a concise short name as the session description (≤30 chars).",
-      "- No null/undefined/strings for numbers.",
-      "- When uncertain, prefer UNDER-estimating calories.",
+      "If duration unclear, infer conservatively.",
+      "Prefer UNDER-estimating calories.",
     ].join(" ");
 
   const payload = {
@@ -1015,7 +1027,6 @@ function buildExerciseDescribePrompt(args: {
   };
 
   const user = `Session: ${JSON.stringify(payload)}\nReturn JSON only.`;
-
   return { system: sys, user };
 }
 
@@ -1025,7 +1036,7 @@ async function callOpenAIForJson(
   prompt: { system: string; user: string },
   kind: "workout" | "meal"
 ): Promise<Plan | MealResultV1> {
-  const key = getOpenAIKey(); // <-- add this
+  const key = getOpenAIKey();
 
   const base: any = {
     model: "gpt-4o-mini",
@@ -1089,7 +1100,7 @@ async function callOpenAIForJson(
 
   if (!rsp.ok) {
     const t = await safeText(rsp);
-    console.error("[meal_suggest] openai_http_error", {
+    console.error("[openai chat] http_error", {
       status: rsp.status,
       body: t.slice(0, 1000),
     });
@@ -1122,7 +1133,7 @@ async function callOpenAIForMealIdeas(
 
   const body: any = {
     model: "gpt-4o-mini",
-    temperature: 0.7, // more novelty
+    temperature: 0.7,
     presence_penalty: 0.3,
     frequency_penalty: 0.2,
     messages: [
@@ -1174,26 +1185,16 @@ async function callOpenAIForMealIdeas(
     },
   };
 
-  // Stable randomness per request (so regen differs); optional but helpful
   if (opts.seed) body.seed = stringToSeed(String(opts.seed));
 
-  let rsp: Response | null = null;
-  try {
-    rsp = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-  } catch (netErr: any) {
-    console.error(
-      "[openai meal_suggest] network error",
-      netErr?.message || netErr
-    );
-    throw netErr;
-  }
+  const rsp = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
 
   if (!rsp.ok) {
     const t = await safeText(rsp);
@@ -1208,55 +1209,37 @@ async function callOpenAIForMealIdeas(
     data?.choices?.[0]?.text ??
     "{}";
 
-  // Log the raw model content once (helps when schema mismatches)
-  try {
-    // Keep short to avoid noisy logs
-    console.log("[openai meal_suggest] raw", String(text).slice(0, 400));
-  } catch {}
-
-  let out: MealIdeasResponse = { meals: [] };
   try {
     const parsed = JSON.parse(typeof text === "string" ? text : String(text));
-    if (parsed && Array.isArray(parsed.meals)) {
-      out = parsed as MealIdeasResponse;
-    } else {
-      console.error("[openai meal_suggest] parsed but missing 'meals'", parsed);
-      // Return shape anyway; let caller decide if it's acceptable
-      return { meals: [] };
-    }
+    if (parsed && Array.isArray(parsed.meals))
+      return parsed as MealIdeasResponse;
+    return { meals: [] };
   } catch (e: any) {
-    console.error(
-      "[openai meal_suggest] JSON parse error",
-      e?.message || e,
-      "from text:",
-      text
-    );
+    console.error("[openai meal_suggest] JSON parse error", e?.message || e);
     throw e;
   }
-
-  return out;
 }
 
+/** ✅ meal:v2 caller — adds max_tokens + 429-friendly errors */
 async function callOpenAIForMealV2(prompt: {
   system: string;
   user: string;
-  _messages?: any[];
 }): Promise<MealV2> {
-  const key = getOpenAIKey(); // <-- add this
-
-  const messages = prompt._messages ?? [
-    { role: "system", content: prompt.system },
-    { role: "user", content: prompt.user },
-  ];
+  const key = getOpenAIKey();
 
   const body = {
     model: "gpt-4o-mini",
     temperature: 0.2,
-    messages,
+    max_tokens: 220, // ✅ keep cheap (schema is small)
+    messages: [
+      { role: "system", content: prompt.system },
+      { role: "user", content: prompt.user },
+    ],
     response_format: {
       type: "json_schema",
       json_schema: {
         name: "MealV2Totals",
+        strict: true,
         schema: {
           type: "object",
           additionalProperties: false,
@@ -1283,7 +1266,6 @@ async function callOpenAIForMealV2(prompt: {
             fiber: { type: "number" },
           },
         },
-        strict: true,
       },
     },
   };
@@ -1299,6 +1281,8 @@ async function callOpenAIForMealV2(prompt: {
 
   if (!rsp.ok) {
     const t = await safeText(rsp);
+    // keep a short log to debug rate limits
+    console.error("[openai meal:v2] http_error", rsp.status, t.slice(0, 400));
     throw new Error(`OpenAI ${rsp.status}: ${t}`);
   }
 
@@ -1309,7 +1293,8 @@ async function callOpenAIForMealV2(prompt: {
     data?.choices?.[0]?.text ??
     "{}";
 
-  let out: MealV2 = {
+  // strict schema *should* make this safe, but still defensive:
+  const out: MealV2 = {
     name: "Meal",
     quantity: 1,
     unit: "serving",
@@ -1323,7 +1308,7 @@ async function callOpenAIForMealV2(prompt: {
 
   try {
     const parsed = JSON.parse(typeof text === "string" ? text : String(text));
-    out = {
+    return {
       name: String(parsed?.name ?? out.name),
       quantity: num(parsed?.quantity, 1),
       unit: String(parsed?.unit ?? out.unit),
@@ -1334,8 +1319,14 @@ async function callOpenAIForMealV2(prompt: {
       sugar: num(parsed?.sugar, 0),
       fiber: num(parsed?.fiber, 0),
     };
-  } catch {}
-  return out;
+  } catch (e: any) {
+    console.error(
+      "[meal:v2] parse_fail",
+      e?.message || e,
+      String(text).slice(0, 250)
+    );
+    return out;
+  }
 }
 
 /** OpenAI caller for suggest:v1 — returns ARRAY of cards */
@@ -1343,11 +1334,12 @@ async function callOpenAIForSuggestionList(
   prompt: { system: string; user: string },
   seed?: string
 ): Promise<SuggestionCard[]> {
-  const key = getOpenAIKey(); // <-- add this
+  const key = getOpenAIKey();
 
   const body: any = {
     model: "gpt-4o-mini",
     temperature: 0.35,
+    max_tokens: 260,
     messages: [
       { role: "system", content: prompt.system },
       { role: "user", content: prompt.user },
@@ -1406,9 +1398,7 @@ async function callOpenAIForSuggestionList(
 
   try {
     const arr = JSON.parse(typeof text === "string" ? text : String(text));
-    if (Array.isArray(arr) && arr.length) {
-      return arr as SuggestionCard[];
-    }
+    if (Array.isArray(arr) && arr.length) return arr as SuggestionCard[];
   } catch {}
   return [];
 }
@@ -1418,11 +1408,12 @@ async function callOpenAIForSuggestion(prompt: {
   system: string;
   user: string;
 }): Promise<SuggestionCard> {
-  const key = getOpenAIKey(); // <-- add this
+  const key = getOpenAIKey();
 
   const body = {
     model: "gpt-4o-mini",
     temperature: 0.35,
+    max_tokens: 160,
     messages: [
       { role: "system", content: prompt.system },
       { role: "user", content: prompt.user },
@@ -1431,6 +1422,7 @@ async function callOpenAIForSuggestion(prompt: {
       type: "json_schema",
       json_schema: {
         name: "SuggestionCard",
+        strict: true,
         schema: {
           type: "object",
           additionalProperties: false,
@@ -1447,7 +1439,6 @@ async function callOpenAIForSuggestion(prompt: {
             },
           },
         },
-        strict: true,
       },
     },
   };
@@ -1493,7 +1484,7 @@ async function callOpenAIForExerciseEstimate(prompt: {
   system: string;
   user: string;
 }): Promise<ExerciseEstimate> {
-  const key = getOpenAIKey(); // <-- add this
+  const key = getOpenAIKey();
 
   const body = {
     model: "gpt-4o-mini",
@@ -1507,6 +1498,7 @@ async function callOpenAIForExerciseEstimate(prompt: {
       type: "json_schema",
       json_schema: {
         name: "ExerciseEstimate",
+        strict: true,
         schema: {
           type: "object",
           additionalProperties: false,
@@ -1519,7 +1511,6 @@ async function callOpenAIForExerciseEstimate(prompt: {
             rationale: { type: "string", maxLength: 160 },
           },
         },
-        strict: true,
       },
     },
   };
@@ -1601,6 +1592,17 @@ function buildBucketKey(args: {
   return `${args.date}|${t}|${r}|${w}|C${cB}|P${pB}`;
 }
 
+function pickText(body: any): string {
+  return String(
+    body?.query ??
+      body?.rawText ??
+      body?.text ??
+      body?.prompt ??
+      body?.input ??
+      ""
+  ).trim();
+}
+
 async function safeText(r: any): Promise<string> {
   try {
     return await r.text();
@@ -1617,7 +1619,132 @@ function hashKey(payload: any) {
     .slice(0, 16);
 }
 
-/** Tiny, conservative heuristic as last-ditch fallback */
+/** keep context small + stable */
+function stableCtx(context: any) {
+  if (!context || typeof context !== "object") return {};
+  const out: any = {};
+  // only allow a few small fields if you pass them from client
+  const allow = ["meal", "notes", "unit", "qty", "brand", "restaurant"];
+  for (const k of allow) {
+    if (context[k] == null) continue;
+    const v = context[k];
+    out[k] = typeof v === "string" ? v.slice(0, 120) : v;
+  }
+  return out;
+}
+
+/** per-user min-interval throttle */
+async function enforceMinInterval(args: {
+  uid: string;
+  namespace: string;
+  minMs: number;
+}): Promise<{ allowed: boolean; retryAfterMs?: number }> {
+  const ref = db.collection("aiRate").doc(`${args.uid}_${args.namespace}`);
+  const now = Date.now();
+  try {
+    const snap = await ref.get();
+    const last = snap.exists ? Number(snap.data()?.ts || 0) : 0;
+    const delta = now - last;
+    if (last && delta < args.minMs) {
+      return { allowed: false, retryAfterMs: Math.max(0, args.minMs - delta) };
+    }
+    await ref.set({ ts: now }, { merge: true });
+    return { allowed: true };
+  } catch {
+    // if firestore is unavailable, don't block the request
+    return { allowed: true };
+  }
+}
+
+/** make meal:v2 response backward-compatible with your items[] mirror */
+function withMealV1Mirror(v2: MealV2) {
+  const v1Mirror: MealResultV1 = {
+    items: [
+      {
+        name: v2.name,
+        serving: v2.unit,
+        unit: v2.unit,
+        qty: v2.quantity,
+        calories: v2.calories,
+        protein: v2.protein,
+        carbs: v2.carbs,
+        fat: v2.fat,
+        sugar: v2.sugar,
+        fiber: v2.fiber,
+      },
+    ],
+    rationale: undefined,
+  };
+  return { ...v2, ...v1Mirror };
+}
+
+/** ultra-simple heuristic meal fallback so UX never breaks */
+function heuristicMealTotals(text: string, _context?: any): MealV2 {
+  const t = String(text || "").toLowerCase();
+
+  // default: generic "meal"
+  let name = "Meal";
+  let calories = 550;
+  let protein = 35;
+  let carbs = 55;
+  let fat = 20;
+  let sugar = 10;
+  let fiber = 6;
+
+  // protein anchors
+  if (/\b(chicken|turkey|beef|steak|salmon|tuna|shrimp|eggs?)\b/.test(t)) {
+    protein += 15;
+    calories += 150;
+    fat += 5;
+    name = "Protein-based meal";
+  }
+  // carb-heavy signals
+  if (
+    /\b(rice|pasta|bread|bagel|wrap|tortilla|fries|potato|sweet potato)\b/.test(
+      t
+    )
+  ) {
+    carbs += 25;
+    calories += 160;
+    name = name === "Meal" ? "Carb + protein meal" : name;
+  }
+  // sauces / oils / cheese
+  if (/\b(cheese|mayo|aioli|cream|butter|oil|sauce|dressing)\b/.test(t)) {
+    fat += 10;
+    calories += 120;
+    sugar += /\b(bbq|teriyaki|sweet)\b/.test(t) ? 8 : 0;
+    name = name === "Meal" ? "Meal with sauce" : name;
+  }
+  // salad / veggies
+  if (/\b(salad|veggies|vegetable|greens)\b/.test(t)) {
+    fiber += 4;
+    calories -= 80;
+    carbs -= 10;
+    name = name === "Meal" ? "Salad-style meal" : name;
+  }
+
+  // clamp non-negative + round
+  const clamp0 = (n: number) => Math.max(0, Math.round(n));
+
+  // calories should roughly match macros (very rough sanity)
+  const macroCals = protein * 4 + carbs * 4 + fat * 9;
+  // pull calories toward macro-derived calories
+  calories = Math.round((calories + macroCals) / 2);
+
+  return {
+    name,
+    quantity: 1,
+    unit: "serving",
+    calories: clamp0(calories),
+    protein: clamp0(protein),
+    carbs: clamp0(carbs),
+    fat: clamp0(fat),
+    sugar: clamp0(sugar),
+    fiber: clamp0(fiber),
+  };
+}
+
+/** Tiny, conservative heuristic as last-ditch fallback (exercise) */
 function heuristicCaloriesEstimate(
   text: string,
   p?: { weight_kg?: number }
@@ -1687,13 +1814,7 @@ function profileEnergyShape(src: any | null) {
 
   const fitnessLevel = src?.fitnessLevel || src?.activityLevel || undefined;
 
-  return {
-    sex,
-    age,
-    height_cm: heightCm,
-    weight_kg: weightKg,
-    fitnessLevel,
-  };
+  return { sex, age, height_cm: heightCm, weight_kg: weightKg, fitnessLevel };
 }
 
 /** Server-side rule fallback (single) */

@@ -1,25 +1,27 @@
-// app/(tabs)/index.tsx
-import React, { useEffect, useMemo, useState, useRef } from "react";
+// app/(tabs)/home.tsx
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
   Pressable,
-  useWindowDimensions,
-  Switch,
-  Modal,
-  TextInput,
+  ScrollView,
   Platform,
-  Animated,
+  Alert,
 } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
-
-import { Link, Href, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
+import { Link, Href, useRouter } from "expo-router";
 import { MotiView } from "moti";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import ProgressRingAnimated from "@/components/ProgressRingAnimated";
+import { withAlpha } from "@/components/workouts/utils/withAlpha";
+import ExpandableHeroCard from "@/components/ExpandableHeroCard";
+import StreakCard from "@/components/StreakCard";
+import AISwipeCard from "@/components/AISwipeCard";
+import FloatingAddMenu from "@/components/FloatingAddMenu";
+import FabMorphMenu from "@/components/FabMorphMenu";
 
-import Card from "../../components/Card";
+import { useTheme } from "@/content/ThemeProvider";
 import { useAuth } from "@/content/AuthContext";
 import {
   subscribeFoodsByDate,
@@ -31,16 +33,32 @@ import {
 import {
   ensureProfile,
   subscribeProfile,
-  updateProfile,
   type Profile,
 } from "@/services/profile";
-import WeeklyCaloriesChart from "@/components/WeeklyCaloriesChart";
-import ProgressRing from "@/components/ProgressRing";
-import { useTheme } from "@/content/ThemeProvider";
-import BottomTabSpacer from "@/components/ui/BottomTapSpacer";
-import { getAuth } from "firebase/auth";
 
-/* ---------- utils ---------- */
+/* ---------- helpers ---------- */
+const softShadow = {
+  shadowColor: "#000",
+  shadowOpacity: 0.12,
+  shadowRadius: 12,
+  shadowOffset: { width: 0, height: 6 },
+  elevation: 6,
+};
+
+const homeGradients = {
+  hero: ["rgba(108,99,255,0.35)", "rgba(27,32,64,0.9)"] as const,
+  activity: ["rgba(16,185,129,0.18)", "rgba(12,18,36,0.92)"] as const,
+  week: ["rgba(56,189,248,0.18)", "rgba(12,18,36,0.92)"] as const,
+  streak: ["rgba(255,184,77,0.22)", "rgba(12,18,36,0.9)"] as const,
+  coach: ["rgba(99,102,241,0.22)", "rgba(12,18,36,0.92)"] as const,
+};
+const arcadeColors = {
+  neonPink: "#ff5ac8",
+  neonBlue: "#5ce1ff",
+  neonLime: "#8cfb9f",
+  amber: "#ffc857",
+};
+
 const pad = (n: number) => String(n).padStart(2, "0");
 const ymd = (d: Date) =>
   `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -49,7 +67,6 @@ const addDays = (date: Date, n: number) => {
   d.setDate(d.getDate() + n);
   return d;
 };
-
 const prettyDate = (ymdStr: string) => {
   const [y, m, d] = ymdStr.split("-").map(Number);
   if (!y || !m || !d) return ymdStr;
@@ -70,2028 +87,915 @@ const prettyDate = (ymdStr: string) => {
   return `${months[m - 1]} ${d}, ${y}`;
 };
 
-function withAlpha(color: string, alpha = 0.25) {
-  if (!color) return `rgba(0,0,0,${alpha})`;
-  if (color.startsWith("rgb")) {
-    const body = color.replace(/^rgba?\(|\)$/g, "");
-    const [r, g, b] = body.split(",").map((s) => s.trim());
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  }
-  const m = color.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
-  if (!m) return color;
-  return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(
-    m[3],
-    16
-  )}, ${alpha})`;
-}
-
-const softShadow = {
-  shadowColor: "#000",
-  shadowOpacity: 0.12,
-  shadowRadius: 12,
-  shadowOffset: { width: 0, height: 6 },
-  elevation: 6,
-};
-
-const arcadeColors = {
-  neonPink: "#ff5ac8",
-  neonBlue: "#5ce1ff",
-  neonLime: "#8cfb9f",
-  amber: "#ffc857",
-};
-
-/* initials helper for avatar */
-function initialsOf(name?: string | null, email?: string | null) {
-  const src = (name && name.trim()) || (email || "").split("@")[0] || "You";
-  const parts = src.split(/[.\s_-]+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return src.slice(0, 2).toUpperCase();
-}
-
-type SuggestionCard = {
-  icon: string;
-  title: string;
-  body: string;
-  ctaLabel: string;
-  href: Href;
-  tint: "workout" | "meal" | "recovery" | "ok";
-};
-
-const AI_URL = process.env.EXPO_PUBLIC_AI_DESCRIBE_URL;
-const AI_SUGGESTIONS_ENABLED =
-  (process.env.EXPO_PUBLIC_AI_SUGGESTIONS || "on") !== "off";
-
-/* ───────────── helpers: step calories ───────────── */
-function estimateStepCalories(steps: number, weightKg?: number | null) {
-  const per = 0.04 * ((weightKg && weightKg > 0 ? weightKg : 80) / 80);
-  return Math.round((steps || 0) * per);
-}
-
-/* ───────────── daily suggestion (rule-based fallback) ───────────── */
-function buildDailySuggestion(opts: {
-  isRestToday: boolean;
-  foodsToday: FoodEntry[];
-  exerciseToday: ExerciseEntry[];
-  kcalGoal: number;
-  proteinGoal: number;
-  greeting: string;
-}): SuggestionCard {
-  const {
-    isRestToday,
-    foodsToday,
-    exerciseToday,
-    kcalGoal,
-    proteinGoal,
-    greeting,
-  } = opts;
-  const hour = new Date().getHours();
-
-  const totals = foodsToday.reduce(
-    (a, f) => ({
-      calories: a.calories + (f.calories || 0),
-      protein: a.protein + (f.protein || 0),
-      carbs: a.carbs + (f.carbs || 0),
-      fat: a.fat + (f.fat || 0),
-    }),
-    { calories: 0, protein: 0, carbs: 0, fat: 0 }
-  );
-  const cRemaining = Math.max(0, Math.round(kcalGoal - totals.calories));
-  const pRemaining = Math.max(0, Math.round(proteinGoal - totals.protein));
-  const noWorkoutYet = exerciseToday.length === 0;
-
-  const mealSlot =
-    hour < 11
-      ? "breakfast"
-      : hour < 15
-      ? "lunch"
-      : hour < 19
-      ? "dinner"
-      : "snacks";
-
-  if (isRestToday) {
-    return {
-      icon: "leaf-outline" as const,
-      title: "Recovery day focus",
-      body:
-        pRemaining > 0
-          ? `Keep it light: aim for ${pRemaining}g protein left with mostly whole foods. Add a 20–30 min walk and 5–10 min mobility before bed. Hydrate!`
-          : "Keep it light: prioritize whole foods, 20–30 min easy walk, and 5–10 min mobility before bed. Hydrate!",
-      ctaLabel: "Log mobility / walk",
-      href: "/(tabs)/workouts" as Href,
-      tint: "recovery" as const,
-    };
-  }
-
-  if (noWorkoutYet) {
-    return {
-      icon: "barbell-outline" as const,
-      title: `${greeting.split(",")[0]} boost`,
-      body:
-        hour < 15
-          ? "Quick suggestion: 25–35 min full-body circuit (3 rounds, 6–8 reps) or 20 min zone-2 cardio. You'll feel great after."
-          : "Evening pick-me-up: 20–30 min full-body or 20 min zone-2 cardio. Keep RPE ~6–7.",
-      ctaLabel: "Start a workout",
-      href: "/(tabs)/workouts" as Href,
-      tint: "workout" as const,
-    };
-  }
-
-  if (cRemaining > 120 || pRemaining > 15) {
-    return {
-      icon: "fast-food-outline" as const,
-      title: `Dial in your ${mealSlot}`,
-      body: `Try a ${mealSlot} around ${Math.min(
-        cRemaining,
-        650
-      )} kcal with ≥${Math.min(
-        pRemaining || 25,
-        55
-      )}g protein. Example: chicken bowl (rice, greens, beans) or Greek yogurt + fruit + granola.`,
-      ctaLabel: "Add a meal",
-      href: "/(tabs)/nutrition" as Href,
-      tint: "meal" as const,
-    };
-  }
-
-  return {
-    icon: "thumbs-up-outline" as const,
-    title: "Nice pace today",
-    body: "You’re trending toward your targets. Keep meals balanced and finish strong with hydration and a walk.",
-    ctaLabel: "Review nutrition",
-    href: "/(tabs)/nutrition" as Href,
-    tint: "ok" as const,
-  };
-}
-
-export default function HomeScreen() {
-  const { colors, isDark } = useTheme();
-  const router = useRouter();
-  const { width } = useWindowDimensions();
-  const { user } = useAuth();
-  const insets = useSafeAreaInsets();
-  const [date, setDate] = useState(ymd(new Date()));
-  const scrollY = useRef(new Animated.Value(0)).current;
-
-  const todayStr = ymd(new Date());
-  const isToday = date === todayStr;
-
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [pickerDate, setPickerDate] = useState<Date>(() => {
-    const [y, m, d] = todayStr.split("-").map(Number);
-    return new Date(y, m - 1, d);
-  });
-
-  const openDatePicker = () => {
-    const [y, m, d] = date.split("-").map(Number);
-    setPickerDate(new Date(y, m - 1, d));
-    setShowDatePicker(true);
-  };
-
-  const applyPickedDate = () => {
-    const base = new Date(pickerDate);
-    base.setHours(0, 0, 0, 0);
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const chosen = base.getTime() > today.getTime() ? today : base;
-    setDate(ymd(chosen));
-    setShowDatePicker(false);
-  };
-
-  const cancelDatePicker = () => {
-    setShowDatePicker(false);
-  };
-
-  const shiftDate = (delta: number) => {
-    setDate((prev) => {
-      const current = prev || todayStr;
-
-      // Parse "YYYY-MM-DD" as a local date to avoid timezone weirdness
-      const [y, m, d] = current.split("-").map(Number);
-      const base = new Date(y, m - 1, d);
-      base.setHours(0, 0, 0, 0);
-      base.setDate(base.getDate() + delta);
-      const next = base;
-
-      // don’t allow going into the future
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (next.getTime() > today.getTime()) return prev;
-
-      return ymd(next);
-    });
-  };
-
-  const goPrevDay = () => shiftDate(-1);
-  const goNextDay = () => shiftDate(1);
-  const goToday = () => setDate(todayStr);
-
-  // provide a safe "success" tint even if ThemeColors doesn't define it
-  const successTint =
-    (colors as any).success ?? (colors as any).chartSecondary ?? colors.primary;
-
-  // responsive helpers
-  const isCompact = width < 390; // iPhone mini / compact
-  const headingSize = isCompact ? 24 : 28;
-  const heroLift = scrollY.interpolate({
-    inputRange: [0, 140],
-    outputRange: [0, -16],
-    extrapolate: "clamp",
-  });
-  const heroScale = scrollY.interpolate({
-    inputRange: [-60, 0, 140],
-    outputRange: [1.03, 1, 0.97],
-    extrapolate: "clamp",
-  });
-  const ribbonTilt = scrollY.interpolate({
-    inputRange: [0, 200],
-    outputRange: ["0deg", "-6deg"],
-    extrapolate: "clamp",
-  });
-  const ribbonTiltBack = scrollY.interpolate({
-    inputRange: [0, 200],
-    outputRange: ["-4deg", "-10deg"],
-    extrapolate: "clamp",
-  });
-
-  // today
-  const [foodsToday, setFoodsToday] = useState<FoodEntry[]>([]);
-  const [exerciseToday, setExerciseToday] = useState<ExerciseEntry[]>([]);
-
-  // goals/profile
-  const [profile, setProfile] = useState<Profile | null>(null);
-
-  // last 7 days (inclusive)
-  const [foodsRange, setFoodsRange] = useState<FoodEntry[]>([]);
-  const [exerciseRange, setExerciseRange] = useState<ExerciseEntry[]>([]);
-
-  // NEW: steps state derived from profile (per-day map)
-  const todayKey = date;
-  const stepsGoal =
-    (profile as any)?.stepsGoal != null
-      ? Number((profile as any).stepsGoal)
-      : 8000;
-  const weightKg = (profile as any)?.weightKg ?? 80;
-  const stepsToday = useMemo(() => {
-    const map = ((profile as any)?.steps ?? {}) as Record<string, number>;
-    return Number(map?.[todayKey] ?? 0);
-  }, [profile, todayKey]);
-
-  // quick entry modal
-  const [openStepsModal, setOpenStepsModal] = useState(false);
-  const [customSteps, setCustomSteps] = useState("");
-
-  useEffect(() => {
-    if (!user?.uid) return;
-    const unsubs: Array<() => void> = [];
-
-    // Foods for today + log
-    unsubs.push(
-      subscribeFoodsByDate(user.uid, date, (arr) => {
-        setFoodsToday(arr);
-      })
-    );
-
-    (async () => {
-      await ensureProfile(user.uid, user.email ? { email: user.email } : {});
-      unsubs.push(subscribeProfile(user.uid, setProfile));
-    })();
-
-    const today = new Date();
-    const start = addDays(today, -6);
-    const from = ymd(start);
-    const to = ymd(today);
-    unsubs.push(subscribeFoodsBetween(user.uid, from, to, setFoodsRange));
-    unsubs.push(subscribeExerciseBetween(user.uid, from, to, setExerciseRange));
-
-    return () => {
-      unsubs.forEach((u) => {
-        try {
-          u();
-        } catch {}
-      });
-    };
-  }, [user?.uid, date]);
-
-  // Derive exerciseToday from range for the selected date
-  useEffect(() => {
-    // Parse "YYYY-MM-DD" as a local date
-    const [y, m, d] = date.split("-").map(Number);
-    const selected = new Date(y, m - 1, d);
-
-    const start = new Date(selected);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(selected);
-    end.setHours(23, 59, 59, 999);
-
-    const toMillis = (v: any): number => {
-      if (!v) return 0;
-      if (typeof v === "number") return v;
-      if (typeof v?.toMillis === "function") return v.toMillis();
-      if (typeof v?.seconds === "number") return v.seconds * 1000;
-      return 0;
-    };
-
-    const filtered = exerciseRange.filter((x) => {
-      if (x.date && x.date === date) return true;
-      const ms = toMillis((x as any).createdAt);
-      return ms >= start.getTime() && ms <= end.getTime();
-    });
-
-    setExerciseToday(filtered);
-  }, [exerciseRange, date]);
-
-  const hasWorkoutToday = exerciseToday.length > 0;
-
-  // today totals (+ step calories)
-  const stepKcal = estimateStepCalories(stepsToday, weightKg);
-  const totals = useMemo(() => {
-    const t = {
-      calories: 0,
-      protein: 0,
-      carbs: 0,
-      fat: 0,
-      fiber: 0,
-      sugar: 0,
-    };
-
-    foodsToday.forEach((f) => {
-      const x = f as any;
-      t.calories += x.calories || 0;
-      t.protein += x.protein || 0;
-      t.carbs += x.carbs || 0;
-      t.fat += x.fat || 0;
-      // handle both `fiber` and `fibre` just in case
-      t.fiber += x.fiber ?? x.fibre ?? 0;
-      t.sugar += x.sugar ?? 0;
-    });
-
-    const burnedWorkouts = exerciseToday.reduce(
-      (s, e) => s + (e.calories || 0),
-      0
-    );
-    const burned = burnedWorkouts + stepKcal;
-    return { ...t, burned, net: t.calories - burned, burnedWorkouts };
-  }, [foodsToday, exerciseToday, stepKcal]);
-
-  // weekly series (unchanged — doesn’t yet include steps; optional future work)
-  const weekly = useMemo(() => {
-    const today = new Date();
-    const start = addDays(today, -6);
-    const days = Array.from({ length: 7 }, (_, i) => ymd(addDays(start, i)));
-    const consumedMap = Object.fromEntries(days.map((d) => [d, 0]));
-    const burnedMap = Object.fromEntries(days.map((d) => [d, 0]));
-    foodsRange.forEach((f) => {
-      if (consumedMap[f.date] != null)
-        consumedMap[f.date] += Number(f.calories || 0);
-    });
-    exerciseRange.forEach((x) => {
-      if (burnedMap[x.date] != null)
-        burnedMap[x.date] += Number(x.calories || 0);
-    });
-    return days.map((d) => ({
-      date: d.slice(5),
-      consumed: consumedMap[d] || 0,
-      burned: burnedMap[d] || 0, // step kcal not backfilled historically (yet)
-      net: (consumedMap[d] || 0) - (burnedMap[d] || 0),
-    }));
-  }, [foodsRange, exerciseRange]);
-
-  // goals
-  const kcalGoal = profile?.dailyCaloriesTarget ?? profile?.calorieGoal ?? 2200;
-  const proteinGoal = profile?.dailyProteinTarget ?? 130;
-
-  // derived hero stats
-  const caloriesRemaining = Math.max(
-    0,
-    Math.round((kcalGoal || 0) - totals.calories)
-  );
-  const proteinRemaining = Math.max(
-    0,
-    Math.round((proteinGoal || 0) - totals.protein)
-  );
-
-  const netDiff = kcalGoal || 0 ? totals.net - kcalGoal : 0;
-  const netStatus = !kcalGoal
-    ? "Goal not set"
-    : netDiff < -200
-    ? "Under target"
-    : netDiff > 200
-    ? "Above target"
-    : "On track";
-
-  const netStatusColor = !kcalGoal
-    ? withAlpha(colors.text, 0.7)
-    : netDiff < -200
-    ? colors.primary
-    : netDiff > 200
-    ? "#FFB02E"
-    : successTint;
-  const questList = useMemo(
-    () => [
-      {
-        icon: "flame-outline" as const,
-        label: "Calorie quest",
-        progress: Math.min(
-          1,
-          totals.calories / Math.max(1, kcalGoal || 1)
-        ),
-        detail:
-          kcalGoal && caloriesRemaining <= 0
-            ? "Quest cleared"
-            : `${caloriesRemaining.toLocaleString()} kcal left`,
-      },
-      {
-        icon: "restaurant-outline" as const,
-        label: "Protein quest",
-        progress: Math.min(1, totals.protein / Math.max(1, proteinGoal || 1)),
-        detail:
-          proteinGoal && proteinRemaining <= 0
-            ? "Quest cleared"
-            : `${proteinRemaining.toLocaleString()} g left`,
-      },
-      {
-        icon: "footsteps-outline" as const,
-        label: "Steps quest",
-        progress: Math.min(1, stepsToday / Math.max(1, stepsGoal || 1)),
-        detail: `${stepsToday.toLocaleString()} / ${stepsGoal.toLocaleString()}`,
-      },
-      {
-        icon: "barbell-outline" as const,
-        label: "Workout quest",
-        progress: hasWorkoutToday ? 1 : 0.35,
-        detail: hasWorkoutToday ? "Logged" : "Log one for a bonus",
-      },
-    ],
-    [
-      caloriesRemaining,
-      hasWorkoutToday,
-      kcalGoal,
-      proteinGoal,
-      proteinRemaining,
-      stepsGoal,
-      stepsToday,
-      totals.calories,
-      totals.protein,
-    ]
-  );
-  const questXp = Math.round(
-    (questList.reduce((s, q) => s + q.progress, 0) /
-      Math.max(1, questList.length)) *
-      100
-  );
-
-  /* greeting + tiny avatar */
-  const greetingLabel = (() => {
-    const h = new Date().getHours();
-    if (h < 12) return "Good morning";
-    if (h < 18) return "Good afternoon";
-    return "Good evening";
-  })();
-  const greeting = `${greetingLabel}, ${user?.displayName || "there"}`;
-  const initials = initialsOf(
-    profile?.displayName ?? undefined,
-    user?.email ?? undefined
-  );
-
-  /* rest-day flag (per selected date) */
-  const restDays = (profile as any)?.restDays || {};
-  const isRestToday = !!restDays?.[date];
-  const toggleRest = async (v: boolean) => {
-    if (!user?.uid) return;
-    try {
-      await updateProfile(user.uid, { [`restDays.${date}`]: v });
-    } catch {}
-  };
-
-  // Steps updaters
-  const writeSteps = async (next: number) => {
-    if (!user?.uid) return;
-    const safe = Math.max(0, Math.round(next || 0));
-    try {
-      await updateProfile(user.uid, { [`steps.${todayKey}`]: safe });
-    } catch {}
-  };
-  const addSteps = (delta: number) => writeSteps((stepsToday || 0) + delta);
-
-  // Build daily suggestion
-  const [suggestion, setSuggestion] = useState<SuggestionCard>(
-    buildDailySuggestion({
-      isRestToday,
-      foodsToday,
-      exerciseToday,
-      kcalGoal,
-      proteinGoal,
-      greeting,
-    })
-  );
-
-  const lastSugKeyRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    // local fallback
-    const fallback = buildDailySuggestion({
-      isRestToday,
-      foodsToday,
-      exerciseToday,
-      kcalGoal,
-      proteinGoal,
-      greeting,
-    });
-    setSuggestion((prev) => {
-      if (
-        prev.title === fallback.title &&
-        prev.body === fallback.body &&
-        prev.ctaLabel === fallback.ctaLabel &&
-        prev.tint === fallback.tint
-      ) {
-        return prev;
-      }
-      return fallback;
-    });
-
-    // (server AI kept as-is, not relevant to steps UI)
-    if (!AI_SUGGESTIONS_ENABLED || !AI_URL || !user?.uid) return;
-
-    const hour = new Date().getHours();
-    const totalsNow = {
-      calories: Math.round(
-        foodsToday.reduce((s, f) => s + (f.calories || 0), 0)
-      ),
-      protein: Math.round(foodsToday.reduce((s, f) => s + (f.protein || 0), 0)),
-      burned: Math.round(
-        exerciseToday.reduce((s, e) => s + (e.calories || 0), 0)
-      ),
-    };
-    const cRem = Math.max(0, Math.round(kcalGoal - totalsNow.calories));
-    const pRem = Math.max(0, Math.round(proteinGoal - totalsNow.protein));
-    const interesting =
-      isRestToday || exerciseToday.length === 0 || cRem > 200 || pRem > 20;
-
-    const tod =
-      hour < 11
-        ? "morning"
-        : hour < 15
-        ? "afternoon"
-        : hour < 19
-        ? "evening"
-        : "night";
-    const cB = cRem <= 200 ? "b0" : cRem <= 500 ? "b1" : "b2";
-    const pB = pRem <= 20 ? "b0" : pRem <= 40 ? "b1" : "b2";
-    const key = `${ymd(new Date())}|${tod}|R${isRestToday ? 1 : 0}|W${
-      exerciseToday.length ? 1 : 0
-    }|C${cB}|P${pB}`;
-    if (!interesting || lastSugKeyRef.current === key) return;
-
-    (async () => {
-      try {
-        const token = await getAuth().currentUser?.getIdToken(true);
-        const res = await fetch(AI_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({
-            mode: "suggest:v1",
-            date: ymd(new Date()),
-            timeOfDay: hour,
-            isRestDay: isRestToday,
-            goals: { calories: kcalGoal, protein: proteinGoal },
-            totals: totalsNow,
-          }),
-        });
-
-        if (!cancelled && res.ok) {
-          const raw = (await res.json()) as Partial<SuggestionCard> & {
-            href?: any;
-            tint?: string;
-          };
-          if (raw?.title && raw?.ctaLabel && raw?.href) {
-            const allowed = new Set(["workout", "meal", "recovery", "ok"]);
-            const safeTint = allowed.has(raw.tint || "")
-              ? (raw.tint as SuggestionCard["tint"])
-              : "ok";
-            setSuggestion((prev) => ({
-              icon: raw.icon || prev.icon || "sparkles-outline",
-              title: raw.title!,
-              body: raw.body || "",
-              ctaLabel: raw.ctaLabel!,
-              href: raw.href as Href,
-              tint: safeTint,
-            }));
-            lastSugKeyRef.current = key;
-          }
-        }
-      } catch {}
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    user?.uid,
-    isRestToday,
-    kcalGoal,
-    proteinGoal,
-    greeting,
-    foodsToday.length,
-    exerciseToday.length,
-  ]);
-
-  /* ---------- UI ---------- */
-  const contentPadBottom = 28 + Math.max(12, insets.bottom);
-
+function bar(widthPct: number, color: string) {
+  const safe = Math.max(0, Math.min(100, widthPct));
   return (
-    <Animated.ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{
-        padding: 16,
-        gap: 16,
-        paddingBottom: contentPadBottom,
+    <View
+      style={{
+        height: 8,
+        borderRadius: 999,
+        backgroundColor: "rgba(255,255,255,0.08)",
+        overflow: "hidden",
       }}
-      showsVerticalScrollIndicator={false}
-      onScroll={Animated.event(
-        [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-        { useNativeDriver: true }
-      )}
-      scrollEventThrottle={16}
     >
-      {/* floating arcade ribbons */}
-      <Animated.View
-        pointerEvents="none"
+      <MotiView
+        from={{ width: "0%" }}
+        animate={{ width: `${safe}%` }}
+        transition={{ type: "timing", duration: 420 }}
         style={{
-          position: "absolute",
-          top: -80,
-          right: -40,
-          width: 220,
-          height: 220,
-          opacity: isDark ? 0.18 : 0.28,
-          transform: [
-            { translateY: Animated.multiply(scrollY, -0.08) },
-            { rotate: ribbonTilt },
-          ],
+          height: "100%",
+          backgroundColor: color,
+          borderRadius: 999,
         }}
-      >
-        <LinearGradient
-          colors={[arcadeColors.neonBlue, arcadeColors.neonPink]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ flex: 1, borderRadius: 120, transform: [{ rotate: "18deg" }] }}
-        />
-      </Animated.View>
-      <Animated.View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          top: 200,
-          left: -60,
-          width: 180,
-          height: 180,
-          opacity: isDark ? 0.16 : 0.24,
-          transform: [
-            { translateY: Animated.multiply(scrollY, -0.04) },
-            { rotate: ribbonTiltBack },
-          ],
-        }}
-      >
-        <LinearGradient
-          colors={[arcadeColors.neonLime, arcadeColors.amber]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ flex: 1, borderRadius: 110, transform: [{ rotate: "-12deg" }] }}
-        />
-      </Animated.View>
+      />
+    </View>
+  );
+}
 
-      {/* TOP BAR / AVATAR */}
+function pill({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: string;
+  color: string;
+}) {
+  return (
+    <View
+      style={{
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 12,
+        backgroundColor: withAlpha(color, 0.14),
+        borderWidth: 1,
+        borderColor: withAlpha(color, 0.28),
+        gap: 2,
+      }}
+    >
+      <Text style={{ color: "rgba(255,255,255,0.7)", fontWeight: "700" }}>
+        {label}
+      </Text>
+      <Text style={{ color, fontWeight: "900", fontSize: 15 }}>{value}</Text>
+    </View>
+  );
+}
+
+const ProgressRow = ({
+  label,
+  val,
+  goal,
+  color,
+}: {
+  label: string;
+  val: number;
+  goal: number;
+  color: string;
+}) => {
+  const pct = goal > 0 ? Math.min(100, Math.round((val / goal) * 100)) : 0;
+  return (
+    <View style={{ gap: 4 }}>
       <View
         style={{
           flexDirection: "row",
-          alignItems: "center",
           justifyContent: "space-between",
+          alignItems: "center",
         }}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <View
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 12,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: withAlpha(colors.primary, 0.18),
-              borderWidth: 1,
-              borderColor: withAlpha(colors.primary, 0.35),
-            }}
-          >
-            <Text style={{ color: colors.text, fontWeight: "800" }}>
-              {initials}
+        <Text style={{ color: "#fff", fontWeight: "800" }}>{label}</Text>
+        <Text style={{ color: "rgba(255,255,255,0.75)", fontWeight: "700" }}>
+          {Math.round(val).toLocaleString()}
+          {label === "Calories" ? " kcal" : " g"} /{" "}
+          {goal
+            ? `${Math.round(goal)}${label === "Calories" ? " kcal" : " g"}`
+            : "—"}
+        </Text>
+      </View>
+      {bar(pct, color)}
+    </View>
+  );
+};
+
+/* ---------- screen ---------- */
+export default function NewHomeScreen() {
+  const { colors, isDark } = useTheme();
+  const { user } = useAuth();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [date] = useState(ymd(new Date()));
+
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [foodsToday, setFoodsToday] = useState<FoodEntry[]>([]);
+  const [exerciseToday, setExerciseToday] = useState<ExerciseEntry[]>([]);
+  const [foodsRange, setFoodsRange] = useState<FoodEntry[]>([]);
+
+  const todayStr = date;
+  const quickActions = useMemo(
+    () => [
+      {
+        key: "meal",
+        label: "Log meal",
+        icon: "restaurant-outline" as const,
+        onPress: () => router.push(`/(modals)/add-meal?date=${todayStr}`),
+      },
+      {
+        key: "scan",
+        label: "Scan barcode",
+        icon: "barcode-outline" as const,
+        onPress: () =>
+          router.push(`/(modals)/add-meal?date=${todayStr}&tab=scan`),
+      },
+      {
+        key: "workout",
+        label: "Log workout",
+        icon: "barbell-outline" as const,
+        onPress: () => router.push("/(modals)/quick-workout"),
+      },
+    ],
+    [router, todayStr]
+  );
+  const fabOffset = Math.max(insets.bottom, 12) + 70;
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    let unsubProfile: undefined | (() => void);
+    let unsubFoods: undefined | (() => void);
+    let unsubEx: undefined | (() => void);
+    let unsubRange: undefined | (() => void);
+
+    (async () => {
+      await ensureProfile(user.uid, user.email ? { email: user.email } : {});
+      unsubProfile = subscribeProfile(user.uid, setProfile);
+      unsubFoods = subscribeFoodsByDate(user.uid, todayStr, setFoodsToday);
+      unsubEx = subscribeExerciseBetween(user.uid, todayStr, todayStr, (arr) =>
+        setExerciseToday(arr || [])
+      );
+      const start = ymd(addDays(new Date(), -6));
+      unsubRange = subscribeFoodsBetween(
+        user.uid,
+        start,
+        todayStr,
+        setFoodsRange
+      );
+    })();
+
+    return () => {
+      try {
+        unsubProfile && unsubProfile();
+        unsubFoods && unsubFoods();
+        unsubEx && unsubEx();
+        unsubRange && unsubRange();
+      } catch {}
+    };
+  }, [user?.uid, todayStr]);
+
+  const kcalGoal = profile?.dailyCaloriesTarget ?? profile?.calorieGoal ?? 2400;
+  const proteinGoal = profile?.dailyProteinTarget ?? 160;
+  const carbGoal = profile?.carbGoal ?? 260;
+  const fatGoal = profile?.fatGoal ?? 70;
+
+  const totals = useMemo(() => {
+    return foodsToday.reduce(
+      (a, f) => ({
+        calories: a.calories + (f.calories || 0),
+        protein: a.protein + (f.protein || 0),
+        carbs: a.carbs + (f.carbs || 0),
+        fat: a.fat + (f.fat || 0),
+      }),
+      { calories: 0, protein: 0, carbs: 0, fat: 0 }
+    );
+  }, [foodsToday]);
+
+  const caloriesRemaining = Math.max(0, Math.round(kcalGoal - totals.calories));
+  const proteinRemaining = Math.max(
+    0,
+    Math.round(proteinGoal - totals.protein)
+  );
+
+  const stepsGoal = Number((profile as any)?.stepsGoal ?? 8000);
+  const stepsToday = useMemo(() => {
+    const map = ((profile as any)?.steps ?? {}) as Record<string, number>;
+    return Number(map?.[todayStr] ?? 0);
+  }, [profile, todayStr]);
+  const burnToday = useMemo(
+    () => exerciseToday.reduce((sum, ex) => sum + Number(ex.calories || 0), 0),
+    [exerciseToday]
+  );
+
+  const weeklyProteinHits = useMemo(() => {
+    if (!proteinGoal) return 0;
+    const start = ymd(addDays(new Date(), -6));
+    const days = Array.from({ length: 7 }, (_, i) =>
+      ymd(addDays(new Date(start), i))
+    );
+    const proteinByDate: Record<string, number> = {};
+    foodsRange.forEach((f) => {
+      proteinByDate[f.date] = (proteinByDate[f.date] || 0) + (f.protein || 0);
+    });
+    return days.filter((d) => (proteinByDate[d] || 0) >= proteinGoal * 0.8)
+      .length;
+  }, [foodsRange, proteinGoal]);
+
+  const streakDays = useMemo(() => {
+    const d = new Set(
+      foodsRange.map((f) => f.date?.slice(0, 10)).filter(Boolean) as string[]
+    );
+    return d.size;
+  }, [foodsRange]);
+
+  const stepsAvg = useMemo(() => {
+    const map = ((profile as any)?.steps ?? {}) as Record<string, number>;
+    const days = Array.from({ length: 7 }, (_, i) =>
+      ymd(addDays(new Date(), -i))
+    );
+    const sum = days.reduce((s, d) => s + Number(map[d] || 0), 0);
+    return Math.round(sum / days.length);
+  }, [profile]);
+
+  const heroGradient: [string, string] = isDark
+    ? ["#12182b", "#0f1322"]
+    : ["#e8edff", "#f4f7ff"];
+
+  const suggestion =
+    proteinRemaining > 25
+      ? {
+          title: "Low on protein",
+          body: "Add a lean 30–40g protein meal or shake to close the gap.",
+          href: "/(tabs)/nutrition" as Href,
+        }
+      : exerciseToday.length === 0
+      ? {
+          title: "No workout yet",
+          body: "Log a 20–30 min session or a brisk walk to keep the streak alive.",
+          href: "/(tabs)/workouts" as Href,
+        }
+      : {
+          title: "Nice pace today",
+          body: "Calories and protein look solid. Keep hydration and steps moving.",
+          href: "/(tabs)/nutrition" as Href,
+        };
+
+  const nutritionQuestList = useMemo(
+    () => [
+      {
+        icon: "flame-outline" as const,
+        label: "Calories",
+        progress: Math.min(1, totals.calories / Math.max(1, kcalGoal)),
+        detail: `${Math.max(
+          0,
+          Math.round(kcalGoal - totals.calories)
+        )} kcal left`,
+        accent: colors.primary,
+      },
+      {
+        icon: "barbell-outline" as const,
+        label: "Protein",
+        progress: Math.min(1, totals.protein / Math.max(1, proteinGoal)),
+        detail: `${Math.max(
+          0,
+          Math.round(proteinGoal - totals.protein)
+        )} g left`,
+        accent: colors.chartSecondary,
+      },
+      {
+        icon: "restaurant-outline" as const,
+        label: "Meals logged",
+        progress: Math.min(1, foodsToday.length / 3),
+        detail: foodsToday.length
+          ? `${foodsToday.length} so far`
+          : "Add your first meal",
+        accent: withAlpha(colors.text, 0.7),
+      },
+      {
+        icon: "sparkles-outline" as const,
+        label: "Movement",
+        progress: exerciseToday.length ? 1 : 0.2,
+        detail: exerciseToday.length ? "Activity added" : "Add a quick burn",
+        accent: colors.accent,
+      },
+    ],
+    [
+      totals.calories,
+      totals.protein,
+      kcalGoal,
+      proteinGoal,
+      foodsToday.length,
+      exerciseToday.length,
+      colors.primary,
+      colors.chartSecondary,
+      colors.text,
+      colors.accent,
+    ]
+  );
+  const nutritionXp = Math.round(
+    (nutritionQuestList.reduce((s, q) => s + q.progress, 0) /
+      Math.max(1, nutritionQuestList.length)) *
+      100
+  );
+
+  const topPad = Math.max(12, insets.top - 8);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          padding: 16,
+          paddingBottom: 118 + Math.max(insets.bottom, 16),
+          gap: 18,
+          paddingTop: topPad,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            paddingVertical: 2,
+          }}
+        >
+          <View>
+            <Text
+              style={{ color: colors.text, fontWeight: "800", fontSize: 18 }}
+            >
+              Today · {prettyDate(todayStr)}
+            </Text>
+            <Text
+              style={{ color: colors.muted, fontWeight: "700", marginTop: 2 }}
+            >
+              How you’re doing + what’s next
             </Text>
           </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <Link href="/(modals)/account" asChild>
+              <Pressable>
+                {({ pressed }) => (
+                  <Ionicons
+                    name="settings-outline"
+                    size={22}
+                    color={colors.text}
+                    style={{ opacity: pressed ? 0.6 : 1 }}
+                  />
+                )}
+              </Pressable>
+            </Link>
+            <Link href="/(tabs)/profile" asChild>
+              <Pressable>
+                {({ pressed }) => (
+                  <Ionicons
+                    name="person-circle-outline"
+                    size={26}
+                    color={colors.text}
+                    style={{ opacity: pressed ? 0.6 : 1 }}
+                  />
+                )}
+              </Pressable>
+            </Link>
+          </View>
+        </View>
 
-          {/* Date picker controls + feedback */}
-          <View>
+        {/* Collapsible hero */}
+        <View style={{ marginBottom: 14 }}>
+          <LinearGradient
+            colors={homeGradients.hero}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{
+              borderRadius: 18,
+              padding: 2,
+              borderWidth: 1,
+              borderColor: withAlpha(colors.primary, 0.4),
+              ...softShadow,
+            }}
+          >
+            <ExpandableHeroCard
+              title="Today"
+              primaryValue={`${Math.max(
+                0,
+                Math.round(caloriesRemaining)
+              ).toLocaleString()} kcal`}
+              primaryLabel="Calories remaining"
+              secondaryLeft={`Protein left: ${Math.max(
+                0,
+                Math.round(proteinRemaining)
+              )} g`}
+              macros={[
+                {
+                  label: "Protein",
+                  value: `${Math.round(totals.protein)} g`,
+                  sub: `Goal ${Math.round(proteinGoal)} g`,
+                },
+                {
+                  label: "Carbs",
+                  value: `${Math.round(totals.carbs)} g`,
+                  sub: `Goal ${Math.round(carbGoal)} g`,
+                },
+                {
+                  label: "Fat",
+                  value: `${Math.round(totals.fat)} g`,
+                  sub: `Goal ${Math.round(fatGoal)} g`,
+                },
+                {
+                  label: "Calories",
+                  value: `${Math.round(totals.calories)} kcal`,
+                  sub: `Goal ${Math.round(kcalGoal)} kcal`,
+                },
+              ]}
+              style={{
+                backgroundColor: "rgba(12,16,30,0.75)",
+                borderColor: withAlpha(colors.primary, 0.3),
+              }}
+            />
+          </LinearGradient>
+        </View>
+
+        {/* Nutrition Today (quest style) */}
+        <MotiView
+          from={{ opacity: 0, translateY: 10 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: "timing", duration: 420, delay: 60 }}
+        >
+          <LinearGradient
+            colors={[withAlpha(arcadeColors.neonBlue, 0.28), colors.card]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{
+              borderRadius: 20,
+              padding: 14,
+              borderWidth: 1,
+              borderColor: withAlpha(colors.primary, 0.35),
+              overflow: "hidden",
+              position: "relative",
+              ...softShadow,
+            }}
+          >
+            <LinearGradient
+              colors={[arcadeColors.neonBlue, arcadeColors.neonPink]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                position: "absolute",
+                top: -60,
+                right: -60,
+                width: 220,
+                height: 220,
+                borderRadius: 140,
+                opacity: 0.18,
+                transform: [{ rotate: "18deg" }],
+              }}
+              pointerEvents="none"
+            />
+            <LinearGradient
+              colors={[arcadeColors.neonLime, arcadeColors.amber]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                position: "absolute",
+                bottom: -70,
+                left: -80,
+                width: 220,
+                height: 220,
+                borderRadius: 150,
+                opacity: 0.16,
+                transform: [{ rotate: "-16deg" }],
+              }}
+              pointerEvents="none"
+            />
+
             <View
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 6,
+                justifyContent: "space-between",
+                gap: 12,
               }}
             >
-              <Pressable onPress={goPrevDay} style={{ padding: 4 }} hitSlop={8}>
-                <Ionicons
-                  name="chevron-back"
-                  size={16}
-                  color={withAlpha(colors.text, 0.6)}
-                />
-              </Pressable>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontWeight: "900",
+                    fontSize: 18,
+                  }}
+                >
+                  Nutrition Today
+                </Text>
+                <Text
+                  style={{
+                    color: withAlpha(colors.text, 0.7),
+                    fontWeight: "600",
+                  }}
+                >
+                  Earn XP for calories, protein, meals, and movement.
+                </Text>
+              </View>
+              <View
+                style={{
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  borderRadius: 14,
+                  backgroundColor: withAlpha(colors.card, 0.94),
+                  borderWidth: 1,
+                  borderColor: withAlpha(colors.border, 0.9),
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    color: withAlpha(colors.text, 0.7),
+                    fontSize: 11,
+                    fontWeight: "700",
+                  }}
+                >
+                  XP today
+                </Text>
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontSize: 20,
+                    fontWeight: "900",
+                  }}
+                >
+                  {nutritionXp}
+                </Text>
+              </View>
+            </View>
 
+            <View style={{ marginTop: 12, gap: 10 }}>
+              {nutritionQuestList.map((q, i) => (
+                <NutritionQuestChip key={q.label} delay={80 + i * 50} {...q} />
+              ))}
+            </View>
+
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                marginTop: 12,
+              }}
+            >
+              <Link href={`/(modals)/add-meal?date=${todayStr}`} asChild>
+                <Pressable
+                  style={({ pressed }) => ({
+                    opacity: pressed ? 0.7 : 1,
+                    flex: 1,
+                  })}
+                >
+                  <View
+                    style={{
+                      paddingVertical: 10,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      alignItems: "center",
+                      backgroundColor: withAlpha(colors.text, 0.06),
+                    }}
+                  >
+                    <Text style={{ color: colors.text, fontWeight: "800" }}>
+                      + Meal
+                    </Text>
+                  </View>
+                </Pressable>
+              </Link>
+              <Link
+                href={`/(modals)/add-meal?date=${todayStr}&type=snack`}
+                asChild
+              >
+                <Pressable
+                  style={({ pressed }) => ({
+                    opacity: pressed ? 0.7 : 1,
+                    flex: 1,
+                  })}
+                >
+                  <View
+                    style={{
+                      paddingVertical: 10,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      alignItems: "center",
+                      backgroundColor: withAlpha(colors.text, 0.06),
+                    }}
+                  >
+                    <Text style={{ color: colors.text, fontWeight: "800" }}>
+                      + Snack
+                    </Text>
+                  </View>
+                </Pressable>
+              </Link>
               <Pressable
-                onPress={goToday}
-                onLongPress={openDatePicker}
-                delayLongPress={250}
+                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+              >
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: withAlpha(colors.text, 0.06),
+                  }}
+                >
+                  <Ionicons
+                    name="camera-outline"
+                    size={20}
+                    color={colors.text}
+                  />
+                </View>
+              </Pressable>
+            </View>
+          </LinearGradient>
+        </MotiView>
+
+        {/* Activity */}
+        <LinearGradient
+          colors={homeGradients.activity}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            borderRadius: 16,
+            padding: 14,
+            borderWidth: 1,
+            borderColor: withAlpha(colors.chartSecondary, 0.35),
+            ...softShadow,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <Text
+              style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}
+            >
+              🏋️ Activity
+            </Text>
+            <View
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 999,
+                backgroundColor: withAlpha(colors.chartSecondary, 0.12),
+                borderWidth: 1,
+                borderColor: withAlpha(colors.chartSecondary, 0.3),
+              }}
+            >
+              <Text
+                style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}
+              >
+                Today
+              </Text>
+            </View>
+          </View>
+          <View style={{ marginTop: 10, gap: 8 }}>
+            <Text style={{ color: colors.text, fontWeight: "800" }}>
+              Steps {stepsToday.toLocaleString()} / {stepsGoal.toLocaleString()}
+            </Text>
+            {bar(
+              (stepsToday / Math.max(1, stepsGoal)) * 100,
+              colors.chartSecondary
+            )}
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: 8,
+                marginTop: 2,
+              }}
+            >
+              <View
                 style={{
                   paddingHorizontal: 10,
-                  paddingVertical: 4,
-                  borderRadius: 999,
-                  backgroundColor: withAlpha(colors.primary, 0.16),
+                  paddingVertical: 6,
+                  borderRadius: 10,
+                  backgroundColor: withAlpha(colors.text, 0.08),
+                  borderWidth: 1,
+                  borderColor: withAlpha(colors.text, 0.14),
                 }}
               >
                 <Text
                   style={{
                     color: colors.text,
-                    fontWeight: "600",
+                    fontWeight: "800",
+                    fontSize: 12,
                   }}
                 >
-                  {isToday ? "Today" : date}
+                  Burn {Math.round(burnToday)} kcal
                 </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={goNextDay}
-                disabled={isToday}
-                style={{ padding: 4, opacity: isToday ? 0.3 : 1 }}
-                hitSlop={8}
-              >
-                <Ionicons
-                  name="chevron-forward"
-                  size={16}
-                  color={withAlpha(colors.text, 0.6)}
-                />
-              </Pressable>
-            </View>
-
-            <Text
-              style={{
-                marginTop: 2,
-                fontSize: 11,
-                color: withAlpha(colors.text, 0.6),
-              }}
-            >
-              {isToday ? "Viewing today" : `Viewing ${prettyDate(date)}`}
-            </Text>
-          </View>
-        </View>
-
-        <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
-          <Ionicons name="bed-outline" size={16} color={colors.text} />
-          <Text style={{ color: colors.text, fontWeight: "700" }}>Rest</Text>
-          <Switch value={isRestToday} onValueChange={toggleRest} />
-          <IconBtn icon="notifications-outline" />
-          <IconBtn
-            icon="settings-outline"
-            onPress={() => router.push("/(modals)/settings")}
-          />
-        </View>
-      </View>
-
-      {/* HERO / GLASS + GRADIENT (revamped) */}
-      <Animated.View
-        style={{
-          transform: [{ translateY: heroLift }, { scale: heroScale }],
-        }}
-      >
-        <MotiView
-          from={{ opacity: 0, translateY: 12, scale: 0.98 }}
-          animate={{ opacity: 1, translateY: 0, scale: 1 }}
-          transition={{ type: "timing", duration: 520 }}
-        >
-          <LinearGradient
-            colors={[
-              withAlpha(colors.primary, 0.26),
-              withAlpha(successTint, 0.24),
-            ]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[
-              {
-                borderRadius: 26,
-                padding: 16,
-                borderWidth: 1,
-                borderColor: withAlpha(colors.border, 0.9),
-                overflow: "hidden",
-                position: "relative",
-              },
-              softShadow,
-            ]}
-          >
-            {/* subtle glow blobs */}
-            <View
-              style={{
-                position: "absolute",
-                top: -40,
-                right: -40,
-                width: 160,
-                height: 160,
-                borderRadius: 999,
-                backgroundColor: withAlpha(successTint, 0.38),
-                opacity: 0.6,
-              }}
-            />
-            <View
-              style={{
-                position: "absolute",
-                bottom: -60,
-                left: -40,
-                width: 190,
-                height: 190,
-                borderRadius: 999,
-                backgroundColor: withAlpha(colors.primary, 0.4),
-                opacity: 0.4,
-              }}
-            />
-
-            {/* scrim */}
-            <View
-              style={{
-                position: "absolute",
-                inset: 0,
-                backgroundColor: withAlpha(colors.card, 0.9),
-              }}
-            />
-
-            <View style={{ position: "relative" }}>
+              </View>
               <View
                 style={{
-                  flexDirection: isCompact ? "column" : "row",
-                  justifyContent: "space-between",
-                  alignItems: isCompact ? "flex-start" : "center",
-                  gap: 16,
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 10,
+                  backgroundColor: withAlpha(colors.text, 0.08),
+                  borderWidth: 1,
+                  borderColor: withAlpha(colors.text, 0.14),
                 }}
               >
-                {/* LEFT: greeting + micro stats */}
-                <View
+                <Text
                   style={{
-                    flex: 1,
-                    paddingRight: isCompact ? 0 : 12,
-                    minWidth: 0,
+                    color: colors.text,
+                    fontWeight: "800",
+                    fontSize: 12,
                   }}
                 >
-                  <View
-                    style={{
-                      alignSelf: "flex-start",
-                      paddingHorizontal: 10,
-                      paddingVertical: 4,
-                      borderRadius: 999,
-                      borderWidth: 1,
-                      borderColor: withAlpha(colors.border, 0.9),
-                      backgroundColor: withAlpha(colors.background, 0.18),
-                      marginBottom: 6,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 6,
-                    }}
-                  >
-                    <Ionicons
-                      name={isRestToday ? "leaf-outline" : "flash-outline"}
-                      size={14}
-                      color={colors.primary}
-                    />
-                    <Text
-                      style={{
-                        color: withAlpha(colors.text, 0.8),
-                        fontSize: 11,
-                        fontWeight: "600",
-                      }}
-                    >
-                      {isRestToday ? "Recovery day overview" : "Daily overview"}
-                    </Text>
-                  </View>
-
-                  <Text
-                    style={{
-                      color: colors.text,
-                      fontSize: headingSize,
-                      fontWeight: "900",
-                      letterSpacing: 0.25,
-                      textShadowColor: withAlpha("#000", 0.16),
-                      textShadowOffset: { width: 0, height: 1 },
-                      textShadowRadius: 3,
-                      lineHeight: headingSize + 4,
-                    }}
-                    allowFontScaling
-                    adjustsFontSizeToFit={isCompact}
-                    minimumFontScale={0.8}
-                    numberOfLines={3} // allow an extra line
-                  >
-                    {greeting}
-                  </Text>
-
-                  <Text
-                    style={{
-                      color: withAlpha(colors.text, 0.75),
-                      marginTop: 4,
-                      fontWeight: "600",
-                      fontSize: 13,
-                    }}
-                  >
-                    {prettyDate(date)} ·{" "}
-                    {isRestToday
-                      ? "Focus on easy movement, steps, and sleep."
-                      : "Hit your calories and steps to stay on track."}
-                  </Text>
-
-                  {/* mini stat chips */}
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      flexWrap: "wrap",
-                      gap: 8,
-                      marginTop: 10,
-                    }}
-                  >
-                    <MiniStat
-                      label="Calories"
-                      primary={`${Math.round(
-                        totals.calories
-                      ).toLocaleString()} kcal`}
-                      secondary={
-                        kcalGoal
-                          ? `of ${Math.round(
-                              kcalGoal
-                            ).toLocaleString()} • ${caloriesRemaining.toLocaleString()} left`
-                          : "Goal not set"
-                      }
-                    />
-                    <MiniStat
-                      label="Protein"
-                      primary={`${Math.round(totals.protein)} g`}
-                      secondary={
-                        proteinGoal
-                          ? `of ${Math.round(
-                              proteinGoal
-                            )} g • ${proteinRemaining} g left`
-                          : "Goal not set"
-                      }
-                    />
-                    <MiniStat
-                      label="Steps"
-                      primary={`${stepsToday.toLocaleString()} steps`}
-                      secondary={`Goal ${stepsGoal.toLocaleString()}`}
-                    />
-                    <MiniStat
-                      label="Workout"
-                      primary={hasWorkoutToday ? "Logged" : "Not logged"}
-                      secondary={
-                        hasWorkoutToday
-                          ? "Nice work — keep the streak."
-                          : "Tap “Log Workout” below to add one."
-                      }
-                    />
-                  </View>
-                </View>
-
-                {/* RIGHT: net ring + status */}
-                <View
-                  style={{
-                    alignItems: "center",
-                    justifyContent: "center",
-                    minWidth: 150,
-                    paddingVertical: isCompact ? 6 : 0,
-                  }}
-                >
-                  <ProgressRing
-                    label="Net calories"
-                    value={Math.max(0, totals.net)}
-                    target={kcalGoal}
-                    unit="kcal"
-                  />
-                  <Text
-                    style={{
-                      marginTop: 8,
-                      fontSize: 14,
-                      fontWeight: "800",
-                      color: isDark ? "#ffffff" : colors.text,
-                    }}
-                  >
-                    Net {Math.round(totals.net).toLocaleString()} kcal
-                  </Text>
-
-                  <Text
-                    style={{
-                      marginTop: 2,
-                      fontSize: 12,
-                      fontWeight: "600",
-                      color: netStatusColor,
-                    }}
-                  >
-                    {netStatus}
-                  </Text>
-                  <Text
-                    style={{
-                      marginTop: 2,
-                      fontSize: 11,
-                      color: withAlpha(colors.text, 0.7),
-                    }}
-                  >
-                    Target {Math.round(kcalGoal).toLocaleString()} kcal
-                  </Text>
-                </View>
+                  Workouts {exerciseToday.length}
+                </Text>
               </View>
             </View>
-          </LinearGradient>
-        </MotiView>
-      </Animated.View>
+            <Text style={{ color: withAlpha(colors.text, 0.65) }}>
+              {exerciseToday.length
+                ? "Workout logged"
+                : "No workout logged yet"}
+            </Text>
+          </View>
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+            <Link href="/(tabs)/workouts" asChild>
+              <Pressable
+                style={({ pressed }) => ({
+                  opacity: pressed ? 0.7 : 1,
+                  flex: 1.6,
+                })}
+              >
+                <View
+                  style={{
+                    paddingVertical: 10,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: withAlpha(colors.chartSecondary, 0.45),
+                    alignItems: "center",
+                    backgroundColor: withAlpha(colors.chartSecondary, 0.14),
+                  }}
+                >
+                  <Text
+                    style={{ color: colors.chartSecondary, fontWeight: "900" }}
+                  >
+                    View workouts
+                  </Text>
+                </View>
+              </Pressable>
+            </Link>
+            <Link href="/(modals)/quick-workout" asChild>
+              <Pressable
+                style={({ pressed }) => ({
+                  opacity: pressed ? 0.7 : 1,
+                  flex: 1,
+                })}
+              >
+                <View
+                  style={{
+                    paddingVertical: 10,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: withAlpha(colors.text, 0.2),
+                    alignItems: "center",
+                    backgroundColor: withAlpha(colors.text, 0.06),
+                  }}
+                >
+                  <Text style={{ color: colors.text, fontWeight: "800" }}>
+                    Quick log
+                  </Text>
+                </View>
+              </Pressable>
+            </Link>
+          </View>
+        </LinearGradient>
 
-      {/* Daily quests / XP strip */}
-      <MotiView
-        from={{ opacity: 0, translateY: 10 }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={{ type: "timing", duration: 460, delay: 40 }}
-      >
+        {/* Streak / consistency */}
         <LinearGradient
-          colors={[withAlpha(arcadeColors.neonBlue, 0.3), colors.card]}
+          colors={homeGradients.streak}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{
-            borderRadius: 22,
-            padding: 14,
-            borderWidth: 1,
-            borderColor: withAlpha(colors.primary, 0.35),
-            overflow: "hidden",
-            position: "relative",
-          }}
-        >
-          <Animated.View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              right: -60,
-              bottom: -40,
-              width: 180,
-              height: 180,
-              transform: [{ rotate: ribbonTilt }],
-              opacity: 0.18,
-            }}
-          >
-            <LinearGradient
-              colors={[arcadeColors.neonPink, arcadeColors.neonLime]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{ flex: 1, borderRadius: 120 }}
-            />
-          </Animated.View>
-
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-            }}
-          >
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text
-                style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}
-              >
-                Daily quests
-              </Text>
-              <Text
-                style={{
-                  color: withAlpha(colors.text, 0.7),
-                  marginTop: 2,
-                  fontWeight: "600",
-                }}
-              >
-                Earn XP by hitting calories, protein, steps, and a workout.
-              </Text>
-            </View>
-
-            <View
-              style={{
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-                borderRadius: 14,
-                backgroundColor: withAlpha(colors.card, 0.94),
-                borderWidth: 1,
-                borderColor: withAlpha(colors.border, 0.9),
-                alignItems: "center",
-              }}
-            >
-              <Text
-                style={{
-                  color: withAlpha(colors.text, 0.7),
-                  fontSize: 11,
-                  fontWeight: "700",
-                }}
-              >
-                XP today
-              </Text>
-              <Text
-                style={{
-                  color: colors.text,
-                  fontSize: 20,
-                  fontWeight: "900",
-                }}
-              >
-                {questXp}
-              </Text>
-            </View>
-          </View>
-
-          <View
-            style={{
-              marginTop: 12,
-              gap: 10,
-            }}
-          >
-            {questList.map((q, i) => (
-              <QuestChip key={q.label} delay={80 + i * 50} {...q} />
-            ))}
-          </View>
-        </LinearGradient>
-      </MotiView>
-
-      {/* AI Suggestions — unchanged */}
-      <MotiView
-        from={{ opacity: 0, translateY: 8 }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={{ type: "timing", duration: 460, delay: 60 }}
-      >
-        <Card
-          style={{
-            padding: 14,
-            borderWidth: 1,
-            borderColor: withAlpha(colors.primary, 0.35),
             borderRadius: 18,
+            padding: 2,
+            borderWidth: 1,
+            borderColor: withAlpha(colors.chartSecondary, 0.35),
             ...softShadow,
           }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <View
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 10,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: withAlpha(colors.primary, 0.15),
-                borderWidth: 1,
-                borderColor: withAlpha(colors.border, 0.8),
-              }}
-            >
-              <Ionicons
-                name="sparkles-outline"
-                size={18}
-                color={colors.primary}
-              />
-            </View>
-            <Text
-              style={{ color: colors.text, fontWeight: "800", fontSize: 16 }}
-            >
-              AI Suggestions
-            </Text>
-          </View>
-
-          <View style={{ marginTop: 10, gap: 6 }}>
-            <Text
-              style={{ color: colors.text, fontWeight: "800", fontSize: 15 }}
-            >
-              {suggestion.title}
-            </Text>
-            <Text
-              style={{ color: withAlpha(colors.text, 0.75), lineHeight: 20 }}
-            >
-              {suggestion.body}
-            </Text>
-          </View>
-
-          <View
+          <StreakCard
+            streakDays={streakDays}
+            bestDays={(profile as any)?.bestStreak ?? undefined}
+            didImprove={
+              (profile as any)?.bestStreak &&
+              streakDays > Number((profile as any)?.bestStreak || 0)
+            }
             style={{
-              marginTop: 12,
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <Link href={`/(modals)/add-meal?date=${date}`} asChild>
-            <Pressable>
-              {({ pressed }) => (
-                <MotiView
-                  animate={{
-                    scale: pressed ? 0.97 : 1,
-                    translateY: pressed ? 2 : 0,
-                  }}
-                  transition={{ type: "timing", duration: 140 }}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 6,
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    backgroundColor: withAlpha(colors.card, 0.96),
-                  }}
-                >
-                  <Ionicons
-                    name="add-circle-outline"
-                    size={16}
-                    color={colors.text}
-                  />
-                  <Text style={{ color: colors.text, fontWeight: "700" }}>
-                    Quick add meal
-                  </Text>
-                </MotiView>
-              )}
-            </Pressable>
-          </Link>
-
-          <Link href={suggestion.href} asChild>
-            <Pressable>
-              {({ pressed }) => (
-                <MotiView
-                  animate={{
-                    scale: pressed ? 0.96 : 1,
-                    translateY: pressed ? 3 : 0,
-                  }}
-                  transition={{ type: "timing", duration: 140 }}
-                  style={{
-                    height: 48,
-                    paddingHorizontal: 16,
-                    borderRadius: 14,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor:
-                      suggestion.tint === "workout"
-                        ? (colors as any).chartSecondary ?? successTint
-                        : colors.primary,
-                    ...softShadow,
-                  }}
-                >
-                  <Text style={{ color: "#fff", fontWeight: "900" }}>
-                    {suggestion.ctaLabel}
-                  </Text>
-                </MotiView>
-              )}
-            </Pressable>
-          </Link>
-        </View>
-      </Card>
-      </MotiView>
-
-      {/* QUICK STATS – full daily macro picture */}
-      <MotiView
-        from={{ opacity: 0, translateY: 8 }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={{ type: "timing", duration: 460, delay: 80 }}
-      >
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-          <StatCard
-            label="Calories"
-            value={`${Math.round(totals.calories)} kcal`}
-          />
-          <StatCard label="Protein" value={`${Math.round(totals.protein)} g`} />
-          <StatCard label="Carbs" value={`${Math.round(totals.carbs)} g`} />
-          <StatCard label="Fat" value={`${Math.round(totals.fat)} g`} />
-          <StatCard label="Fibre" value={`${Math.round(totals.fiber)} g`} />
-          <StatCard label="Sugar" value={`${Math.round(totals.sugar)} g`} />
-          <StatCard
-            label="Exercise"
-            value={`-${Math.round(totals.burned)} kcal`}
-          />
-          <StatCard
-            label="Net"
-            value={`${Math.round(totals.net)} kcal`}
-            accent
-          />
-        </View>
-      </MotiView>
-
-      {/* GOALS */}
-      <MotiView
-        from={{ opacity: 0, translateY: 8 }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={{ type: "timing", duration: 460, delay: 120 }}
-      >
-        <Card
-          style={{ padding: 14, borderWidth: 1, borderColor: colors.border }}
-        >
-          <SectionTitle icon="trophy-outline" text="Goals" />
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-            <ProgressRing
-              label="Calorie Goal"
-              value={totals.calories}
-              target={kcalGoal}
-              unit="kcal"
-            />
-            <ProgressRing
-              label="Protein Goal"
-              value={totals.protein}
-              target={proteinGoal}
-              unit="g"
-            />
-            {/* NEW: Steps Goal ring */}
-            <ProgressRing
-              label="Steps Goal"
-              value={stepsToday}
-              target={Math.max(1, stepsGoal || 8000)}
-              unit="steps"
-            />
-          </View>
-        </Card>
-      </MotiView>
-
-      {/* NEW: Steps quick-add card */}
-      <MotiView
-        from={{ opacity: 0, translateY: 8 }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={{ type: "timing", duration: 460, delay: 140 }}
-      >
-        <Card
-          style={{ padding: 14, borderWidth: 1, borderColor: colors.border }}
-        >
-          <SectionTitle icon="footsteps-outline" text="Steps" />
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              flexWrap: "wrap",
-              gap: 12,
+              backgroundColor: "rgba(12,16,30,0.82)",
+              borderColor: withAlpha(colors.chartSecondary, 0.2),
             }}
-          >
-            <View style={{ flexGrow: 1, minWidth: 180 }}>
-              <HeadlineValue
-                value={`${stepsToday.toLocaleString()} / ${stepsGoal.toLocaleString()} steps`}
-              />
-              <Text style={{ color: withAlpha(colors.text, 0.6) }}>
-                Estimated burn: {stepKcal} kcal (adds to “Burned”)
-              </Text>
-            </View>
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              {[
-                { d: 100, label: "+100" },
-                { d: 500, label: "+500" },
-                { d: 1000, label: "+1000" },
-              ].map((b) => (
-                <Pressable key={b.d} onPress={() => addSteps(b.d)}>
-                  {({ pressed }) => (
-                    <MotiView
-                      animate={{
-                        scale: pressed ? 0.94 : 1,
-                        translateY: pressed ? 2 : 0,
-                      }}
-                      transition={{ type: "timing", duration: 120 }}
-                      style={{
-                        paddingVertical: 10,
-                        paddingHorizontal: 12,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: withAlpha(colors.primary, 0.4),
-                        backgroundColor: withAlpha(
-                          colors.primary,
-                          pressed ? 0.24 : 0.14
-                        ),
-                      }}
-                    >
-                      <Text style={{ color: colors.text, fontWeight: "800" }}>
-                        {b.label}
-                      </Text>
-                    </MotiView>
-                  )}
-                </Pressable>
-              ))}
-              <Pressable
-                onPress={() => {
-                  setCustomSteps("");
-                  setOpenStepsModal(true);
-                }}
-              >
-                {({ pressed }) => (
-                  <MotiView
-                    animate={{
-                      scale: pressed ? 0.95 : 1,
-                      translateY: pressed ? 2 : 0,
-                    }}
-                    transition={{ type: "timing", duration: 120 }}
-                    style={{
-                      paddingVertical: 10,
-                      paddingHorizontal: 12,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      backgroundColor: withAlpha(
-                        colors.card,
-                        pressed ? 0.9 : 1
-                      ),
-                    }}
-                  >
-                    <Text style={{ color: colors.text, fontWeight: "800" }}>
-                      Custom
-                    </Text>
-                  </MotiView>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </Card>
-      </MotiView>
-
-      {/* WEEKLY CHART */}
-      <MotiView
-        from={{ opacity: 0, translateY: 8 }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={{ type: "timing", duration: 460, delay: 200 }}
-      >
-        <Card style={{ borderWidth: 1, borderColor: colors.border }}>
-          <SectionTitle icon="stats-chart-outline" text="Weekly Trend" />
-          <WeeklyCaloriesChart data={weekly} />
-        </Card>
-      </MotiView>
-
-      {/* TODAY SNAPSHOT BAR */}
-      <MotiView
-        from={{ opacity: 0, translateY: 8 }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={{ type: "timing", duration: 460, delay: 220 }}
-      >
-        <Card
-          style={{ padding: 16, borderWidth: 1, borderColor: colors.border }}
-        >
-          <SectionTitle icon="pulse-outline" text="Daily Snapshot" />
-          <TodayBar
-            consumed={totals.calories}
-            burned={totals.burned}
-            target={kcalGoal}
-            primary={colors.primary}
-            secondary={(colors as any).chartSecondary ?? successTint}
-            border={colors.border}
-            textColor={colors.text}
-            muted={withAlpha(colors.text, 0.6)}
           />
-        </Card>
-      </MotiView>
+        </LinearGradient>
 
-      {/* QUICK ACTIONS */}
-      <MotiView
-        from={{ opacity: 0, translateY: 8 }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={{ type: "timing", duration: 460, delay: 260 }}
-      >
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-          <ActionTile
-            icon="barbell-outline"
-            title="Log Workout"
-            desc="Add sets, reps, weight"
-            to={"/(tabs)/workouts" as Href}
-            tint={(colors as any).chartSecondary ?? successTint}
-          />
-          <ActionTile
-            icon="fast-food-outline"
-            title="Add Meal"
-            desc="Track food & macros"
-            to={"/(tabs)/nutrition" as Href}
-            tint={colors.primary}
-          />
-          <ActionTile
-            icon="person-circle-outline"
-            title="Profile"
-            desc="Account & preferences"
-            to={"/(tabs)/profile" as Href}
-            tint={(colors as any).success ?? colors.primary}
-          />
-        </View>
-      </MotiView>
-
-      <BottomTabSpacer extra={4} />
-
-      {/* Steps custom modal */}
-      <Modal transparent visible={openStepsModal} animationType="fade">
-        <Pressable
-          onPress={() => setOpenStepsModal(false)}
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.35)",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-          }}
-        >
-          <Pressable
-            onPress={(e) => e.stopPropagation()}
-            style={{
-              width: "100%",
-              maxWidth: 420,
-              borderRadius: 16,
-              overflow: "hidden",
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: colors.card,
-              padding: 16,
-              gap: 12,
-            }}
-          >
-            <Text
-              style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}
-            >
-              Add custom steps
-            </Text>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: withAlpha(colors.card, 0.95),
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-              }}
-            >
-              <Ionicons
-                name="footsteps-outline"
-                size={18}
-                color={colors.text}
-                style={{ marginRight: 8 }}
-              />
-              <TextInput
-                placeholder="e.g., 750"
-                placeholderTextColor={withAlpha(colors.text, 0.45)}
-                inputMode="numeric"
-                value={customSteps}
-                onChangeText={(t) => setCustomSteps(t.replace(/[^0-9]/g, ""))}
-                style={{
-                  flex: 1,
-                  color: colors.text,
-                  fontSize: 18,
-                  paddingVertical: 2,
-                }}
-              />
-            </View>
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "flex-end",
-                gap: 10,
-              }}
-            >
-              <Pressable
-                onPress={() => setOpenStepsModal(false)}
-                style={{ paddingVertical: 10, paddingHorizontal: 12 }}
-              >
-                <Text style={{ color: withAlpha(colors.text, 0.8) }}>
-                  Cancel
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  const n = Math.max(0, Number(customSteps || 0));
-                  if (n) addSteps(n);
-                  setOpenStepsModal(false);
-                }}
-                style={{
-                  paddingVertical: 10,
-                  paddingHorizontal: 14,
-                  borderRadius: 10,
-                  backgroundColor: colors.primary,
-                }}
-              >
-                <Text style={{ color: "#fff", fontWeight: "800" }}>Add</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-      {/* Date picker modal (long-press on date chip) */}
-      <Modal transparent visible={showDatePicker} animationType="fade">
-        <Pressable
-          onPress={cancelDatePicker}
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.35)",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-          }}
-        >
-          <Pressable
-            onPress={(e) => e.stopPropagation()}
-            style={{
-              width: "100%",
-              maxWidth: 420,
-              borderRadius: 16,
-              overflow: "hidden",
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: colors.card,
-              padding: 16,
-              gap: 12,
-            }}
-          >
-            <Text
-              style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}
-            >
-              Jump to date
-            </Text>
-
-            <DateTimePicker
-              value={pickerDate}
-              mode="date"
-              display={Platform.OS === "ios" ? "inline" : "calendar"}
-              maximumDate={new Date()} // no future dates
-              onChange={(_, selected) => {
-                if (selected) setPickerDate(selected);
-              }}
-            />
-
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "flex-end",
-                gap: 10,
-              }}
-            >
-              <Pressable
-                onPress={cancelDatePicker}
-                style={{ paddingVertical: 10, paddingHorizontal: 12 }}
-              >
-                <Text style={{ color: withAlpha(colors.text, 0.8) }}>
-                  Cancel
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={applyPickedDate}
-                style={{
-                  paddingVertical: 10,
-                  paddingHorizontal: 14,
-                  borderRadius: 10,
-                  backgroundColor: colors.primary,
-                }}
-              >
-                <Text style={{ color: "#fff", fontWeight: "800" }}>Apply</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </Animated.ScrollView>
-  );
-}
-
-/* ---------- bits (helpers) ---------- */
-
-function IconBtn({ icon, onPress }: { icon: any; onPress?: () => void }) {
-  const { colors } = useTheme();
-  return (
-    <Pressable accessibilityRole="button" hitSlop={8} onPress={onPress}>
-      {({ pressed }) => (
+        {/* Coach Suggestion */}
         <MotiView
-          animate={{
-            scale: pressed ? 0.92 : 1,
-            translateY: pressed ? 2 : 0,
-          }}
-          transition={{ type: "timing", duration: 140 }}
+          from={{ opacity: 0, translateY: 10 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: "timing", duration: 420, delay: 60 }}
         >
-          <View
+          <LinearGradient
+            colors={homeGradients.coach}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
             style={{
-              width: 36,
-              height: 36,
-              borderRadius: 12,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: withAlpha(colors.card, 0.9),
+              borderRadius: 16,
+              padding: 2,
               borderWidth: 1,
-              borderColor: colors.border,
-            }}
-          >
-            <Ionicons name={icon} size={18} color={colors.text} />
-          </View>
-        </MotiView>
-      )}
-    </Pressable>
-  );
-}
-
-function SectionTitle({
-  icon,
-  text,
-  compact,
-}: {
-  icon: any;
-  text: string;
-  compact?: boolean;
-}) {
-  const { colors } = useTheme();
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-        marginBottom: compact ? 6 : 10,
-      }}
-    >
-      <View
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: 8,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: withAlpha(colors.primary, 0.15),
-          borderWidth: 1,
-          borderColor: withAlpha(colors.primary, 0.35),
-        }}
-      >
-        <Ionicons name={icon} size={16} color={colors.primary} />
-      </View>
-      <Text style={{ color: colors.text, fontWeight: "800" }}>{text}</Text>
-    </View>
-  );
-}
-
-function HeadlineValue({ value }: { value: string }) {
-  const { colors } = useTheme();
-  return (
-    <Text style={{ fontSize: 22, fontWeight: "800", color: colors.text }}>
-      {value}
-    </Text>
-  );
-}
-
-function RowSplit({ children }: { children: React.ReactNode }) {
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 10,
-        flexWrap: "wrap",
-      }}
-    >
-      {children}
-    </View>
-  );
-}
-
-function MiniStat({
-  label,
-  primary,
-  secondary,
-}: {
-  label: string;
-  primary: string;
-  secondary?: string;
-}) {
-  const { colors } = useTheme();
-  return (
-    <View
-      style={{
-        paddingVertical: 8,
-        paddingHorizontal: 10,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: withAlpha(colors.border, 0.9),
-        backgroundColor: withAlpha(colors.card, 0.95),
-        minWidth: 150,
-        maxWidth: 220,
-      }}
-    >
-      <Text
-        style={{
-          fontSize: 11,
-          textTransform: "uppercase",
-          letterSpacing: 0.4,
-          color: withAlpha(colors.text, 0.6),
-          marginBottom: 2,
-        }}
-      >
-        {label}
-      </Text>
-      <Text
-        style={{
-          fontSize: 16,
-          fontWeight: "800",
-          color: colors.text,
-        }}
-      >
-        {primary}
-      </Text>
-      {secondary ? (
-        <Text
-          style={{
-            fontSize: 11,
-            marginTop: 2,
-            color: withAlpha(colors.text, 0.7),
-          }}
-          numberOfLines={2}
-        >
-          {secondary}
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-}) {
-  const { colors } = useTheme();
-  return (
-    <Card
-      style={{
-        padding: 16,
-        minWidth: 150,
-        borderWidth: 1,
-        borderColor: accent ? withAlpha(colors.primary, 0.35) : colors.border,
-        borderRadius: 16,
-        ...softShadow,
-      }}
-    >
-      <Text
-        style={{
-          color: withAlpha(colors.text, 0.6),
-          textTransform: "uppercase",
-          fontSize: 12,
-        }}
-      >
-        {label}
-      </Text>
-      <Text style={{ fontSize: 22, fontWeight: "800", color: colors.text }}>
-        {value}
-      </Text>
-    </Card>
-  );
-}
-
-function Pill({
-  icon,
-  label,
-  value,
-  tint,
-}: {
-  icon: any;
-  label: string;
-  value: string;
-  tint: string;
-}) {
-  const { colors } = useTheme();
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        borderRadius: 999,
-        backgroundColor: withAlpha(tint, 0.18),
-        borderWidth: 1,
-        borderColor: withAlpha(tint, 0.35),
-      }}
-    >
-      <Ionicons name={icon} size={16} color={tint} />
-      <Text style={{ color: colors.text, fontWeight: "600" }}>{label}</Text>
-      <Text style={{ color: withAlpha(colors.text, 0.6) }}>· {value}</Text>
-    </View>
-  );
-}
-
-function Badge({ text, color }: { text: string; color: string }) {
-  return (
-    <View
-      style={{
-        borderWidth: 1,
-        borderColor: withAlpha(color, 0.5),
-        borderRadius: 999,
-        paddingVertical: 4,
-        paddingHorizontal: 10,
-        alignSelf: "flex-start",
-      }}
-    >
-      <Text style={{ color }}>{text}</Text>
-    </View>
-  );
-}
-
-function GlassCard({ children }: { children: React.ReactNode }) {
-  const { colors } = useTheme();
-  return (
-    <View
-      style={{
-        flex: 1,
-        minWidth: 180,
-        borderRadius: 20,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: withAlpha(colors.card, 0.9),
-        ...softShadow,
-      }}
-    >
-      {children}
-    </View>
-  );
-}
-
-function ActionTile({
-  icon,
-  title,
-  desc,
-  to,
-  tint,
-}: {
-  icon: any;
-  title: string;
-  desc: string;
-  to: Href;
-  tint: string;
-}) {
-  const { colors } = useTheme();
-  return (
-    <Link href={to} asChild>
-      <Pressable>
-        {({ pressed }) => (
-          <MotiView
-            from={{ scale: 1 }}
-            animate={{
-              scale: pressed ? 0.96 : 1,
-              rotateZ: pressed ? "-1deg" : "0deg",
-              translateY: pressed ? 3 : 0,
-            }}
-            transition={{ type: "timing", duration: 140 }}
-            style={{
-              padding: 16,
-              minWidth: 160,
-              borderRadius: 18,
-              backgroundColor: withAlpha(tint, 0.08),
-              borderWidth: 1,
-              borderColor: withAlpha(tint, 0.35),
+              borderColor: withAlpha(colors.primary, 0.35),
               ...softShadow,
             }}
           >
-            <View
+            <AISwipeCard
+              title="Smart suggestion"
+              suggestion={suggestion.body}
+              onAccept={() => Alert.alert("Added", "Suggestion accepted")}
+              onDismiss={() => Alert.alert("Skipped", "Suggestion dismissed")}
               style={{
-                width: 36,
-                height: 36,
-                borderRadius: 10,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: withAlpha(tint, 0.15),
-                borderWidth: 1,
-                borderColor: withAlpha(tint, 0.35),
-                marginBottom: 8,
+                backgroundColor: "rgba(10,14,30,0.82)",
+                borderColor: withAlpha(colors.primary, 0.2),
               }}
-            >
-              <Ionicons name={icon} size={20} color={tint} />
-            </View>
-            <Text
-              style={{ fontSize: 16, fontWeight: "800", color: colors.text }}
-            >
-              {title}
-            </Text>
-            <Text style={{ color: withAlpha(colors.text, 0.6) }}>{desc}</Text>
-          </MotiView>
-        )}
-      </Pressable>
-    </Link>
+            />
+          </LinearGradient>
+        </MotiView>
+
+        {/* This Week */}
+        <LinearGradient
+          colors={homeGradients.week}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            borderRadius: 16,
+            padding: 14,
+            borderWidth: 1,
+            borderColor: withAlpha(colors.accent, 0.35),
+            ...softShadow,
+          }}
+        >
+          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}>
+            📊 This week
+          </Text>
+          <View
+            style={{
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: 10,
+              marginTop: 10,
+            }}
+          >
+            {pill({
+              label: "Weight",
+              value: profile?.weightKg
+                ? `${Math.round(profile.weightKg)} kg`
+                : "—",
+              color: colors.chartSecondary,
+            })}
+            {pill({
+              label: "Protein hit rate",
+              value: `${weeklyProteinHits} / 7`,
+              color: colors.primary,
+            })}
+            {pill({
+              label: "Steps avg",
+              value: `${stepsAvg.toLocaleString()}/day`,
+              color: colors.accent,
+            })}
+          </View>
+        </LinearGradient>
+      </ScrollView>
+
+      {/* FloatingAddMenu retained in repo; using new morph menu here */}
+      <FabMorphMenu
+        actions={quickActions}
+        style={{ bottom: Math.max(insets.bottom, 12) + 54, right: 18 }}
+        accent={colors.accent || "#5DD6FF"}
+        tint={isDark ? "dark" : "light"}
+      />
+    </View>
   );
 }
 
-function QuestChip({
+function NutritionQuestChip({
   icon,
   label,
   progress,
   detail,
+  accent,
   delay = 0,
 }: {
-  icon: any;
+  icon: string;
   label: string;
   progress: number;
   detail: string;
+  accent: string;
   delay?: number;
 }) {
   const { colors } = useTheme();
@@ -2129,12 +1033,12 @@ function QuestChip({
                 borderRadius: 10,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: withAlpha(colors.primary, 0.18),
+                backgroundColor: withAlpha(accent, 0.18),
                 borderWidth: 1,
-                borderColor: withAlpha(colors.primary, 0.35),
+                borderColor: withAlpha(accent, 0.35),
               }}
             >
-              <Ionicons name={icon} size={18} color={colors.primary} />
+              <Ionicons name={icon as any} size={18} color={accent} />
             </View>
             <View>
               <Text
@@ -2142,7 +1046,7 @@ function QuestChip({
               >
                 {label}
               </Text>
-              <Text style={{ color: withAlpha(colors.text, 0.7) }}>{detail}</Text>
+              <Text style={{ color: colors.muted }}>{detail}</Text>
             </View>
           </View>
 
@@ -2152,14 +1056,14 @@ function QuestChip({
               paddingHorizontal: 10,
               borderRadius: 10,
               backgroundColor: withAlpha(
-                pct >= 100 ? arcadeColors.neonLime : colors.primary,
-                0.14
+                pct >= 100 ? arcadeColors.neonLime : accent,
+                0.16
               ),
             }}
           >
             <Text
               style={{
-                color: pct >= 100 ? arcadeColors.neonLime : colors.primary,
+                color: pct >= 100 ? arcadeColors.neonLime : accent,
                 fontWeight: "800",
               }}
             >
@@ -2180,82 +1084,12 @@ function QuestChip({
               width: `${pct}%`,
               height: "100%",
               borderRadius: 999,
-              backgroundColor:
-                pct >= 100 ? arcadeColors.neonLime : colors.primary,
+              backgroundColor: pct >= 100 ? arcadeColors.neonLime : accent,
               opacity: 0.9,
             }}
           />
         </View>
       </View>
     </MotiView>
-  );
-}
-
-function TodayBar({
-  consumed,
-  burned,
-  target,
-  primary,
-  secondary,
-  border,
-  textColor,
-  muted,
-}: {
-  consumed: number;
-  burned: number;
-  target: number;
-  primary: string;
-  secondary: string;
-  border: string;
-  textColor: string;
-  muted: string;
-}) {
-  const safeTarget = Math.max(1, target || 1);
-  const pctConsumed = Math.min(100, Math.round((consumed / safeTarget) * 100));
-  const pctBurned = Math.min(100, Math.round((burned / safeTarget) * 100));
-  const net = consumed - burned;
-
-  return (
-    <View>
-      <View
-        style={{
-          height: 16,
-          borderRadius: 999,
-          backgroundColor: withAlpha("#ffffff", 0.04),
-          borderWidth: 1,
-          borderColor: border,
-          overflow: "hidden",
-        }}
-      >
-        <View
-          style={{
-            width: `${pctConsumed}%`,
-            height: "100%",
-            backgroundColor: withAlpha(primary, 0.9),
-          }}
-        >
-          <View
-            style={{
-              width: `${pctBurned}%`,
-              height: "100%",
-              backgroundColor: withAlpha(secondary, 0.9),
-              opacity: 0.65,
-            }}
-          />
-        </View>
-      </View>
-      <View
-        style={{
-          marginTop: 8,
-          flexDirection: "row",
-          justifyContent: "space-between",
-        }}
-      >
-        <Text style={{ color: muted }}>Target: {Math.round(target)} kcal</Text>
-        <Text style={{ color: textColor, fontWeight: "700" }}>
-          Net: {Math.round(net)} kcal
-        </Text>
-      </View>
-    </View>
   );
 }

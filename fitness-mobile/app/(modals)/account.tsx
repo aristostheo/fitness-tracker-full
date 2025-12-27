@@ -18,6 +18,7 @@ import { BlurView } from "expo-blur";
 
 import { useTheme } from "@/content/ThemeProvider";
 import { useAuth } from "@/content/AuthContext";
+import { useEntitlements } from "@/content/useEntitlements";
 
 import { useBadges } from "@/hooks/useBadges";
 import { BadgeGrid } from "@/components/badges/BadgeGrid";
@@ -206,6 +207,7 @@ export default function AccountScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const navigation = useNavigation();
+  const { isPro, isAdmin, isTester } = useEntitlements();
 
   // Show native header with Done button (doesn't cover content)
   useLayoutEffect(() => {
@@ -372,6 +374,54 @@ export default function AccountScreen() {
             )}
           </View>
         </GlassPanel>
+
+        {!isPro && (
+          <GlassPanel pad={14}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "rgba(124,58,237,0.12)",
+                  borderWidth: 1,
+                  borderColor: "rgba(124,58,237,0.45)",
+                }}
+              >
+                <Ionicons name="sparkles-outline" size={24} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}>
+                  Go Pro
+                </Text>
+                <Text style={{ color: colors.muted, fontWeight: "600" }}>
+                  Unlock AI features, templates, and generators. Admin/tester roles always
+                  unlock everything.
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => router.push("/paywall")}
+                style={({ pressed }) => ({
+                  paddingVertical: 10,
+                  paddingHorizontal: 14,
+                  borderRadius: 12,
+                  backgroundColor: pressed
+                    ? colors.primary
+                    : colors.primary,
+                })}
+              >
+                <Text style={{ color: colors.background, fontWeight: "900" }}>Upgrade</Text>
+              </Pressable>
+            </View>
+            {(isAdmin || isTester) && (
+              <Text style={{ color: colors.muted, fontSize: 12, marginTop: 8 }}>
+                You’re flagged as {isAdmin ? "admin" : "tester"} — all features stay unlocked.
+              </Text>
+            )}
+          </GlassPanel>
+        )}
 
         {/* Earned badges (collapsible) */}
         <GlassPanel>

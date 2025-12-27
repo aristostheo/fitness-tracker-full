@@ -6,6 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { MotiView } from "moti";
 import { useAuth } from "@/content/AuthContext";
 import { useTheme } from "@/content/ThemeProvider";
+import { Link } from "expo-router";
 import {
   subscribeNotifications,
   markNotificationRead,
@@ -72,12 +73,42 @@ export default function NotificationsScreen() {
             gap: 10,
           }}
         >
-          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 20 }}>
-            Notifications
-          </Text>
-          <Text style={{ color: colors.muted, fontWeight: "600" }}>
-            Friend pings, meal nudges, requests, and streak reminders in one feed.
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={{ color: colors.text, fontWeight: "900", fontSize: 20 }}>
+                Alerts
+              </Text>
+              <Text style={{ color: colors.muted, fontWeight: "600" }}>
+                Friend pings, requests, meal nudges, and streak reminders.
+              </Text>
+            </View>
+            <Link href="/friends" asChild>
+              <Pressable>
+                {({ pressed }) => (
+                  <MotiView
+                    animate={{ scale: pressed ? 0.95 : 1 }}
+                    transition={{ type: "timing", duration: 140 }}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: withAlpha(colors.primary, 0.35),
+                      backgroundColor: withAlpha(colors.primary, 0.12),
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <Ionicons name="people-outline" size={16} color={colors.primary} />
+                    <Text style={{ color: colors.primary, fontWeight: "800" }}>
+                      Friends
+                    </Text>
+                  </MotiView>
+                )}
+              </Pressable>
+            </Link>
+          </View>
 
           <GradientButton
             label={

@@ -1,9 +1,10 @@
-// components/workouts/Filters.tsx
+// components/workouts/Filters.tsx (makeover)
 import React, { useMemo } from "react";
-import { View, Text, Pressable, Platform } from "react-native";
-import Card from "@/components/Card";
-import { useTheme } from "@/content/ThemeProvider";
+import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { MotiView } from "moti";
+import { useTheme } from "@/content/ThemeProvider";
 import { withAlpha } from "./utils/withAlpha";
 import { Field } from "./ui/Field";
 
@@ -51,10 +52,13 @@ export default function Filters({
   ];
 
   const chipBase = {
-    paddingVertical: 8,
+    paddingVertical: 9,
     paddingHorizontal: 12,
-    borderRadius: 999,
+    borderRadius: 12,
     borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   } as const;
 
   function setToday() {
@@ -76,208 +80,190 @@ export default function Filters({
   }
 
   return (
-    <Card style={{ gap: 12, paddingTop: 12, paddingBottom: 14 }}>
-      {/* Header + summary pill */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <View
-            style={{
-              padding: 8,
-              borderRadius: 12,
-              backgroundColor: withAlpha(colors.primary, 0.15),
-              borderWidth: 1,
-              borderColor: withAlpha(colors.primary, 0.35),
-            }}
-          >
-            <Ionicons name="funnel-outline" size={16} color={colors.primary} />
-          </View>
-          <Text style={{ fontWeight: "800", color: colors.text, fontSize: 16 }}>
-            Filters
-          </Text>
-        </View>
-
-        {/* Summary */}
+    <LinearGradient
+      colors={[withAlpha(colors.card, 0.9), withAlpha(colors.card, 0.98)]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={{
+        borderRadius: 18,
+        padding: 14,
+        borderWidth: 1,
+        borderColor: withAlpha(colors.border, 0.7),
+        gap: 12,
+      }}
+    >
+      {/* Header */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
         <View
           style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 6,
-            paddingVertical: 6,
-            paddingHorizontal: 10,
-            borderRadius: 999,
+            padding: 10,
+            borderRadius: 12,
             backgroundColor: withAlpha(colors.primary, 0.12),
             borderWidth: 1,
-            borderColor: withAlpha(colors.primary, 0.28),
-            maxWidth: "64%",
+            borderColor: withAlpha(colors.primary, 0.35),
           }}
         >
-          <Ionicons name="sparkles-outline" size={14} color={colors.primary} />
+          <Ionicons name="funnel-outline" size={16} color={colors.primary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}>
+            Filter workouts
+          </Text>
           <Text
             numberOfLines={1}
-            style={{ color: colors.primary, fontWeight: "800", fontSize: 12 }}
+            style={{ color: colors.muted, fontSize: 12, fontWeight: "600" }}
           >
             {summary}
           </Text>
         </View>
+        {(from || to || preset !== "all") && (
+          <Pressable
+            onPress={() => {
+              setPreset("all");
+              clearDates();
+            }}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 999,
+              backgroundColor: withAlpha(colors.text, 0.06),
+              borderWidth: 1,
+              borderColor: withAlpha(colors.text, 0.12),
+            }}
+          >
+            <Ionicons name="refresh-outline" size={14} color={colors.muted} />
+            <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>
+              Reset
+            </Text>
+          </Pressable>
+        )}
       </View>
 
-      {/* Presets */}
-      <View
-        style={{
-          borderWidth: 1,
-          borderColor: colors.border,
-          borderRadius: 999,
-          padding: 4,
-          flexDirection: "row",
-          gap: 6,
-          backgroundColor: colors.card,
-        }}
-      >
-        {presets.map(([p, icon, label]) => {
+      {/* Preset pills */}
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {presets.map(([p, icon, label], idx) => {
           const active = preset === p;
           return (
-            <Pressable
+            <MotiView
               key={p}
-              onPress={() => setPreset(p)}
-              hitSlop={6}
-              android_ripple={{
-                color: withAlpha(colors.primary, 0.12),
-                borderless: false,
-              }}
-              style={[
-                chipBase,
-                {
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 6,
-                  backgroundColor: active
-                    ? withAlpha(colors.primary, 0.18)
-                    : "transparent",
-                  borderColor: active
-                    ? withAlpha(colors.primary, 0.35)
-                    : "transparent",
-                },
-              ]}
+              from={{ opacity: 0, translateY: 6 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={{ type: "timing", duration: 240, delay: 25 * idx }}
             >
-              <Ionicons
-                name={icon}
-                size={14}
-                color={active ? colors.primary : colors.muted}
-              />
-              <Text
+              <Pressable
+                onPress={() => setPreset(p)}
+                hitSlop={8}
                 style={{
-                  color: active ? colors.primary : colors.text,
-                  fontWeight: active ? "800" : "600",
-                  fontSize: 13,
+                  ...chipBase,
+                  backgroundColor: active
+                    ? withAlpha(colors.primary, 0.22)
+                    : withAlpha(colors.text, 0.04),
+                  borderColor: active
+                    ? withAlpha(colors.primary, 0.4)
+                    : withAlpha(colors.border, 0.9),
                 }}
               >
-                {label}
-              </Text>
-            </Pressable>
+                <Ionicons
+                  name={icon}
+                  size={14}
+                  color={active ? colors.primary : colors.muted}
+                />
+                <Text
+                  style={{
+                    color: active ? colors.primary : colors.text,
+                    fontWeight: active ? "900" : "700",
+                    fontSize: 13,
+                  }}
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            </MotiView>
           );
         })}
       </View>
 
       {/* Quick shortcuts */}
-      <View
-        style={{
-          flexDirection: "row",
-          flexWrap: "wrap",
-          gap: 8,
-          marginTop: -2,
-        }}
-      >
-        <Pressable
-          onPress={setToday}
-          hitSlop={6}
-          style={[
-            chipBase,
-            {
-              borderColor: colors.border,
-              backgroundColor: withAlpha(colors.primary, 0.08),
-            },
-          ]}
-        >
-          <Row gap={6}>
-            <Ionicons name="sunny-outline" size={14} color={colors.text} />
-            <Text style={{ color: colors.text, fontWeight: "700" }}>Today</Text>
-          </Row>
-        </Pressable>
-        <Pressable
-          onPress={setYesterday}
-          hitSlop={6}
-          style={[
-            chipBase,
-            { borderColor: colors.border, backgroundColor: "transparent" },
-          ]}
-        >
-          <Row gap={6}>
-            <Ionicons name="moon-outline" size={14} color={colors.muted} />
-            <Text style={{ color: colors.text, fontWeight: "600" }}>
-              Yesterday
-            </Text>
-          </Row>
-        </Pressable>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        <ShortcutChip icon="sunny-outline" label="Today" onPress={setToday} />
+        <ShortcutChip icon="moon-outline" label="Yesterday" onPress={setYesterday} />
         {(from || to) && (
-          <Pressable
-            onPress={clearDates}
-            hitSlop={6}
-            style={[
-              chipBase,
-              {
-                borderColor: withAlpha("#ef4444", 0.5),
-                backgroundColor: withAlpha("#ef4444", 0.08),
-              },
-            ]}
-          >
-            <Row gap={6}>
-              <Ionicons name="close-circle-outline" size={14} color="#ef4444" />
-              <Text style={{ color: "#ef4444", fontWeight: "800" }}>
-                Clear dates
-              </Text>
-            </Row>
-          </Pressable>
+          <ShortcutChip icon="close-outline" label="Clear dates" onPress={clearDates} dim />
         )}
       </View>
 
       {/* Custom range */}
-      <View style={{ gap: 8 }}>
-        <Text style={{ color: colors.muted, fontSize: 12 }}>
-          Or set a custom range:
+      <View style={{ gap: 6 }}>
+        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+          Custom range
         </Text>
         <View style={{ flexDirection: "row", gap: 8 }}>
           <Field
             icon="calendar-outline"
-            placeholder="From YYYY-MM-DD"
+            placeholder="YYYY-MM-DD"
             value={from}
             onChangeText={setFrom}
-            autoCapitalize="none"
           />
           <Field
-            icon="calendar-clear-outline"
-            placeholder="To YYYY-MM-DD"
+            icon="calendar-outline"
+            placeholder="YYYY-MM-DD"
             value={to}
             onChangeText={setTo}
-            autoCapitalize="none"
           />
         </View>
+        <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "600" }}>
+          Tip: presets set dates automatically; custom range overrides them.
+        </Text>
       </View>
-    </Card>
+    </LinearGradient>
   );
 }
 
-/* ─── tiny helper ───────────────────────────────────────────── */
-
-function Row({ children, gap = 0 }: React.PropsWithChildren<{ gap?: number }>) {
+function ShortcutChip({
+  icon,
+  label,
+  onPress,
+  dim,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  dim?: boolean;
+}) {
+  const { colors } = useTheme();
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap }}>
-      {children}
-    </View>
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+        borderRadius: 12,
+        borderWidth: 1,
+        backgroundColor: dim
+          ? withAlpha(colors.text, 0.05)
+          : withAlpha(colors.primary, 0.08),
+        borderColor: dim
+          ? withAlpha(colors.text, 0.12)
+          : withAlpha(colors.primary, 0.25),
+      }}
+    >
+      <Ionicons name={icon} size={14} color={dim ? colors.muted : colors.primary} />
+      <Text
+        style={{
+          color: dim ? colors.muted : colors.text,
+          fontWeight: "800",
+          fontSize: 13,
+        }}
+      >
+        {label}
+      </Text>
+    </Pressable>
   );
 }

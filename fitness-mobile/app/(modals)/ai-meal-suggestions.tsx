@@ -16,6 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/content/ThemeProvider";
 import { auth } from "@/lib/firebase";
+import { useEntitlements } from "@/content/useEntitlements";
 
 // 🔑 Your Cloud Run / HTTPS function URL (Expo public env)
 const DESCRIBE_URL = process.env.EXPO_PUBLIC_AI_DESCRIBE_URL;
@@ -79,6 +80,29 @@ async function callDescribe(payload: any) {
 export default function AiMealSuggestions() {
   const { colors, isDark } = useTheme() as any;
   const router = useRouter();
+  const { isPro } = useEntitlements();
+  const [showingLock, setShowingLock] = useState(false);
+
+  const ensurePro = () => {
+    if (isPro) return true;
+    if (showingLock) return false;
+    setShowingLock(true);
+    Alert.alert(
+      "Pro required",
+      "AI meal ideas are part of Pro. Unlock to continue.",
+      [
+        { text: "Not now", style: "cancel", onPress: () => setShowingLock(false) },
+        {
+          text: "See Pro",
+          onPress: () => {
+            setShowingLock(false);
+            router.replace("/paywall");
+          },
+        },
+      ]
+    );
+    return false;
+  };
 
   // Expect these from the nutrition tab when navigating here.
   // If you can pass them, send JSON.stringified objects for goals & totals.
@@ -122,6 +146,7 @@ export default function AiMealSuggestions() {
   );
 
   async function fetchIdeas(opts: { forceNew?: boolean }) {
+    if (!ensurePro()) return;
     // sensible fallbacks if the screen was opened without params
     const safeGoals =
       goals && typeof goals === "object"

@@ -1,4 +1,4 @@
-// app/(tabs)/friends.tsx
+// app/friends.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, ScrollView, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -32,6 +32,7 @@ const ribbonColors = ["#5ce1ff", "#ff5ac8", "#8cfb9f", "#ffc857"];
 export default function FriendsScreen() {
   const { user } = useAuth();
   const { colors, isDark } = useTheme();
+  const router = useRouter();
   const uid = user?.uid ?? "__demo__";
 
   const [friends, setFriends] = useState<FriendEdge[]>([]);
@@ -39,7 +40,6 @@ export default function FriendsScreen() {
   const [input, setInput] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [sending, setSending] = useState(false);
-  const router = useRouter();
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -144,12 +144,12 @@ export default function FriendsScreen() {
       {/* floating ribbons */}
       <GradientRibbon
         side="right"
-        colors={[ribbonColors[1], ribbonColors[0]]}
+        colors={[ribbonColors[1], ribbonColors[0]] as const}
         opacity={isDark ? 0.18 : 0.24}
       />
       <GradientRibbon
         side="left"
-        colors={[ribbonColors[2], ribbonColors[3]]}
+        colors={[ribbonColors[2], ribbonColors[3]] as const}
         top={320}
         opacity={isDark ? 0.14 : 0.2}
       />
@@ -162,20 +162,41 @@ export default function FriendsScreen() {
         <LinearGradient
           colors={[withAlpha(colors.primary, 0.22), colors.card]}
           start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{
-            borderRadius: 22,
-            padding: 16,
-            borderWidth: 1,
-            borderColor: withAlpha(colors.primary, 0.35),
-          }}
-        >
-          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 20 }}>
-            Friend League
-          </Text>
-          <Text style={{ color: colors.muted, marginTop: 4, fontWeight: "600" }}>
-            Add buddies, watch their meals, and nudge them to log today.
-          </Text>
+        end={{ x: 1, y: 1 }}
+        style={{
+          borderRadius: 22,
+          padding: 16,
+          borderWidth: 1,
+          borderColor: withAlpha(colors.primary, 0.35),
+        }}
+      >
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={{ color: colors.text, fontWeight: "900", fontSize: 20 }}>
+                Friends & Meals
+              </Text>
+              <Text style={{ color: colors.muted, marginTop: 4, fontWeight: "600" }}>
+                Add buddies, watch their meals, and nudge them to log today.
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => router.push("/notifications")}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: withAlpha(colors.primary, 0.35),
+                backgroundColor: withAlpha(colors.primary, pressed ? 0.18 : 0.12),
+              })}
+            >
+              <Ionicons name="arrow-back" size={16} color={colors.primary} />
+              <Text style={{ color: colors.primary, fontWeight: "800" }}>Back</Text>
+            </Pressable>
+          </View>
 
           <View style={{ marginTop: 12, gap: 10 }}>
             <Field
@@ -304,6 +325,15 @@ export default function FriendsScreen() {
                       `/friends/${encodeURIComponent(
                         f.friendUid
                       )}?name=${encodeURIComponent(f.friendDisplayName || "")}`
+                    ),
+                },
+                {
+                  label: "View workouts",
+                  onPress: () =>
+                    router.push(
+                      `/friends/${encodeURIComponent(
+                        f.friendUid
+                      )}/workouts?name=${encodeURIComponent(f.friendDisplayName || "")}`
                     ),
                 },
               ]}
@@ -454,7 +484,7 @@ function GradientRibbon({
   opacity = 0.2,
 }: {
   side: "left" | "right";
-  colors: string[];
+  colors: readonly [string, string];
   top?: number;
   opacity?: number;
 }) {

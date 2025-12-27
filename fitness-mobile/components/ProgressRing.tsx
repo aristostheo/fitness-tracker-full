@@ -28,7 +28,7 @@ export default function ProgressRing({
     <View
       style={{
         flex: 1,
-        minWidth: 160,
+        minWidth: 10,
         padding: 12,
         borderRadius: 16,
         borderWidth: 1,
