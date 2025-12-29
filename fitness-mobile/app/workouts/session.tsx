@@ -82,8 +82,25 @@ type EditSetState = {
   done: boolean;
 };
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, v));
+type Palette = {
+  bg: string;
+  bg2: string;
+  bg3: string;
+  text: string;
+  muted: string;
+  card: string;
+  border: string;
+  border2: string;
+  primary: string;
+  primary2: string;
+  danger: string;
+  success: string;
+  shadowInk: string; // used for “dark ink” icons on light surfaces
+};
+
+function clamp(v: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, v));
+}
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -107,93 +124,495 @@ function uid() {
   return Math.random().toString(16).slice(2) + Date.now().toString(16);
 }
 
-function GlassCard({
-  children,
-  style,
-  intensity = 30,
-}: {
-  children: React.ReactNode;
-  style?: any;
-  intensity?: number;
-}) {
-  return (
-    <View style={[styles.cardWrap, style]}>
-      <View style={styles.cardBorder} pointerEvents="none" />
-      <BlurView intensity={intensity} tint="dark" style={styles.cardBlur}>
-        <LinearGradient
-          colors={[
-            withAlpha("#FFFFFF", 0.1),
-            withAlpha("#FFFFFF", 0.06),
-            withAlpha("#000000", 0.06),
-          ]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.cardInner}
-        >
-          {children}
-        </LinearGradient>
-      </BlurView>
-    </View>
-  );
+function guessIsDarkFromBg(bg?: string) {
+  // crude fallback: if bg is near-black assume dark
+  if (!bg) return true;
+  const hex = bg.replace("#", "").trim();
+  if (hex.length !== 6) return true;
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance < 0.45;
 }
 
-function Chip({
-  icon,
-  label,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-}) {
-  return (
-    <View style={styles.chip}>
-      <Ionicons name={icon} size={14} color={withAlpha("#FFFFFF", 0.82)} />
-      <Text style={styles.chipText}>{label}</Text>
-    </View>
-  );
+function buildPalette(theme: any): { p: Palette; isDark: boolean } {
+  const colors = theme?.colors ?? theme ?? {};
+  const isDark =
+    typeof theme?.isDark === "boolean"
+      ? theme.isDark
+      : typeof colors?.isDark === "boolean"
+      ? colors.isDark
+      : guessIsDarkFromBg(colors?.bg);
+
+  // try common keys; fallback to your original dark palette
+  const bg =
+    colors?.bg ?? colors?.background ?? (isDark ? "#05060C" : "#F6F7FB");
+  const text =
+    colors?.text ?? colors?.foreground ?? (isDark ? "#FFFFFF" : "#0B0F1A");
+  const muted =
+    colors?.muted ??
+    colors?.subtext ??
+    (isDark ? withAlpha("#FFFFFF", 0.6) : withAlpha("#0B0F1A", 0.55));
+
+  const primary = colors?.primary ?? colors?.accent ?? "#68D7FF";
+  const danger = colors?.danger ?? colors?.error ?? "#FF5C6A";
+  const success = colors?.success ?? colors?.ok ?? "#7CFFB5";
+
+  const card =
+    colors?.card ??
+    colors?.surface ??
+    (isDark ? withAlpha("#FFFFFF", 0.06) : withAlpha("#0B0F1A", 0.04));
+
+  const border =
+    colors?.border ??
+    (isDark ? withAlpha("#FFFFFF", 0.14) : withAlpha("#0B0F1A", 0.12));
+
+  const border2 =
+    colors?.border2 ??
+    (isDark ? withAlpha("#FFFFFF", 0.12) : withAlpha("#0B0F1A", 0.1));
+
+  // background gradient (keep the vibe, but theme-aware)
+  const bg2 = colors?.bg2 ?? (isDark ? "#070A12" : withAlpha(primary, 0.1));
+  const bg3 = colors?.bg3 ?? (isDark ? "#03040A" : withAlpha(primary, 0.04));
+
+  const primary2 = colors?.primary2 ?? withAlpha(primary, 0.22);
+
+  const shadowInk = isDark ? "#111111" : "#0B0F1A";
+
+  return {
+    isDark,
+    p: {
+      bg,
+      bg2,
+      bg3,
+      text,
+      muted,
+      card,
+      border,
+      border2,
+      primary,
+      primary2,
+      danger,
+      success,
+      shadowInk,
+    },
+  };
 }
 
-function MiniBtn({
-  icon,
-  label,
-  onPress,
-  danger,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  onPress?: () => void;
-  danger?: boolean;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      style={({ pressed }) => [
-        styles.miniBtn,
-        danger && { borderColor: withAlpha("#FF5C6A", 0.25) },
-        pressed && { opacity: 0.85 },
-      ]}
-    >
-      <Ionicons
-        name={icon}
-        size={16}
-        color={danger ? withAlpha("#FF5C6A", 0.9) : withAlpha("#FFFFFF", 0.82)}
-      />
-      <Text
-        style={[
-          styles.miniBtnText,
-          danger && { color: withAlpha("#FF5C6A", 0.9) },
-        ]}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
+function makeStyles(p: Palette, isDark: boolean) {
+  const hair = StyleSheet.hairlineWidth;
+
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: p.bg },
+    loadingWrap: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: p.bg,
+    },
+
+    headerBlur: {
+      borderBottomWidth: hair,
+      borderBottomColor: withAlpha(p.text, 0.12),
+    },
+    headerRow: {
+      paddingTop: 14,
+      paddingBottom: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    iconBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: withAlpha(p.text, isDark ? 0.06 : 0.05),
+      borderWidth: hair,
+      borderColor: withAlpha(p.text, isDark ? 0.14 : 0.12),
+    },
+    finishBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: isDark
+        ? withAlpha("#FFFFFF", 0.92)
+        : withAlpha(p.shadowInk, 0.92),
+      borderWidth: hair,
+      borderColor: withAlpha(p.text, isDark ? 0.2 : 0.14),
+    },
+    inProgress: {
+      color: withAlpha(p.text, 0.6),
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0.9,
+    },
+    headerTitle: {
+      color: withAlpha(p.text, 0.94),
+      fontSize: 16,
+      fontWeight: "900",
+      letterSpacing: -0.2,
+      maxWidth: 240,
+    },
+
+    cardWrap: { borderRadius: 18, overflow: "hidden" },
+    cardBorder: {
+      ...StyleSheet.absoluteFillObject,
+      borderRadius: 18,
+      borderWidth: hair,
+      borderColor: withAlpha(p.text, isDark ? 0.14 : 0.12),
+      zIndex: 2,
+    },
+    cardBlur: { borderRadius: 18, overflow: "hidden" },
+    cardInner: { padding: 14 },
+
+    chip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 999,
+      backgroundColor: withAlpha(p.text, isDark ? 0.05 : 0.045),
+      borderWidth: hair,
+      borderColor: withAlpha(p.text, isDark ? 0.12 : 0.1),
+    },
+    chipText: {
+      color: withAlpha(p.text, 0.72),
+      fontWeight: "800",
+      fontSize: 12,
+      fontVariant: ["tabular-nums"],
+    },
+
+    sectionTitle: {
+      color: withAlpha(p.text, 0.92),
+      fontWeight: "900",
+      fontSize: 14,
+    },
+    sectionSub: {
+      marginTop: 4,
+      color: withAlpha(p.text, 0.58),
+      fontWeight: "700",
+      fontSize: 12,
+      lineHeight: 16,
+    },
+
+    statPill: {
+      flex: 1,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 16,
+      borderWidth: hair,
+      borderColor: withAlpha(p.text, isDark ? 0.12 : 0.1),
+      backgroundColor: withAlpha(p.text, isDark ? 0.05 : 0.045),
+    },
+    statLabel: {
+      color: withAlpha(p.text, 0.55),
+      fontWeight: "900",
+      fontSize: 11,
+      letterSpacing: 0.6,
+    },
+    statValue: {
+      marginTop: 6,
+      color: withAlpha(p.text, 0.92),
+      fontWeight: "900",
+      fontSize: 18,
+      fontVariant: ["tabular-nums"],
+    },
+    tip: {
+      marginTop: 10,
+      color: withAlpha(p.text, 0.5),
+      fontWeight: "700",
+      fontSize: 12,
+    },
+
+    browseBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 999,
+      backgroundColor: withAlpha(p.text, isDark ? 0.06 : 0.05),
+      borderWidth: hair,
+      borderColor: withAlpha(p.text, isDark ? 0.14 : 0.12),
+    },
+    browseText: {
+      color: withAlpha(p.text, 0.9),
+      fontWeight: "900",
+      fontSize: 13,
+    },
+
+    inputLabel: {
+      color: withAlpha(p.text, 0.6),
+      fontWeight: "900",
+      fontSize: 11,
+      letterSpacing: 0.6,
+      marginBottom: 6,
+    },
+    input: {
+      borderRadius: 14,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderWidth: hair,
+      borderColor: withAlpha(p.text, isDark ? 0.14 : 0.12),
+      backgroundColor: withAlpha(p.text, isDark ? 0.06 : 0.05),
+      color: withAlpha(p.text, 0.92),
+      fontWeight: "800",
+    },
+    quickRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+
+    primaryBtn: {
+      flex: 1,
+      height: 48,
+      borderRadius: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      backgroundColor: withAlpha(p.primary, isDark ? 0.22 : 0.16),
+      borderWidth: hair,
+      borderColor: withAlpha(p.primary, isDark ? 0.35 : 0.28),
+    },
+    primaryBtnText: {
+      color: withAlpha(p.text, 0.92),
+      fontWeight: "900",
+      fontSize: 14,
+    },
+    secondaryBtn: {
+      width: 110,
+      height: 48,
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: withAlpha(p.text, isDark ? 0.05 : 0.045),
+      borderWidth: hair,
+      borderColor: withAlpha(p.text, isDark ? 0.12 : 0.1),
+    },
+    secondaryBtnText: { color: withAlpha(p.text, 0.8), fontWeight: "900" },
+
+    exerciseCard: {
+      borderRadius: 18,
+      overflow: "hidden",
+      borderWidth: hair,
+      borderColor: withAlpha(p.text, isDark ? 0.14 : 0.12),
+      backgroundColor: withAlpha(p.text, isDark ? 0.04 : 0.035),
+    },
+    exerciseHeader: {
+      padding: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    exerciseName: {
+      color: withAlpha(p.text, 0.94),
+      fontWeight: "900",
+      fontSize: 15,
+      letterSpacing: -0.1,
+    },
+    exerciseMeta: {
+      marginTop: 4,
+      color: withAlpha(p.text, 0.58),
+      fontWeight: "700",
+      fontSize: 12,
+    },
+    exerciseActions: {
+      paddingHorizontal: 12,
+      paddingBottom: 10,
+      flexDirection: "row",
+      gap: 10,
+    },
+
+    miniBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      borderRadius: 12,
+      backgroundColor: withAlpha(p.text, isDark ? 0.05 : 0.045),
+      borderWidth: hair,
+      borderColor: withAlpha(p.text, isDark ? 0.12 : 0.1),
+    },
+    miniBtnText: {
+      color: withAlpha(p.text, 0.82),
+      fontWeight: "900",
+      fontSize: 12,
+    },
+
+    setRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      padding: 12,
+      borderRadius: 16,
+      backgroundColor: withAlpha(p.text, isDark ? 0.05 : 0.045),
+      borderWidth: hair,
+      borderColor: withAlpha(p.text, isDark ? 0.12 : 0.1),
+    },
+    donePill: {
+      width: 34,
+      height: 34,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: hair,
+      borderColor: withAlpha(p.text, isDark ? 0.12 : 0.1),
+      backgroundColor: withAlpha(p.text, isDark ? 0.04 : 0.035),
+    },
+    setTitle: {
+      color: withAlpha(p.text, 0.92),
+      fontWeight: "900",
+      fontSize: 13,
+    },
+    setNote: {
+      marginTop: 4,
+      color: withAlpha(p.text, 0.65),
+      fontWeight: "700",
+      fontSize: 12,
+    },
+    setNoteMuted: {
+      marginTop: 4,
+      color: withAlpha(p.text, 0.45),
+      fontWeight: "700",
+      fontSize: 12,
+    },
+    trashBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: withAlpha(p.text, isDark ? 0.04 : 0.035),
+      borderWidth: hair,
+      borderColor: withAlpha(p.text, isDark ? 0.12 : 0.1),
+    },
+
+    footer: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      paddingHorizontal: 16,
+      paddingBottom: 14,
+      paddingTop: 10,
+      borderTopWidth: hair,
+      borderTopColor: withAlpha(p.text, isDark ? 0.12 : 0.1),
+      backgroundColor: isDark ? "rgba(0,0,0,0.35)" : "rgba(255,255,255,0.78)",
+    },
+    footerBtn: {
+      height: 54,
+      borderRadius: 18,
+      alignItems: "center",
+      justifyContent: "center",
+      flexDirection: "row",
+      gap: 10,
+      backgroundColor: isDark
+        ? withAlpha("#FFFFFF", 0.92)
+        : withAlpha(p.shadowInk, 0.92),
+      borderWidth: hair,
+      borderColor: withAlpha(p.text, isDark ? 0.2 : 0.14),
+    },
+    footerBtnText: {
+      color: isDark ? withAlpha("#111", 0.95) : withAlpha("#FFFFFF", 0.95),
+      fontWeight: "1000" as any,
+      fontSize: 16,
+    },
+
+    toastWrap: {
+      position: "absolute",
+      top: 60,
+      left: 0,
+      right: 0,
+      alignItems: "center",
+      zIndex: 50,
+    },
+    toast: {
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 14,
+      backgroundColor: withAlpha(p.primary, isDark ? 0.2 : 0.14),
+      borderWidth: hair,
+      borderColor: withAlpha(p.primary, isDark ? 0.35 : 0.26),
+    },
+    toastText: { color: withAlpha(p.text, 0.92), fontWeight: "900" },
+
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.55)", // stays dark for focus (good in both)
+      padding: 18,
+      justifyContent: "center",
+    },
+    modalCard: {
+      borderRadius: 18,
+      padding: 14,
+      backgroundColor: isDark
+        ? withAlpha("#0B0F1A", 0.98)
+        : withAlpha("#FFFFFF", 0.96),
+      borderWidth: hair,
+      borderColor: withAlpha(p.text, isDark ? 0.14 : 0.12),
+    },
+    modalTitle: {
+      color: withAlpha(p.text, 0.94),
+      fontWeight: "900",
+      fontSize: 16,
+    },
+    modalSub: {
+      marginTop: 6,
+      color: withAlpha(p.text, 0.6),
+      fontWeight: "700",
+      fontSize: 12,
+    },
+
+    doneToggle: {
+      marginTop: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      padding: 12,
+      borderRadius: 16,
+      borderWidth: hair,
+      borderColor: withAlpha(p.text, isDark ? 0.12 : 0.1),
+      backgroundColor: withAlpha(p.text, isDark ? 0.05 : 0.045),
+    },
+    doneToggleText: { color: withAlpha(p.text, 0.86), fontWeight: "900" },
+
+    modalSecondary: {
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 14,
+      borderWidth: hair,
+      borderColor: withAlpha(p.text, isDark ? 0.14 : 0.12),
+      backgroundColor: withAlpha(p.text, isDark ? 0.04 : 0.035),
+    },
+    modalSecondaryText: { color: withAlpha(p.text, 0.86), fontWeight: "900" },
+    modalPrimary: {
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 14,
+      backgroundColor: withAlpha(p.primary, isDark ? 0.22 : 0.16),
+      borderWidth: hair,
+      borderColor: withAlpha(p.primary, isDark ? 0.35 : 0.26),
+    },
+    modalPrimaryText: { color: withAlpha(p.text, 0.92), fontWeight: "900" },
+  });
 }
 
 export default function WorkoutSessionScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<any>();
-  const { colors } = useTheme();
+  const theme = useTheme() as any;
+  const { p, isDark } = useMemo(() => buildPalette(theme), [theme]);
+  const styles = useMemo(() => makeStyles(p, isDark), [p, isDark]);
+
   const { user } = useAuth();
   const uidUser = user?.uid;
 
@@ -220,18 +639,20 @@ export default function WorkoutSessionScreen() {
   const safePresets = useMemo(
     () =>
       (presets || [])
-        .filter((p) => p?.name)
-        .map((p) => ({
-          id: p.id,
-          name: p.name,
-          sets: p.sets,
-          reps: p.reps,
-          weightKg: p.weight, // stored as kg in your service
-          notes: p.notes,
-          exercise: (p as any).exercise,
+        .filter((pp) => pp?.name)
+        .map((pp) => ({
+          id: pp.id,
+          name: pp.name,
+          sets: pp.sets,
+          reps: pp.reps,
+          weightKg:
+            (pp as any).weight ?? (pp as any).weightKg ?? (pp as any).weight, // robust
+          notes: (pp as any).notes,
+          exercise: (pp as any).exercise,
         })),
     [presets]
   );
+  void safePresets; // keep if you plan to use later
 
   // ---- UI states ----
   const [savedToast, setSavedToast] = useState("");
@@ -289,7 +710,7 @@ export default function WorkoutSessionScreen() {
   useEffect(() => {
     if (!uidUser) return;
     ensureProfile(uidUser).catch(() => {});
-    const unsub = subscribeProfile(uidUser, (p) => setProfile(p || null));
+    const unsub = subscribeProfile(uidUser, (pp) => setProfile(pp || null));
     return () => unsub?.();
   }, [uidUser]);
 
@@ -646,11 +1067,11 @@ export default function WorkoutSessionScreen() {
     if (!uidUser) return;
     const lower = exName.trim().toLowerCase();
     const found = presets.find(
-      (p: any) =>
-        String(p?.name || "")
+      (pp: any) =>
+        String(pp?.name || "")
           .trim()
           .toLowerCase() === lower ||
-        String((p as any)?.exercise || "")
+        String((pp as any)?.exercise || "")
           .trim()
           .toLowerCase() === lower
     );
@@ -750,7 +1171,7 @@ export default function WorkoutSessionScreen() {
   }
 
   function confirmExit() {
-    if (!draft || !(items.length)) {
+    if (!draft || !items.length) {
       router.back();
       return;
     }
@@ -759,17 +1180,12 @@ export default function WorkoutSessionScreen() {
       "Leave workout?",
       "Save it to continue later, or cancel to discard everything.",
       [
-        {
-          text: "Save & come back",
-          onPress: () => router.back(),
-        },
+        { text: "Save & come back", onPress: () => router.back() },
         {
           text: "Cancel workout",
           style: "destructive",
           onPress: async () => {
-            if (uidUser) {
-              await clearSessionDraft(uidUser);
-            }
+            if (uidUser) await clearSessionDraft(uidUser);
             setDraft(null);
             setExpanded({});
             router.back();
@@ -799,10 +1215,107 @@ export default function WorkoutSessionScreen() {
     setQuickExercise(ex); // keep name for speed
   }
 
+  // theme-aware helpers (same components, just themed)
+  function GlassCard({
+    children,
+    style,
+    intensity = 30,
+  }: {
+    children: React.ReactNode;
+    style?: any;
+    intensity?: number;
+  }) {
+    const gradColors = isDark
+      ? [
+          withAlpha("#FFFFFF", 0.1),
+          withAlpha("#FFFFFF", 0.06),
+          withAlpha("#000000", 0.06),
+        ]
+      : [
+          withAlpha("#FFFFFF", 0.85),
+          withAlpha(p.primary, 0.06),
+          withAlpha("#000000", 0.03),
+        ];
+
+    return (
+      <View style={[styles.cardWrap, style]}>
+        <View style={styles.cardBorder} pointerEvents="none" />
+        <BlurView
+          intensity={intensity}
+          tint={isDark ? "dark" : "light"}
+          style={styles.cardBlur}
+        >
+          <LinearGradient
+            colors={gradColors as any}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.cardInner}
+          >
+            {children}
+          </LinearGradient>
+        </BlurView>
+      </View>
+    );
+  }
+
+  function Chip({
+    icon,
+    label,
+  }: {
+    icon: keyof typeof Ionicons.glyphMap;
+    label: string;
+  }) {
+    return (
+      <View style={styles.chip}>
+        <Ionicons name={icon} size={14} color={withAlpha(p.text, 0.82)} />
+        <Text style={styles.chipText}>{label}</Text>
+      </View>
+    );
+  }
+
+  function MiniBtn({
+    icon,
+    label,
+    onPress,
+    danger,
+  }: {
+    icon: keyof typeof Ionicons.glyphMap;
+    label: string;
+    onPress?: () => void;
+    danger?: boolean;
+  }) {
+    const dangerColor = p.danger;
+    return (
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        style={({ pressed }) => [
+          styles.miniBtn,
+          danger && { borderColor: withAlpha(dangerColor, 0.25) },
+          pressed && { opacity: 0.85 },
+        ]}
+      >
+        <Ionicons
+          name={icon}
+          size={16}
+          color={danger ? withAlpha(dangerColor, 0.9) : withAlpha(p.text, 0.82)}
+        />
+        <Text
+          style={[
+            styles.miniBtnText,
+            danger && { color: withAlpha(dangerColor, 0.9) },
+          ]}
+        >
+          {label}
+        </Text>
+      </Pressable>
+    );
+  }
+
   if (!draft) {
     return (
       <View style={[styles.loadingWrap]}>
-        <Text style={{ color: withAlpha("#FFFFFF", 0.7), fontWeight: "800" }}>
+        <Text style={{ color: withAlpha(p.text, 0.7), fontWeight: "800" }}>
           Loading…
         </Text>
       </View>
@@ -812,11 +1325,13 @@ export default function WorkoutSessionScreen() {
   const contentMax = 980;
   const sidePad = 16;
 
+  const bgColors = isDark ? [p.bg2, "#050711", p.bg3] : [p.bg2, p.bg, p.bg3];
+
   return (
     <View style={styles.root}>
       {/* Background */}
       <LinearGradient
-        colors={["#070A12", "#050711", "#03040A"]}
+        colors={bgColors as any}
         start={{ x: 0, y: 0 }}
         end={{ x: 0.8, y: 1 }}
         style={StyleSheet.absoluteFill}
@@ -833,7 +1348,11 @@ export default function WorkoutSessionScreen() {
 
       {/* Sticky top bar */}
       <View style={{ paddingTop: topInset }}>
-        <BlurView intensity={26} tint="dark" style={styles.headerBlur}>
+        <BlurView
+          intensity={26}
+          tint={isDark ? "dark" : "light"}
+          style={styles.headerBlur}
+        >
           <View style={[styles.headerRow, { paddingHorizontal: sidePad }]}>
             <Pressable
               onPress={() => {
@@ -849,7 +1368,7 @@ export default function WorkoutSessionScreen() {
               <Ionicons
                 name="chevron-back"
                 size={20}
-                color={withAlpha("#FFFFFF", 0.9)}
+                color={withAlpha(p.text, 0.9)}
               />
             </Pressable>
 
@@ -870,7 +1389,7 @@ export default function WorkoutSessionScreen() {
                 <Ionicons
                   name="pencil"
                   size={14}
-                  color={withAlpha("#FFFFFF", 0.55)}
+                  color={withAlpha(p.text, 0.55)}
                 />
               </View>
               <View style={{ flexDirection: "row", gap: 8 }}>
@@ -890,7 +1409,9 @@ export default function WorkoutSessionScreen() {
               <Ionicons
                 name="checkmark"
                 size={20}
-                color={withAlpha("#111", 0.95)}
+                color={
+                  isDark ? withAlpha("#111", 0.95) : withAlpha("#FFFFFF", 0.95)
+                }
               />
             </Pressable>
           </View>
@@ -975,7 +1496,7 @@ export default function WorkoutSessionScreen() {
                   <Ionicons
                     name="search-outline"
                     size={16}
-                    color={withAlpha("#FFFFFF", 0.9)}
+                    color={withAlpha(p.text, 0.9)}
                   />
                   <Text style={styles.browseText}>Browse</Text>
                 </Pressable>
@@ -990,7 +1511,7 @@ export default function WorkoutSessionScreen() {
                     value={quickExercise}
                     onChangeText={setQuickExercise}
                     placeholder="e.g., Bench Press"
-                    placeholderTextColor={withAlpha("#FFFFFF", 0.35)}
+                    placeholderTextColor={withAlpha(p.text, 0.35)}
                     style={styles.input}
                     returnKeyType="next"
                   />
@@ -1005,7 +1526,7 @@ export default function WorkoutSessionScreen() {
                     onChangeText={setQuickReps}
                     keyboardType="number-pad"
                     placeholder="10"
-                    placeholderTextColor={withAlpha("#FFFFFF", 0.35)}
+                    placeholderTextColor={withAlpha(p.text, 0.35)}
                     style={styles.input}
                     returnKeyType="done"
                   />
@@ -1017,7 +1538,7 @@ export default function WorkoutSessionScreen() {
                     onChangeText={setQuickWeight}
                     keyboardType="decimal-pad"
                     placeholder="—"
-                    placeholderTextColor={withAlpha("#FFFFFF", 0.35)}
+                    placeholderTextColor={withAlpha(p.text, 0.35)}
                     style={styles.input}
                     returnKeyType="done"
                   />
@@ -1035,7 +1556,7 @@ export default function WorkoutSessionScreen() {
                   <Ionicons
                     name="add"
                     size={18}
-                    color={withAlpha("#FFFFFF", 0.95)}
+                    color={withAlpha(p.text, 0.95)}
                   />
                   <Text style={styles.primaryBtnText}>Add set</Text>
                 </Pressable>
@@ -1058,7 +1579,7 @@ export default function WorkoutSessionScreen() {
             </GlassCard>
           </Animated.View>
 
-          {/* Exercise blocks (sets in one place) */}
+          {/* Exercise blocks */}
           {groups.length === 0 ? (
             <Animated.View entering={FadeIn.duration(220)}>
               <GlassCard>
@@ -1085,8 +1606,11 @@ export default function WorkoutSessionScreen() {
                 const lastLine = `${Math.round(lastW * 100) / 100} ${unit} × ${
                   last.reps
                 } reps`;
-
                 const doneCount = g.items.filter((x) => x.done).length;
+
+                const exGradient = isDark
+                  ? [withAlpha(p.primary, 0.14), withAlpha("#FFFFFF", 0.04)]
+                  : [withAlpha(p.primary, 0.1), withAlpha("#FFFFFF", 0.65)];
 
                 return (
                   <Animated.View
@@ -1095,17 +1619,14 @@ export default function WorkoutSessionScreen() {
                   >
                     <View style={styles.exerciseCard}>
                       <LinearGradient
-                        colors={[
-                          withAlpha("#68D7FF", 0.14),
-                          withAlpha("#FFFFFF", 0.04),
-                        ]}
+                        colors={exGradient as any}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                         style={StyleSheet.absoluteFill}
                       />
                       <BlurView
                         intensity={18}
-                        tint="dark"
+                        tint={isDark ? "dark" : "light"}
                         style={StyleSheet.absoluteFill}
                       />
 
@@ -1143,7 +1664,7 @@ export default function WorkoutSessionScreen() {
                           <Ionicons
                             name={isOpen ? "chevron-up" : "chevron-down"}
                             size={16}
-                            color={withAlpha("#FFFFFF", 0.6)}
+                            color={withAlpha(p.text, 0.6)}
                           />
                         </View>
                       </Pressable>
@@ -1172,7 +1693,7 @@ export default function WorkoutSessionScreen() {
                                 ? kgToLb(Number(it.weightKg || 0))
                                 : Number(it.weightKg || 0);
 
-                            const setNo = totalSets - idx; // because newest on top
+                            const setNo = totalSets - idx; // newest on top
                             return (
                               <Pressable
                                 key={String(it.id || it.createdAt)}
@@ -1180,7 +1701,7 @@ export default function WorkoutSessionScreen() {
                                 style={({ pressed }) => [
                                   styles.setRow,
                                   it.done && {
-                                    borderColor: withAlpha("#7CFFB5", 0.25),
+                                    borderColor: withAlpha(p.success, 0.25),
                                   },
                                   pressed && { opacity: 0.9 },
                                 ]}
@@ -1192,9 +1713,10 @@ export default function WorkoutSessionScreen() {
                                     styles.donePill,
                                     it.done && {
                                       backgroundColor: withAlpha(
-                                        "#7CFFB5",
+                                        p.success,
                                         0.18
                                       ),
+                                      borderColor: withAlpha(p.success, 0.25),
                                     },
                                     pressed && { opacity: 0.85 },
                                   ]}
@@ -1206,8 +1728,8 @@ export default function WorkoutSessionScreen() {
                                     size={16}
                                     color={
                                       it.done
-                                        ? withAlpha("#7CFFB5", 0.95)
-                                        : withAlpha("#FFFFFF", 0.55)
+                                        ? withAlpha(p.success, 0.95)
+                                        : withAlpha(p.text, 0.55)
                                     }
                                   />
                                 </Pressable>
@@ -1259,7 +1781,7 @@ export default function WorkoutSessionScreen() {
                                   <Ionicons
                                     name="trash-outline"
                                     size={18}
-                                    color={withAlpha("#FFFFFF", 0.7)}
+                                    color={withAlpha(p.text, 0.7)}
                                   />
                                 </Pressable>
                               </Pressable>
@@ -1287,7 +1809,9 @@ export default function WorkoutSessionScreen() {
             <Ionicons
               name="checkmark-circle-outline"
               size={20}
-              color={withAlpha("#111", 0.95)}
+              color={
+                isDark ? withAlpha("#111", 0.95) : withAlpha("#FFFFFF", 0.95)
+              }
             />
             <Text style={styles.footerBtnText}>Finish workout</Text>
           </Pressable>
@@ -1313,7 +1837,7 @@ export default function WorkoutSessionScreen() {
                     onChangeText={(t) => setEdit((s) => ({ ...s, reps: t }))}
                     keyboardType="number-pad"
                     placeholder="10"
-                    placeholderTextColor={withAlpha("#FFFFFF", 0.35)}
+                    placeholderTextColor={withAlpha(p.text, 0.35)}
                     style={styles.input}
                   />
                 </View>
@@ -1324,7 +1848,7 @@ export default function WorkoutSessionScreen() {
                     onChangeText={(t) => setEdit((s) => ({ ...s, weight: t }))}
                     keyboardType="decimal-pad"
                     placeholder="—"
-                    placeholderTextColor={withAlpha("#FFFFFF", 0.35)}
+                    placeholderTextColor={withAlpha(p.text, 0.35)}
                     style={styles.input}
                   />
                 </View>
@@ -1336,7 +1860,7 @@ export default function WorkoutSessionScreen() {
                   value={edit.note}
                   onChangeText={(t) => setEdit((s) => ({ ...s, note: t }))}
                   placeholder="Optional (form cues, RPE, PR, etc.)"
-                  placeholderTextColor={withAlpha("#FFFFFF", 0.35)}
+                  placeholderTextColor={withAlpha(p.text, 0.35)}
                   style={[styles.input, { minHeight: 44 }]}
                 />
               </View>
@@ -1353,8 +1877,8 @@ export default function WorkoutSessionScreen() {
                   size={18}
                   color={
                     edit.done
-                      ? withAlpha("#7CFFB5", 0.95)
-                      : withAlpha("#FFFFFF", 0.55)
+                      ? withAlpha(p.success, 0.95)
+                      : withAlpha(p.text, 0.55)
                   }
                 />
                 <Text style={styles.doneToggleText}>
@@ -1410,7 +1934,7 @@ export default function WorkoutSessionScreen() {
                 value={titleDraft}
                 onChangeText={setTitleDraft}
                 placeholder="e.g., Push Day, Legs, Upper"
-                placeholderTextColor={withAlpha("#FFFFFF", 0.35)}
+                placeholderTextColor={withAlpha(p.text, 0.35)}
                 style={[styles.input, { marginTop: 12 }]}
                 autoFocus
                 returnKeyType="done"
@@ -1452,402 +1976,6 @@ export default function WorkoutSessionScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#05060C" },
-  loadingWrap: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#05060C",
-  },
-
-  headerBlur: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: withAlpha("#FFFFFF", 0.12),
-  },
-  headerRow: {
-    paddingTop: 14,
-    paddingBottom: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  iconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: withAlpha("#FFFFFF", 0.06),
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.14),
-  },
-  finishBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: withAlpha("#FFFFFF", 0.92),
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.2),
-  },
-  inProgress: {
-    color: withAlpha("#FFFFFF", 0.6),
-    fontSize: 11,
-    fontWeight: "900",
-    letterSpacing: 0.9,
-  },
-  headerTitle: {
-    color: withAlpha("#FFFFFF", 0.94),
-    fontSize: 16,
-    fontWeight: "900",
-    letterSpacing: -0.2,
-    maxWidth: 240,
-  },
-
-  cardWrap: { borderRadius: 18, overflow: "hidden" },
-  cardBorder: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.14),
-    zIndex: 2,
-  },
-  cardBlur: { borderRadius: 18, overflow: "hidden" },
-  cardInner: { padding: 14 },
-
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: withAlpha("#FFFFFF", 0.05),
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.12),
-  },
-  chipText: {
-    color: withAlpha("#FFFFFF", 0.72),
-    fontWeight: "800",
-    fontSize: 12,
-    fontVariant: ["tabular-nums"],
-  },
-
-  sectionTitle: {
-    color: withAlpha("#FFFFFF", 0.92),
-    fontWeight: "900",
-    fontSize: 14,
-  },
-  sectionSub: {
-    marginTop: 4,
-    color: withAlpha("#FFFFFF", 0.58),
-    fontWeight: "700",
-    fontSize: 12,
-    lineHeight: 16,
-  },
-
-  statPill: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.12),
-    backgroundColor: withAlpha("#FFFFFF", 0.05),
-  },
-  statLabel: {
-    color: withAlpha("#FFFFFF", 0.55),
-    fontWeight: "900",
-    fontSize: 11,
-    letterSpacing: 0.6,
-  },
-  statValue: {
-    marginTop: 6,
-    color: withAlpha("#FFFFFF", 0.92),
-    fontWeight: "900",
-    fontSize: 18,
-    fontVariant: ["tabular-nums"],
-  },
-  tip: {
-    marginTop: 10,
-    color: withAlpha("#FFFFFF", 0.5),
-    fontWeight: "700",
-    fontSize: 12,
-  },
-
-  browseBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: withAlpha("#FFFFFF", 0.06),
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.14),
-  },
-  browseText: {
-    color: withAlpha("#FFFFFF", 0.9),
-    fontWeight: "900",
-    fontSize: 13,
-  },
-
-  inputLabel: {
-    color: withAlpha("#FFFFFF", 0.6),
-    fontWeight: "900",
-    fontSize: 11,
-    letterSpacing: 0.6,
-    marginBottom: 6,
-  },
-  input: {
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.14),
-    backgroundColor: withAlpha("#FFFFFF", 0.06),
-    color: withAlpha("#FFFFFF", 0.92),
-    fontWeight: "800",
-  },
-  quickRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-
-  primaryBtn: {
-    flex: 1,
-    height: 48,
-    borderRadius: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: withAlpha("#68D7FF", 0.22),
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#68D7FF", 0.35),
-  },
-  primaryBtnText: {
-    color: withAlpha("#FFFFFF", 0.92),
-    fontWeight: "900",
-    fontSize: 14,
-  },
-  secondaryBtn: {
-    width: 110,
-    height: 48,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: withAlpha("#FFFFFF", 0.05),
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.12),
-  },
-  secondaryBtnText: { color: withAlpha("#FFFFFF", 0.8), fontWeight: "900" },
-
-  exerciseCard: {
-    borderRadius: 18,
-    overflow: "hidden",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.14),
-    backgroundColor: withAlpha("#FFFFFF", 0.04),
-  },
-  exerciseHeader: {
-    padding: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  exerciseName: {
-    color: withAlpha("#FFFFFF", 0.94),
-    fontWeight: "900",
-    fontSize: 15,
-    letterSpacing: -0.1,
-  },
-  exerciseMeta: {
-    marginTop: 4,
-    color: withAlpha("#FFFFFF", 0.58),
-    fontWeight: "700",
-    fontSize: 12,
-  },
-  exerciseActions: {
-    paddingHorizontal: 12,
-    paddingBottom: 10,
-    flexDirection: "row",
-    gap: 10,
-  },
-
-  miniBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: withAlpha("#FFFFFF", 0.05),
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.12),
-  },
-  miniBtnText: {
-    color: withAlpha("#FFFFFF", 0.82),
-    fontWeight: "900",
-    fontSize: 12,
-  },
-
-  setRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    padding: 12,
-    borderRadius: 16,
-    backgroundColor: withAlpha("#FFFFFF", 0.05),
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.12),
-  },
-  donePill: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.12),
-    backgroundColor: withAlpha("#FFFFFF", 0.04),
-  },
-  setTitle: {
-    color: withAlpha("#FFFFFF", 0.92),
-    fontWeight: "900",
-    fontSize: 13,
-  },
-  setNote: {
-    marginTop: 4,
-    color: withAlpha("#FFFFFF", 0.65),
-    fontWeight: "700",
-    fontSize: 12,
-  },
-  setNoteMuted: {
-    marginTop: 4,
-    color: withAlpha("#FFFFFF", 0.45),
-    fontWeight: "700",
-    fontSize: 12,
-  },
-  trashBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: withAlpha("#FFFFFF", 0.04),
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.12),
-  },
-
-  footer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 16,
-    paddingBottom: 14,
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: withAlpha("#FFFFFF", 0.12),
-    backgroundColor: "rgba(0,0,0,0.35)",
-  },
-  footerBtn: {
-    height: 54,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 10,
-    backgroundColor: withAlpha("#FFFFFF", 0.92),
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.2),
-  },
-  footerBtnText: {
-    color: withAlpha("#111", 0.95),
-    fontWeight: "1000" as any,
-    fontSize: 16,
-  },
-
-  toastWrap: {
-    position: "absolute",
-    top: 60,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-    zIndex: 50,
-  },
-  toast: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
-    backgroundColor: withAlpha("#68D7FF", 0.2),
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#68D7FF", 0.35),
-  },
-  toastText: { color: withAlpha("#FFFFFF", 0.92), fontWeight: "900" },
-
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    padding: 18,
-    justifyContent: "center",
-  },
-  modalCard: {
-    borderRadius: 18,
-    padding: 14,
-    backgroundColor: withAlpha("#0B0F1A", 0.98),
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.14),
-  },
-  modalTitle: {
-    color: withAlpha("#FFFFFF", 0.94),
-    fontWeight: "900",
-    fontSize: 16,
-  },
-  modalSub: {
-    marginTop: 6,
-    color: withAlpha("#FFFFFF", 0.6),
-    fontWeight: "700",
-    fontSize: 12,
-  },
-
-  doneToggle: {
-    marginTop: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    padding: 12,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.12),
-    backgroundColor: withAlpha("#FFFFFF", 0.05),
-  },
-  doneToggleText: { color: withAlpha("#FFFFFF", 0.86), fontWeight: "900" },
-
-  modalSecondary: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.14),
-    backgroundColor: withAlpha("#FFFFFF", 0.04),
-  },
-  modalSecondaryText: { color: withAlpha("#FFFFFF", 0.86), fontWeight: "900" },
-  modalPrimary: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
-    backgroundColor: withAlpha("#68D7FF", 0.22),
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#68D7FF", 0.35),
-  },
-  modalPrimaryText: { color: withAlpha("#FFFFFF", 0.92), fontWeight: "900" },
-});
 
 // // app/workouts/session.tsx
 // import React, { useEffect, useMemo, useRef, useState } from "react";

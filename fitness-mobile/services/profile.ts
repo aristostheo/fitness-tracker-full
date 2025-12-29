@@ -6,6 +6,7 @@ import {
   onSnapshot,
   setDoc,
   updateDoc,
+  increment,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -142,4 +143,51 @@ export function subscribeProfile(uid: string, cb: (p: Profile | null) => void) {
 
 export async function updateProfile(uid: string, patch: Partial<Profile>) {
   await updateDoc(ref(uid), { ...patch, updatedAt: Date.now() });
+}
+export async function setStepsForDate(
+  uid: string,
+  ymdDate: string,
+  steps: number
+) {
+  const safe = Math.max(0, Math.floor(Number(steps) || 0));
+  const r = ref(uid); // ✅ users/{uid}
+
+  // Ensure doc exists + merge steps map
+  await setDoc(
+    r,
+    {
+      steps: { [ymdDate]: safe },
+      stepsUpdatedAt: Date.now(),
+      updatedAt: Date.now(),
+    } as any,
+    { merge: true }
+  );
+
+  // Dot-path write (keeps one canonical field)
+  await updateDoc(r, {
+    [`steps.${ymdDate}`]: safe,
+    stepsUpdatedAt: Date.now(),
+    updatedAt: Date.now(),
+  } as any);
+}
+
+export async function addStepsForDate(
+  uid: string,
+  ymdDate: string,
+  delta: number
+) {
+  const add = Math.max(0, Math.floor(Number(delta) || 0));
+  if (!add) return;
+
+  const r = ref(uid); // ✅ users/{uid}
+
+  // Ensure doc exists (important for updateDoc)
+  await setDoc(r, { updatedAt: Date.now() } as any, { merge: true });
+
+  // ✅ Atomic increment (no stale reads)
+  await updateDoc(r, {
+    [`steps.${ymdDate}`]: increment(add),
+    stepsUpdatedAt: Date.now(),
+    updatedAt: Date.now(),
+  } as any);
 }

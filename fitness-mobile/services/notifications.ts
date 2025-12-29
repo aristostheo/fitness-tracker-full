@@ -63,7 +63,7 @@ export function subscribeNotifications(
     return () => {};
   }
 
-  const filters = [];
+  const filters: any[] = [];
   if (opts.unreadOnly) filters.push(where("readAt", "==", null));
 
   const qy = query(
@@ -99,10 +99,7 @@ export function subscribeNotifications(
 }
 
 // Lightweight unread count stream for badge usage
-export function subscribeUnreadCount(
-  uid: string,
-  cb: (count: number) => void
-) {
+export function subscribeUnreadCount(uid: string, cb: (count: number) => void) {
   if (!uid || uid === "__demo__") {
     cb(0);
     return () => {};
@@ -136,7 +133,8 @@ export async function markAllNotificationsRead(uid: string) {
   }
 }
 
-// Convenience helpers for common friend flows
+// ───────────────────────── Convenience helpers ─────────────────────────
+
 export async function notifyFriendRequest(
   toUid: string,
   from: { uid: string; email?: string | null; displayName?: string | null }
@@ -168,7 +166,9 @@ export async function notifyPing(
 ) {
   await addNotification(toUid, {
     type: "ping",
-    title: from.displayName ? `${from.displayName} pinged you` : "You were pinged",
+    title: from.displayName
+      ? `${from.displayName} pinged you`
+      : "You were pinged",
     body: "Log a meal to keep your streak alive.",
     data: { fromUid: from.uid },
   });
@@ -222,4 +222,87 @@ export async function notifyComment(
       preview: payload.text.slice(0, 120),
     },
   });
+}
+
+// ───────────────────────── Premium “respectful” helpers ─────────────────────────
+//
+// These prevent spam by deduping recently-created notifications.
+// Works without extra indexes by querying a small recent set.
+//
+// Default policy:
+// - Ping: at most once per (fromUid -> toUid) every 6 hours
+// - Friend request: at most once per (fromUid -> toUid) every 24 hours
+//
+
+async function hasRecentSimilar(
+  toUid: string,
+  type: NotificationType,
+  predicate: (n: any) => boolean,
+  windowMs: number,
+  scanMax = 30
+) {
+  const snap = await getDocs(
+    query(
+      col(toUid),
+      where("type", "==", type),
+      orderBy("createdAt", "desc"),
+      limit(scanMax)
+    )
+  );
+
+  const now = Date.now();
+  let found = false;
+
+  snap.forEach((d) => {
+    if (found) return;
+    const x = d.data() as any;
+    const createdMs =
+      x.createdAt && typeof x.createdAt.toMillis === "function"
+        ? x.createdAt.toMillis()
+        : 0;
+
+    if (!createdMs) return;
+    if (now - createdMs > windowMs) return; // too old
+    if (predicate(x)) found = true;
+  });
+
+  return found;
+}
+
+export async function notifyPingSafe(
+  toUid: string,
+  from: { uid: string; displayName?: string | null },
+  opts: { cooldownHours?: number } = {}
+) {
+  const cooldownMs = (opts.cooldownHours ?? 6) * 60 * 60 * 1000;
+
+  const exists = await hasRecentSimilar(
+    toUid,
+    "ping",
+    (n) => n?.data?.fromUid === from.uid,
+    cooldownMs
+  );
+
+  if (exists) return; // silently ignore to feel respectful
+
+  await notifyPing(toUid, from);
+}
+
+export async function notifyFriendRequestSafe(
+  toUid: string,
+  from: { uid: string; email?: string | null; displayName?: string | null },
+  opts: { cooldownHours?: number } = {}
+) {
+  const cooldownMs = (opts.cooldownHours ?? 24) * 60 * 60 * 1000;
+
+  const exists = await hasRecentSimilar(
+    toUid,
+    "friend:request",
+    (n) => n?.data?.fromUid === from.uid,
+    cooldownMs
+  );
+
+  if (exists) return;
+
+  await notifyFriendRequest(toUid, from);
 }

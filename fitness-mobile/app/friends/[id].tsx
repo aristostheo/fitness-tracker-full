@@ -1,4 +1,4 @@
-// app/friends/[id].tsx
+// app/friends/[uid].tsx  (works even if your file is [id].tsx)
 import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -8,18 +8,22 @@ import {
   ActivityIndicator,
   TextInput,
   Alert,
+  Platform,
+  StatusBar,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import { MotiView } from "moti";
-import Card from "@/components/Card";
+import * as Haptics from "expo-haptics";
+
 import BottomTabSpacer from "@/components/ui/BottomTapSpacer";
 import { useTheme } from "@/content/ThemeProvider";
 import { useAuth } from "@/content/AuthContext";
+
 import { withAlpha } from "@/components/workouts/utils/withAlpha";
 import { subscribeFoodsByDate, type FoodEntry } from "@/services/nutrition";
-import { GradientButton } from "@/components/workouts/ui/GradientButton";
 import {
   addComment,
   removeReaction,
@@ -34,38 +38,50 @@ import { notifyComment, notifyReaction } from "@/services/notifications";
 type MealKey = "breakfast" | "lunch" | "dinner" | "snacks";
 const MEAL_ORDER: MealKey[] = ["breakfast", "lunch", "dinner", "snacks"];
 
-const softShadow = {
-  shadowColor: "#000",
-  shadowOpacity: 0.12,
-  shadowRadius: 12,
-  shadowOffset: { width: 0, height: 6 },
-  elevation: 6,
-};
+const softShadow = Platform.select({
+  ios: {
+    shadowColor: "#000",
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+  },
+  android: { elevation: 8 },
+});
 
-export default function FriendDetailScreen() {
-  const { id, name } = useLocalSearchParams<{ id?: string; name?: string }>();
-  const friendUid = (id || "").toString();
-  const friendName = (name || "").toString();
+export default function FriendMealsScreen() {
+  // ✅ Support both param names: [uid].tsx or [id].tsx
+  const params = useLocalSearchParams<{
+    uid?: string;
+    id?: string;
+    name?: string;
+  }>();
+  const friendUid = ((params.uid ?? params.id) || "").toString();
+  const friendName = (params.name || "").toString();
+
   const { colors, isDark } = useTheme();
   const { user } = useAuth();
   const router = useRouter();
 
+  const topInset = Platform.OS === "android" ? StatusBar.currentHeight ?? 0 : 0;
+
   const todayISO = useMemo(() => {
     const t = new Date();
-    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(
-      t.getDate()
-    ).padStart(2, "0")}`;
+    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}-${String(t.getDate()).padStart(2, "0")}`;
   }, []);
 
   const datePills = useMemo(() => {
-    const days = [];
+    const days: string[] = [];
     const base = new Date(todayISO + "T00:00:00");
     for (let i = 0; i < 10; i++) {
       const d = new Date(base);
       d.setDate(base.getDate() - i);
-      const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-        d.getDate()
-      ).padStart(2, "0")}`;
+      const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+        2,
+        "0"
+      )}-${String(d.getDate()).padStart(2, "0")}`;
       days.push(iso);
     }
     return days;
@@ -75,17 +91,19 @@ export default function FriendDetailScreen() {
   const [foods, setFoods] = useState<FoodEntry[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Stream meals for selected day
+  // ✅ OLD BACKEND LOGIC (unchanged): Stream meals for selected day
   useEffect(() => {
     if (!friendUid || !user?.uid) {
       setFoods([]);
       return;
     }
+
     setLoading(true);
     const unsub = subscribeFoodsByDate(friendUid, selectedDate, (rows) => {
       setFoods(rows || []);
       setLoading(false);
     });
+
     return () => {
       try {
         unsub && unsub();
@@ -96,10 +114,10 @@ export default function FriendDetailScreen() {
   const totals = useMemo(() => {
     return foods.reduce(
       (acc, f) => {
-        acc.calories += Number(f.calories || 0);
-        acc.protein += Number(f.protein || 0);
-        acc.carbs += Number(f.carbs || 0);
-        acc.fat += Number(f.fat || 0);
+        acc.calories += Number((f as any).calories || 0);
+        acc.protein += Number((f as any).protein || 0);
+        acc.carbs += Number((f as any).carbs || 0);
+        acc.fat += Number((f as any).fat || 0);
         return acc;
       },
       { calories: 0, protein: 0, carbs: 0, fat: 0 }
@@ -109,230 +127,528 @@ export default function FriendDetailScreen() {
   const grouped = useMemo(() => {
     return MEAL_ORDER.map((meal) => ({
       meal,
-      items: foods.filter((f) => (f.meal || "").toLowerCase() === meal),
+      items: foods.filter(
+        (f) => ((f as any).meal || "").toLowerCase() === meal
+      ),
     }));
   }, [foods]);
 
   const title = friendName || friendUid || "Friend";
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 28 }}
-    >
-      <Ribbon side="right" colors={["#5ce1ff", "#ff5ac8"] as const} opacity={isDark ? 0.2 : 0.26} />
-      <Ribbon side="left" top={260} colors={["#8cfb9f", "#ffc857"] as const} opacity={isDark ? 0.16 : 0.22} />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* premium background wash */}
+      <LinearGradient
+        colors={
+          isDark
+            ? [
+                "rgba(255,255,255,0.06)",
+                "rgba(255,255,255,0.00)",
+                "rgba(0,0,0,0.00)",
+              ]
+            : [
+                "rgba(0,0,0,0.04)",
+                "rgba(255,255,255,0.00)",
+                "rgba(255,255,255,0.00)",
+              ]
+        }
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+      />
 
-      <MotiView
-        from={{ opacity: 0, translateY: 10 }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={{ type: "timing", duration: 420 }}
-      >
-        <LinearGradient
-          colors={[withAlpha(colors.primary, 0.22), colors.card]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{
-            borderRadius: 22,
-            padding: 16,
-            borderWidth: 1,
-            borderColor: withAlpha(colors.primary, 0.35),
-            gap: 12,
-            ...softShadow,
-          }}
+      {/* floating ribbons */}
+      <Ribbon
+        side="right"
+        colors={["#5ce1ff", "#ff5ac8"] as const}
+        opacity={isDark ? 0.18 : 0.22}
+      />
+      <Ribbon
+        side="left"
+        top={260}
+        colors={["#8cfb9f", "#ffc857"] as const}
+        opacity={isDark ? 0.14 : 0.18}
+      />
+
+      {/* header */}
+      <View style={{ paddingTop: topInset + 12, paddingHorizontal: 16 }}>
+        <MotiView
+          from={{ opacity: 0, translateY: -10 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: "timing", duration: 360 }}
         >
-          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 20 }}>
-            {title}
-          </Text>
-          <Text style={{ color: colors.muted, fontWeight: "600" }}>
-            Browse {title}'s meals by day. Tap a date to explore their nutrition.
-          </Text>
-          <GradientButton label="Back to alerts" onPress={() => router.push("/notifications")} />
-        </LinearGradient>
-      </MotiView>
-
-      {/* Date pills */}
-      <Card
-        style={{
-          padding: 12,
-          borderWidth: 1,
-          borderColor: colors.border,
-          gap: 8,
-        }}
-      >
-        <Text style={{ color: colors.text, fontWeight: "800", marginBottom: 4 }}>
-          Pick a day
-        </Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-          {datePills.map((d) => {
-            const isActive = d === selectedDate;
-            const dateObj = new Date(d + "T00:00:00");
-            const label = dateObj.toLocaleDateString(undefined, {
-              month: "short",
-              day: "numeric",
-            });
-            const weekday = dateObj.toLocaleDateString(undefined, { weekday: "short" });
-            return (
-              <Pressable key={d} onPress={() => setSelectedDate(d)}>
-                {({ pressed }) => (
-                  <MotiView
-                    animate={{
-                      scale: pressed ? 0.97 : 1,
-                      translateY: pressed ? 1 : 0,
-                    }}
-                    transition={{ type: "timing", duration: 140 }}
-                    style={{
-                      paddingHorizontal: 12,
-                      paddingVertical: 10,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: isActive ? colors.primary : colors.border,
-                      backgroundColor: withAlpha(
-                        isActive ? colors.primary : colors.card,
-                        isActive ? 0.18 : 0.96
-                      ),
-                      gap: 2,
-                      minWidth: 88,
-                    }}
-                  >
-                    <Text style={{ color: colors.text, fontWeight: "900", fontSize: 13 }}>
-                      {weekday}
-                    </Text>
-                    <Text style={{ color: colors.muted, fontWeight: "700" }}>{label}</Text>
-                  </MotiView>
-                )}
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </Card>
-
-      {/* Totals */}
-      <Card
-        style={{
-          padding: 12,
-          borderWidth: 1,
-          borderColor: colors.border,
-          gap: 8,
-        }}
-      >
-        <Text style={{ color: colors.text, fontWeight: "800" }}>
-          {selectedDate} snapshot
-        </Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          <StatPill label="Calories" value={`${Math.round(totals.calories)} kcal`} color={colors.primary} />
-          <StatPill label="Protein" value={`${Math.round(totals.protein)} g`} color={colors.chartPrimary || colors.primary} />
-          <StatPill label="Carbs" value={`${Math.round(totals.carbs)} g`} color={colors.chartSecondary || colors.primary} />
-          <StatPill label="Fat" value={`${Math.round(totals.fat)} g`} color={colors.chartSecondary || colors.primary} />
-        </View>
-      </Card>
-
-      {/* Meals */}
-      {loading ? (
-        <Card
-          style={{
-            padding: 16,
-            borderWidth: 1,
-            borderColor: colors.border,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <ActivityIndicator color={colors.primary} />
-          <Text style={{ color: colors.muted, marginTop: 8 }}>Loading meals...</Text>
-        </Card>
-      ) : (
-        grouped.map((group) => (
-          <Card
-            key={group.meal}
+          <BlurView
+            intensity={isDark ? 28 : 55}
             style={{
-              padding: 12,
+              borderRadius: 22,
+              overflow: "hidden",
               borderWidth: 1,
-              borderColor: colors.border,
-              gap: 10,
+              borderColor: isDark
+                ? "rgba(255,255,255,0.12)"
+                : "rgba(0,0,0,0.06)",
+              backgroundColor: isDark
+                ? "rgba(255,255,255,0.06)"
+                : "rgba(255,255,255,0.70)",
+              padding: 14,
+              ...(softShadow as any),
             }}
           >
-            <SectionHeader
-              icon={iconForMeal(group.meal)}
-              title={titleForMeal(group.meal)}
-              subtitle={group.items.length ? `${group.items.length} items` : "No items"}
-            />
-            {group.items.length === 0 ? (
-              <EmptyLine label="No meals logged" />
-            ) : (
-              <View style={{ gap: 10 }}>
-                {group.items.map((item) => (
-                  <MealRow
-                    key={item.id}
-                    item={item}
-                    colors={colors}
-                    friendUid={friendUid}
-                    actorUid={user?.uid}
-                    actorName={user?.displayName || user?.email || null}
-                  />
-                ))}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 10,
+              }}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontWeight: "900",
+                    fontSize: 20,
+                    letterSpacing: -0.2,
+                  }}
+                  numberOfLines={1}
+                >
+                  {title}'s Meals
+                </Text>
+                <Text
+                  style={{
+                    color: colors.muted,
+                    marginTop: 4,
+                    fontWeight: "700",
+                  }}
+                >
+                  Browse by day • React & comment (keep it supportive)
+                </Text>
               </View>
-            )}
-          </Card>
-        ))
-      )}
 
-      <BottomTabSpacer extra={20} />
-    </ScrollView>
-  );
-}
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <GlassIconButton
+                  icon="chevron-back"
+                  label="Back"
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    router.back();
+                  }}
+                />
+                <GlassIconButton
+                  icon="barbell-outline"
+                  label="Workouts"
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    router.push(
+                      `/friends/${encodeURIComponent(
+                        friendUid
+                      )}/workouts?name=${encodeURIComponent(title)}`
+                    );
+                  }}
+                />
+              </View>
+            </View>
 
-function SectionHeader({
-  icon,
-  title,
-  subtitle,
-}: {
-  icon: any;
-  title: string;
-  subtitle?: string;
-}) {
-  const { colors } = useTheme();
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-      <View
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: 10,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: withAlpha(colors.primary, 0.16),
-          borderWidth: 1,
-          borderColor: withAlpha(colors.primary, 0.35),
-        }}
+            {/* small debug hint if route param is missing */}
+            {!friendUid ? (
+              <View
+                style={{
+                  marginTop: 10,
+                  padding: 10,
+                  borderRadius: 14,
+                  backgroundColor: withAlpha(colors.primary, 0.12),
+                  borderWidth: 1,
+                  borderColor: withAlpha(colors.primary, 0.35),
+                }}
+              >
+                <Text style={{ color: colors.text, fontWeight: "900" }}>
+                  Missing friend uid
+                </Text>
+                <Text
+                  style={{
+                    color: colors.muted,
+                    marginTop: 4,
+                    fontWeight: "700",
+                  }}
+                >
+                  Your route param is empty. Ensure the file name matches your
+                  route:
+                  {"\n"}• /friends/[uid].tsx expects “uid”
+                  {"\n"}• /friends/[id].tsx expects “id”
+                </Text>
+              </View>
+            ) : null}
+          </BlurView>
+        </MotiView>
+
+        <View style={{ height: 12 }} />
+
+        {/* date pills */}
+        <BlurView
+          intensity={isDark ? 22 : 45}
+          style={{
+            borderRadius: 18,
+            borderWidth: 1,
+            borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.06)",
+            backgroundColor: isDark
+              ? "rgba(255,255,255,0.05)"
+              : "rgba(255,255,255,0.68)",
+            overflow: "hidden",
+            padding: 10,
+          }}
+        >
+          <Text
+            style={{ color: colors.text, fontWeight: "900", marginBottom: 8 }}
+          >
+            Pick a day
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 10 }}
+          >
+            {datePills.map((d) => {
+              const active = d === selectedDate;
+              const dateObj = new Date(d + "T00:00:00");
+              const label = dateObj.toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+              });
+              const weekday = dateObj.toLocaleDateString(undefined, {
+                weekday: "short",
+              });
+
+              return (
+                <Pressable
+                  key={d}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setSelectedDate(d);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Select ${weekday} ${label}`}
+                  accessibilityState={{ selected: active }}
+                >
+                  {({ pressed }) => (
+                    <MotiView
+                      animate={{
+                        scale: pressed ? 0.97 : 1,
+                        translateY: pressed ? 1 : 0,
+                      }}
+                      transition={{ type: "timing", duration: 130 }}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: active
+                          ? withAlpha(colors.primary, 0.55)
+                          : withAlpha(colors.border, 0.9),
+                        backgroundColor: withAlpha(
+                          active ? colors.primary : colors.card,
+                          active ? (isDark ? 0.18 : 0.14) : 0.96
+                        ),
+                        minWidth: 92,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: colors.text,
+                          fontWeight: "900",
+                          fontSize: 13,
+                        }}
+                      >
+                        {weekday}
+                      </Text>
+                      <Text
+                        style={{
+                          color: colors.muted,
+                          fontWeight: "800",
+                          marginTop: 2,
+                        }}
+                      >
+                        {label}
+                      </Text>
+                    </MotiView>
+                  )}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </BlurView>
+
+        <View style={{ height: 12 }} />
+
+        {/* totals */}
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <GlassStat
+            label="Calories"
+            value={`${Math.round(totals.calories)} kcal`}
+          />
+          <GlassStat
+            label="Protein"
+            value={`${Math.round(totals.protein)} g`}
+          />
+          <GlassStat label="Carbs" value={`${Math.round(totals.carbs)} g`} />
+          <GlassStat label="Fat" value={`${Math.round(totals.fat)} g`} />
+        </View>
+
+        <View style={{ height: 10 }} />
+      </View>
+
+      {/* content */}
+      <ScrollView
+        contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 28 }}
       >
-        <Ionicons name={icon} size={18} color={colors.primary} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ color: colors.text, fontWeight: "800", fontSize: 15 }}>
-          {title}
-        </Text>
-        {subtitle ? (
-          <Text style={{ color: colors.muted, fontSize: 13 }}>{subtitle}</Text>
-        ) : null}
-      </View>
+        {loading ? (
+          <PremiumLoadingCard label="Loading meals…" />
+        ) : (
+          grouped.map((group) => (
+            <PremiumSectionCard
+              key={group.meal}
+              title={titleForMeal(group.meal)}
+              subtitle={
+                group.items.length ? `${group.items.length} items` : "No items"
+              }
+              icon={iconForMeal(group.meal)}
+            >
+              {group.items.length === 0 ? (
+                <EmptyLine label="No meals logged." />
+              ) : (
+                <View style={{ gap: 10 }}>
+                  {group.items.map((item, idx) => {
+                    const targetId =
+                      (item as any).id ??
+                      (item as any).docId ??
+                      (item as any).name ??
+                      `${group.meal}-${idx}`;
+                    return (
+                      <MealRow
+                        key={String(targetId)}
+                        item={item}
+                        friendUid={friendUid}
+                        actorUid={user?.uid}
+                        actorName={user?.displayName || user?.email || null}
+                      />
+                    );
+                  })}
+                </View>
+              )}
+            </PremiumSectionCard>
+          ))
+        )}
+
+        <BottomTabSpacer extra={20} />
+      </ScrollView>
     </View>
   );
 }
 
+/* ───────────────── UI blocks ───────────────── */
+
+function GlassIconButton({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: any;
+  label: string;
+  onPress: () => void;
+}) {
+  const { colors, isDark } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <BlurView
+        intensity={isDark ? 22 : 44}
+        style={{
+          height: 42,
+          borderRadius: 14,
+          paddingHorizontal: 12,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+          borderWidth: 1,
+          borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.06)",
+          backgroundColor: isDark
+            ? "rgba(255,255,255,0.06)"
+            : "rgba(255,255,255,0.72)",
+          overflow: "hidden",
+        }}
+      >
+        <Ionicons name={icon} size={16} color={colors.text} />
+        <Text
+          style={{ color: colors.text, fontWeight: "900", letterSpacing: -0.1 }}
+        >
+          {label}
+        </Text>
+      </BlurView>
+    </Pressable>
+  );
+}
+
+function PremiumSectionCard({
+  title,
+  subtitle,
+  icon,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  icon: any;
+  children: React.ReactNode;
+}) {
+  const { colors, isDark } = useTheme();
+  return (
+    <BlurView
+      intensity={isDark ? 24 : 50}
+      style={{
+        borderRadius: 22,
+        overflow: "hidden",
+        borderWidth: 1,
+        borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.06)",
+        backgroundColor: isDark
+          ? "rgba(255,255,255,0.05)"
+          : "rgba(255,255,255,0.72)",
+        ...(softShadow as any),
+      }}
+    >
+      <LinearGradient
+        colors={
+          isDark
+            ? ["rgba(255,255,255,0.10)", "rgba(255,255,255,0.00)"]
+            : ["rgba(255,255,255,0.92)", "rgba(255,255,255,0.60)"]
+        }
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ padding: 14 }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+            marginBottom: 10,
+          }}
+        >
+          <View
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 12,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: isDark
+                ? "rgba(255,255,255,0.08)"
+                : "rgba(0,0,0,0.04)",
+              borderWidth: 1,
+              borderColor: isDark
+                ? "rgba(255,255,255,0.12)"
+                : "rgba(0,0,0,0.06)",
+            }}
+          >
+            <Ionicons name={icon} size={18} color={colors.text} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}
+            >
+              {title}
+            </Text>
+            {!!subtitle && (
+              <Text style={{ color: colors.muted, marginTop: 2 }}>
+                {subtitle}
+              </Text>
+            )}
+          </View>
+        </View>
+
+        {children}
+      </LinearGradient>
+    </BlurView>
+  );
+}
+
+function PremiumLoadingCard({ label }: { label: string }) {
+  const { colors, isDark } = useTheme();
+  return (
+    <BlurView
+      intensity={isDark ? 24 : 50}
+      style={{
+        borderRadius: 22,
+        overflow: "hidden",
+        borderWidth: 1,
+        borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.06)",
+        backgroundColor: isDark
+          ? "rgba(255,255,255,0.05)"
+          : "rgba(255,255,255,0.72)",
+        padding: 16,
+        alignItems: "center",
+        justifyContent: "center",
+        ...(softShadow as any),
+      }}
+    >
+      <ActivityIndicator color={colors.primary} />
+      <Text style={{ color: colors.muted, marginTop: 10, fontWeight: "800" }}>
+        {label}
+      </Text>
+    </BlurView>
+  );
+}
+
+export function GlassStat({ label, value }: { label: string; value: string }) {
+  const { colors, isDark } = useTheme();
+  return (
+    <BlurView
+      intensity={isDark ? 22 : 44}
+      style={{
+        flex: 1,
+        borderRadius: 18,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.06)",
+        backgroundColor: isDark
+          ? "rgba(255,255,255,0.05)"
+          : "rgba(255,255,255,0.70)",
+        overflow: "hidden",
+      }}
+    >
+      <Text style={{ color: colors.muted, fontWeight: "900", fontSize: 12 }}>
+        {label.toUpperCase()}
+      </Text>
+      <Text
+        style={{
+          color: colors.text,
+          fontWeight: "900",
+          fontSize: 18,
+          marginTop: 6,
+          letterSpacing: -0.2,
+        }}
+      >
+        {value}
+      </Text>
+    </BlurView>
+  );
+}
+
 function EmptyLine({ label }: { label: string }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   return (
     <View
       style={{
         padding: 12,
-        borderRadius: 12,
+        borderRadius: 14,
         borderWidth: 1,
-        borderColor: withAlpha(colors.border, 0.8),
-        backgroundColor: withAlpha(colors.card, 0.9),
+        borderColor: isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.06)",
+        backgroundColor: isDark
+          ? "rgba(255,255,255,0.04)"
+          : "rgba(255,255,255,0.70)",
       }}
     >
-      <Text style={{ color: colors.muted }}>{label}</Text>
+      <Text style={{ color: colors.muted, fontWeight: "700" }}>{label}</Text>
     </View>
   );
 }
@@ -367,52 +683,27 @@ function Ribbon({
   );
 }
 
-function StatPill({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: string;
-  color: string;
-}) {
-  return (
-    <View
-      style={{
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: withAlpha(color, 0.5),
-        backgroundColor: withAlpha(color, 0.12),
-      }}
-    >
-      <Text style={{ color: withAlpha(color, 0.8), fontWeight: "700", fontSize: 12 }}>
-        {label}
-      </Text>
-      <Text style={{ color: color, fontWeight: "900", fontSize: 16 }}>{value}</Text>
-    </View>
-  );
-}
+/* ───────────────── MealRow (keeps your old logic) ───────────────── */
 
 function MealRow({
   item,
-  colors,
   friendUid,
   actorUid,
   actorName,
 }: {
   item: FoodEntry;
-  colors: any;
   friendUid: string;
   actorUid?: string | null;
   actorName?: string | null;
 }) {
+  const { colors } = useTheme();
+
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState("");
 
-  const targetId = item.id ?? (item as any)?.docId ?? item.name;
+  const targetId =
+    (item as any).id ?? (item as any)?.docId ?? (item as any).name;
 
   useEffect(() => {
     if (!friendUid || !targetId) return;
@@ -458,7 +749,7 @@ function MealRow({
           fromUid: actorUid,
           fromName: actorName ?? undefined,
           targetId: String(targetId),
-          targetLabel: item.name || "Meal",
+          targetLabel: (item as any).name || "Meal",
           kind,
         });
       }
@@ -478,7 +769,7 @@ function MealRow({
         fromUid: actorUid,
         fromName: actorName ?? undefined,
         targetId: String(targetId),
-        targetLabel: item.name || "Meal",
+        targetLabel: (item as any).name || "Meal",
         text: commentText,
       });
       setCommentText("");
@@ -532,18 +823,19 @@ function MealRow({
         </View>
         <View style={{ flex: 1 }}>
           <Text style={{ color: colors.text, fontWeight: "900" }}>
-            {item.name || "Meal item"}
+            {(item as any).name || "Meal item"}
           </Text>
           <Text style={{ color: colors.muted }}>
-            {item.qty} {item.unit || "serving"} • {Math.round(item.calories || 0)} kcal
+            {(item as any).qty} {(item as any).unit || "serving"} •{" "}
+            {Math.round(Number((item as any).calories || 0))} kcal
           </Text>
         </View>
       </View>
 
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-        {macroChip("P", Number(item.protein || 0))}
-        {macroChip("C", Number(item.carbs || 0))}
-        {macroChip("F", Number(item.fat || 0))}
+        {macroChip("P", Number((item as any).protein || 0))}
+        {macroChip("C", Number((item as any).carbs || 0))}
+        {macroChip("F", Number((item as any).fat || 0))}
       </View>
 
       {/* Reactions */}
@@ -576,7 +868,10 @@ function MealRow({
                       paddingVertical: 6,
                       borderRadius: 999,
                       borderWidth: 1,
-                      borderColor: withAlpha(colors.primary, active ? 0.8 : 0.35),
+                      borderColor: withAlpha(
+                        colors.primary,
+                        active ? 0.8 : 0.35
+                      ),
                       backgroundColor: withAlpha(
                         colors.primary,
                         active ? 0.18 : 0.1
@@ -607,17 +902,11 @@ function MealRow({
       {/* Comments */}
       {targetId ? (
         <View style={{ gap: 8 }}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <TextInput
               value={commentText}
               onChangeText={setCommentText}
-              placeholder="Say something nice..."
+              placeholder="Say something nice…"
               placeholderTextColor={withAlpha(colors.text, 0.6)}
               style={{
                 flex: 1,

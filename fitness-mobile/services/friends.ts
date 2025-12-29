@@ -1,11 +1,10 @@
 // services/friends.ts
 import {
   collection,
-  deleteDoc,
   doc,
+  getDoc,
   getFirestore,
   onSnapshot,
-  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -36,6 +35,14 @@ const col = (uid: string) =>
 
 const docRef = (uid: string, friendUid: string) => doc(col(uid), friendUid);
 
+function toMillis(t: any) {
+  return t && typeof t.toMillis === "function"
+    ? t.toMillis()
+    : typeof t === "number"
+    ? t
+    : 0;
+}
+
 export function subscribeFriends(
   uid: string,
   cb: (rows: FriendEdge[]) => void,
@@ -46,9 +53,10 @@ export function subscribeFriends(
     return () => {};
   }
 
-  const filters = statuses && statuses.length
-    ? [where("status", "in", statuses.slice(0, 10))]
-    : [];
+  const filters =
+    statuses && statuses.length
+      ? [where("status", "in", statuses.slice(0, 10))]
+      : [];
 
   const qy = query(col(uid), ...filters);
 
@@ -72,16 +80,9 @@ export function subscribeFriends(
           updatedAt: x.updatedAt ?? null,
         });
       });
+
       // client-side sort to avoid index requirement
-      rows.sort((a, b) => {
-        const toMillis = (t: any) =>
-          t && typeof t.toMillis === "function"
-            ? t.toMillis()
-            : typeof t === "number"
-            ? t
-            : 0;
-        return toMillis(b.updatedAt) - toMillis(a.updatedAt);
-      });
+      rows.sort((a, b) => toMillis(b.updatedAt) - toMillis(a.updatedAt));
       cb(rows);
     },
     (err) => {
@@ -126,16 +127,9 @@ export function subscribeFriendRequests(
           updatedAt: x.updatedAt ?? null,
         });
       });
-      // client-side sort newest first to avoid index requirement
-      rows.sort((a, b) => {
-        const toMillis = (t: any) =>
-          t && typeof t.toMillis === "function"
-            ? t.toMillis()
-            : typeof t === "number"
-            ? t
-            : 0;
-        return toMillis(b.requestedAt) - toMillis(a.requestedAt);
-      });
+
+      // newest first
+      rows.sort((a, b) => toMillis(b.requestedAt) - toMillis(a.requestedAt));
       cb(rows);
     },
     (err) => {
@@ -205,23 +199,13 @@ export async function respondToFriendRequest(
 
   batch.set(
     docRef(uid, requesterUid),
-    {
-      status,
-      direction: "incoming",
-      respondedAt: now,
-      updatedAt: now,
-    },
+    { status, direction: "incoming", respondedAt: now, updatedAt: now },
     { merge: true }
   );
 
   batch.set(
     docRef(requesterUid, uid),
-    {
-      status,
-      direction: "outgoing",
-      respondedAt: now,
-      updatedAt: now,
-    },
+    { status, direction: "outgoing", respondedAt: now, updatedAt: now },
     { merge: true }
   );
 
@@ -251,6 +235,46 @@ export async function pingFriend(uid: string, friendUid: string) {
   batch.set(
     docRef(friendUid, uid),
     { lastPingAt: now, updatedAt: now },
+    { merge: true }
+  );
+
+  await batch.commit();
+}
+
+/**
+ * ✅ Cancel an outgoing pending request.
+ * Safe-guard: only cancels if YOUR edge is pending+outgoing (so you can't delete accepted).
+ */
+export async function cancelFriendRequest(fromUid: string, toUid: string) {
+  const ref = getFirestore() ?? db;
+
+  const myEdgeSnap = await getDoc(docRef(fromUid, toUid));
+  if (!myEdgeSnap.exists()) return;
+
+  const myEdge = myEdgeSnap.data() as any;
+  const status: FriendStatus = myEdge.status ?? "pending";
+  const direction: FriendDirection = myEdge.direction ?? "outgoing";
+
+  // Only allow cancel if it's truly an outgoing pending request
+  if (!(status === "pending" && direction === "outgoing")) return;
+
+  const batch = writeBatch(ref);
+  batch.delete(docRef(fromUid, toUid));
+  batch.delete(docRef(toUid, fromUid));
+  await batch.commit();
+}
+
+/**
+ * Optional helper to “soft-block” later if you add UI.
+ */
+export async function blockUser(uid: string, friendUid: string) {
+  const ref = getFirestore() ?? db;
+  const now = serverTimestamp();
+  const batch = writeBatch(ref);
+
+  batch.set(
+    docRef(uid, friendUid),
+    { status: "blocked", updatedAt: now },
     { merge: true }
   );
 

@@ -643,7 +643,9 @@ export default function AddMealModal() {
   }, [navigation]);
 
   const params = useLocalSearchParams<{ meal?: string; date?: string }>();
-  const meal = (params.meal as MealKey) || "breakfast";
+  const [meal, setMeal] = useState<MealKey>(
+    (params.meal as MealKey) || "breakfast"
+  );
   const date = (params.date as string) || new Date().toISOString().slice(0, 10);
 
   const [tab, setTab] = useState<
@@ -1177,6 +1179,65 @@ export default function AddMealModal() {
         colors={colors}
         isDark={isDark}
       />
+
+      {/* Meal picker */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 }}>
+        <Text style={{ color: colors.muted, fontWeight: "800", fontSize: 12 }}>
+          Logging for
+        </Text>
+        <View
+          style={{
+            flexDirection: "row",
+            flexWrap: "wrap",
+            gap: 8,
+            marginTop: 8,
+          }}
+        >
+          {(
+            [
+              ["breakfast", "🍳"],
+              ["lunch", "🥗"],
+              ["dinner", "🍽️"],
+              ["snacks", "🍌"],
+            ] as [MealKey, string][]
+          ).map(([key, emoji]) => {
+            const active = meal === key;
+            return (
+              <Pressable
+                key={key}
+                onPress={() => setMeal(key)}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: active
+                    ? withAlpha(colors.primary, 0.65)
+                    : colors.border,
+                  backgroundColor: active
+                    ? withAlpha(colors.primary, 0.16)
+                    : withAlpha(colors.card, 0.7),
+                  opacity: pressed ? 0.9 : 1,
+                })}
+              >
+                <Text style={{ fontSize: 14 }}>{emoji}</Text>
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontWeight: "900",
+                    textTransform: "capitalize",
+                  }}
+                >
+                  {key}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
 
       {/* ✅ Confirm sheet */}
       <Modal

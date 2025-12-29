@@ -50,6 +50,15 @@ import {
   deleteWorkoutTemplate,
   type WorkoutTemplate as DbWorkoutTemplate,
 } from "@/services/templates";
+import ActivityCard from "@/components/activity/ActivityCard";
+
+import {
+  subscribeActivityBetween,
+  addActivity,
+  updateActivity,
+  deleteActivity,
+  type ActivityEntry as CardioEntry,
+} from "@/services/activity";
 
 const withAlpha = (hex: string, a: number) => {
   const h = hex.replace("#", "");
@@ -63,6 +72,14 @@ const withAlpha = (hex: string, a: number) => {
 
 const clamp = (v: number, min: number, max: number) =>
   Math.max(min, Math.min(max, v));
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const ymd = (d: Date) =>
+  `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const addDays = (date: Date, n: number) => {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
+};
 
 type WorkoutSummary = {
   id: string;
@@ -920,6 +937,7 @@ export default function WorkoutsPage() {
 
   const TEMPLATE_PREVIEW_COUNT = 7;
   const [dbTemplates, setDbTemplates] = useState<DbWorkoutTemplate[]>([]);
+  const [activityEntries, setActivityEntries] = useState<CardioEntry[]>([]);
 
   const accent = "#68D7FF";
   const accent2 = "#8B7CFF";
@@ -1213,6 +1231,17 @@ export default function WorkoutsPage() {
     }
   }, [hasDraftSession]);
 
+  useEffect(() => {
+    if (!uid) return;
+
+    const end = ymd(new Date());
+    const start = ymd(addDays(new Date(), -30));
+
+    return subscribeActivityBetween(uid, start, end, (arr) =>
+      setActivityEntries(arr || [])
+    );
+  }, [uid]);
+
   const [startOpen, setStartOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [toast, setToast] = useState<{
@@ -1304,6 +1333,18 @@ export default function WorkoutsPage() {
   const duplicateRecent = (w: WorkoutSummary) => {
     openSession({ repeatWorkoutId: w.id, repeatTitle: w.title });
   };
+  async function handleCreateActivity(e: CardioEntry) {
+    if (!uid) return;
+    await addActivity(uid, e);
+  }
+  async function handleUpdateActivity(e: CardioEntry) {
+    if (!uid) return;
+    await updateActivity(uid, e);
+  }
+  async function handleDeleteActivity(id: string) {
+    if (!uid) return;
+    await deleteActivity(uid, id);
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: s.colors.bg }]}>
@@ -1798,6 +1839,54 @@ export default function WorkoutsPage() {
             </View>
 
             <View style={{ height: 10 }} />
+          </View>
+        }
+        ListFooterComponent={
+          <View style={{ paddingBottom: 62 }}>
+            <View style={{ marginTop: 10 }}>
+              <SectionHeader title="Activity" />
+              <Text style={[styles.helperText, { color: s.t2 }]}>
+                Optional cardio + movement logs — complements your lifts.
+              </Text>
+            </View>
+
+            <View style={{ marginTop: 10 }}>
+              <ActivityCard
+                entries={activityEntries}
+                goal={{ minutesPerDay: 30 }}
+                onCreate={handleCreateActivity}
+                onUpdate={handleUpdateActivity}
+                onDelete={handleDeleteActivity}
+                title="Movement"
+                subtitle="Optional • gentle momentum"
+                presets={[
+                  {
+                    type: "walk",
+                    minutes: 10,
+                    intensity: "easy",
+                    label: "Walk 10",
+                  },
+                  {
+                    type: "run",
+                    minutes: 20,
+                    intensity: "moderate",
+                    label: "Run 20",
+                  },
+                  {
+                    type: "bike",
+                    minutes: 20,
+                    intensity: "moderate",
+                    label: "Bike 20",
+                  },
+                  {
+                    type: "stretch",
+                    minutes: 10,
+                    intensity: "easy",
+                    label: "Stretch 10",
+                  },
+                ]}
+              />
+            </View>
           </View>
         }
         renderItem={({ item }) => (

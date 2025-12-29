@@ -31,16 +31,16 @@ type ThemeColors = {
   accent: string;
 
   // NEW (aliases + semantic tokens for sleek UI)
-  bg: string; // alias of background (my screens use this)
-  surface: string; // subtle surface
-  surface2: string; // elevated surface
-  glass: string; // glass overlay tint
-  glassBorder: string; // glass border
-  shadow: string; // for shadows (optional)
+  bg: string; // alias of background
+  surface: string;
+  surface2: string;
+  glass: string;
+  glassBorder: string;
+  shadow: string;
   success: string;
   warning: string;
   danger: string;
-  ringTrack: string; // ring/track color
+  ringTrack: string;
 };
 
 type ThemeContextShape = {
@@ -70,25 +70,28 @@ const STORAGE_KEYS = {
   ACCENT: "@theme:accent",
 };
 
-function withAlpha(hexOrRgb: string, alpha: number) {
-  if (!hexOrRgb) return `rgba(0,0,0,${alpha})`;
-  if (hexOrRgb.startsWith("rgb")) {
-    const body = hexOrRgb.replace(/^rgba?\(|\)$/g, "");
-    const [r, g, b] = body.split(",").map((s) => s.trim());
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  }
-  const m = hexOrRgb.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
-  if (!m) return hexOrRgb;
-  return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(
-    m[3],
-    16
-  )}, ${alpha})`;
-}
-
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [modeSetting, setModeSetting] = useState<ThemeMode>("system");
-  const sysScheme: ColorSchemeName = Appearance.getColorScheme();
-  const isSystemDark = sysScheme === "dark";
+
+  // ✅ IMPORTANT: keep system scheme in state and subscribe to changes
+  const [systemScheme, setSystemScheme] = useState<ColorSchemeName>(
+    Appearance.getColorScheme()
+  );
+
+  useEffect(() => {
+    const sub = Appearance.addChangeListener(({ colorScheme }) => {
+      setSystemScheme(colorScheme);
+    });
+    return () => {
+      // RN compatibility: newer returns { remove }, older returns unsubscribe function
+      // @ts-ignore
+      if (typeof sub?.remove === "function") sub.remove();
+      // @ts-ignore
+      else if (typeof sub === "function") sub();
+    };
+  }, []);
+
+  const isSystemDark = systemScheme === "dark";
 
   const [accentPrimary, setAccentPrimary] = useState<string | undefined>(
     undefined
@@ -147,7 +150,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       const text = "#EEF2FF";
 
       return {
-        // existing
         background,
         text,
         card: "rgba(18,22,33,0.72)",
@@ -165,7 +167,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         primary,
         accent,
 
-        // NEW
         bg: background,
         surface: "rgba(255,255,255,0.04)",
         surface2: "rgba(255,255,255,0.07)",
@@ -179,12 +180,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    // Light mode tuned to feel “premium” (less grey, more depth)
+    // Light mode tuned to feel “premium”
     const background = "#F6F9FF";
     const text = "#0B1220";
 
     return {
-      // existing
       background,
       text,
       card: "rgba(255,255,255,0.88)",
@@ -202,7 +202,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       primary,
       accent,
 
-      // NEW
       bg: background,
       surface: "rgba(255,255,255,0.70)",
       surface2: "rgba(255,255,255,0.92)",

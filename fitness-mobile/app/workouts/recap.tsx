@@ -1,5 +1,6 @@
 // app/workouts/recap.tsx
-// Single unified log section: ordered entries (what happened first) + grouped feel via exercise headers
+// Theme-aware (dark/light) unified log recap screen.
+// Drop-in replacement.
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -15,7 +16,9 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
+
 import { useAuth } from "@/content/AuthContext";
+import { useTheme } from "@/content/ThemeProvider";
 import { subscribeWorkouts, type Workout } from "@/services/workouts";
 
 const withAlpha = (hex: string, a: number) => {
@@ -33,6 +36,7 @@ function createdAtMs(x: any) {
   if (!t) return 0;
   if (typeof t === "number") return t;
   if (typeof t?.toMillis === "function") return t.toMillis();
+  if (typeof t?.seconds === "number") return t.seconds * 1000;
   return Number(t) || 0;
 }
 
@@ -75,6 +79,8 @@ type LogItem =
 export default function WorkoutRecapScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { colors, isDark } = useTheme();
+
   const params = useLocalSearchParams<{ sessionKey?: string }>();
   const sessionKey = String(params.sessionKey || "");
 
@@ -134,7 +140,6 @@ export default function WorkoutRecapScreen() {
       0
     );
 
-    // Simple highlights inside session
     let bestWeight = { ex: "", weight: 0, sets: 0, reps: 0 };
     let bestVol = { ex: "", vol: 0, sets: 0, reps: 0, weight: 0 };
 
@@ -177,7 +182,6 @@ export default function WorkoutRecapScreen() {
       const firstOf = !seenExercise.has(ex);
       if (firstOf) {
         seenExercise.add(ex);
-        // insert a compact header the first time this exercise appears in the log
         out.push({ kind: "exerciseHeader", exercise: ex, order: out.length });
       }
 
@@ -199,22 +203,85 @@ export default function WorkoutRecapScreen() {
     return out;
   }, [rows]);
 
+  // -------- theme tokens ----------
+  const accent = colors.primary ?? "#68D7FF";
+  const accent2 = "#8B7CFF";
+
+  const bgGradient = isDark
+    ? ["#070A12", "#050711", "#03040A"]
+    : [
+        withAlpha(accent, 0.1),
+        withAlpha("#FFFFFF", 0.92),
+        withAlpha(colors.card ?? "#FFFFFF", 0.7),
+      ];
+
+  const headerBorder = withAlpha(colors.text, isDark ? 0.12 : 0.1);
+
+  const glassBg = isDark
+    ? withAlpha("#FFFFFF", 0.06)
+    : withAlpha("#FFFFFF", 0.75);
+  const glassBorder = isDark
+    ? withAlpha("#FFFFFF", 0.14)
+    : withAlpha(colors.text, 0.1);
+
+  const softRowBg = isDark
+    ? withAlpha("#FFFFFF", 0.05)
+    : withAlpha(colors.card ?? "#FFFFFF", 0.85);
+  const softRowBorder = isDark
+    ? withAlpha("#FFFFFF", 0.12)
+    : withAlpha(colors.text, 0.1);
+
+  const pillBg = isDark
+    ? withAlpha("#FFFFFF", 0.06)
+    : withAlpha(colors.card ?? "#FFFFFF", 0.82);
+  const pillBorder = isDark
+    ? withAlpha("#FFFFFF", 0.14)
+    : withAlpha(colors.text, 0.1);
+
+  const textStrong = isDark ? withAlpha("#FFFFFF", 0.94) : colors.text;
+  const textMid = withAlpha(colors.text, isDark ? 0.62 : 0.7);
+  const textMuted = withAlpha(colors.text, isDark ? 0.58 : 0.62);
+
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colors.bg }]}>
       <LinearGradient
-        colors={["#070A12", "#050711", "#03040A"]}
+        colors={bgGradient as any}
         start={{ x: 0, y: 0 }}
-        end={{ x: 0.8, y: 1 }}
+        end={{ x: 0.85, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
 
+      {/* subtle glows (nice in light too) */}
+      <View
+        pointerEvents="none"
+        style={[
+          styles.glow,
+          { top: -120, left: -90, backgroundColor: withAlpha(accent, 0.16) },
+        ]}
+      />
+      <View
+        pointerEvents="none"
+        style={[
+          styles.glow,
+          { top: 140, right: -100, backgroundColor: withAlpha(accent2, 0.14) },
+        ]}
+      />
+
       <View style={{ paddingTop: topInset }}>
-        <BlurView intensity={28} tint="dark" style={styles.headerBlur}>
+        <BlurView
+          intensity={isDark ? 28 : 22}
+          tint={isDark ? "dark" : "light"}
+          style={[styles.headerBlur, { borderBottomColor: headerBorder }]}
+        >
           <View style={styles.headerRow}>
             <Pressable
               onPress={() => router.back()}
               style={({ pressed }) => [
                 styles.backBtn,
+                {
+                  backgroundColor: pillBg,
+                  borderColor: pillBorder,
+                },
                 pressed && { opacity: 0.82 },
               ]}
               accessibilityRole="button"
@@ -223,16 +290,24 @@ export default function WorkoutRecapScreen() {
               <Ionicons
                 name="chevron-back"
                 size={18}
-                color={withAlpha("#FFFFFF", 0.9)}
+                color={withAlpha(colors.text, isDark ? 0.9 : 0.8)}
               />
-              <Text style={styles.backText}>Workouts</Text>
+              <Text style={[styles.backText, { color: textStrong }]}>
+                Workouts
+              </Text>
             </Pressable>
 
             <View style={{ flex: 1 }}>
-              <Text style={styles.title} numberOfLines={1}>
+              <Text
+                style={[styles.title, { color: textStrong }]}
+                numberOfLines={1}
+              >
                 {meta.title}
               </Text>
-              <Text style={styles.subtitle} numberOfLines={1}>
+              <Text
+                style={[styles.subtitle, { color: textMuted }]}
+                numberOfLines={1}
+              >
                 {meta.dateISO ? meta.dateISO : ""}
                 {meta.timeLabel ? ` • ${meta.timeLabel}` : ""}
               </Text>
@@ -246,25 +321,67 @@ export default function WorkoutRecapScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Summary */}
-        <View style={styles.card}>
-          <Text style={styles.sectionLabel}>Summary</Text>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: glassBg, borderColor: glassBorder },
+          ]}
+        >
+          <Text
+            style={[
+              styles.sectionLabel,
+              { color: withAlpha(colors.text, isDark ? 0.7 : 0.62) },
+            ]}
+          >
+            Summary
+          </Text>
 
           <View style={styles.kpisRow}>
-            <View style={styles.kpi}>
-              <Text style={styles.kpiVal}>{rows.length}</Text>
-              <Text style={styles.kpiLab}>Entries</Text>
+            <View
+              style={[
+                styles.kpi,
+                { backgroundColor: softRowBg, borderColor: softRowBorder },
+              ]}
+            >
+              <Text style={[styles.kpiVal, { color: textStrong }]}>
+                {rows.length}
+              </Text>
+              <Text style={[styles.kpiLab, { color: textMuted }]}>Entries</Text>
             </View>
-            <View style={styles.kpi}>
-              <Text style={styles.kpiVal}>{meta.totalSets}</Text>
-              <Text style={styles.kpiLab}>Sets</Text>
+            <View
+              style={[
+                styles.kpi,
+                { backgroundColor: softRowBg, borderColor: softRowBorder },
+              ]}
+            >
+              <Text style={[styles.kpiVal, { color: textStrong }]}>
+                {meta.totalSets}
+              </Text>
+              <Text style={[styles.kpiLab, { color: textMuted }]}>Sets</Text>
             </View>
-            <View style={styles.kpi}>
-              <Text style={styles.kpiVal}>{meta.durationMin || "—"}</Text>
-              <Text style={styles.kpiLab}>Min</Text>
+            <View
+              style={[
+                styles.kpi,
+                { backgroundColor: softRowBg, borderColor: softRowBorder },
+              ]}
+            >
+              <Text style={[styles.kpiVal, { color: textStrong }]}>
+                {meta.durationMin || "—"}
+              </Text>
+              <Text style={[styles.kpiLab, { color: textMuted }]}>Min</Text>
             </View>
-            <View style={styles.kpi}>
-              <Text style={styles.kpiVal}>{meta.totalVol}</Text>
-              <Text style={styles.kpiLab}>Vol (kg)</Text>
+            <View
+              style={[
+                styles.kpi,
+                { backgroundColor: softRowBg, borderColor: softRowBorder },
+              ]}
+            >
+              <Text style={[styles.kpiVal, { color: textStrong }]}>
+                {meta.totalVol}
+              </Text>
+              <Text style={[styles.kpiLab, { color: textMuted }]}>
+                Vol (kg)
+              </Text>
             </View>
           </View>
 
@@ -275,7 +392,13 @@ export default function WorkoutRecapScreen() {
                 size={16}
                 color={withAlpha("#FFD66B", 0.95)}
               />
-              <Text style={styles.highlightText} numberOfLines={2}>
+              <Text
+                style={[
+                  styles.highlightText,
+                  { color: withAlpha(colors.text, isDark ? 0.82 : 0.78) },
+                ]}
+                numberOfLines={2}
+              >
                 Heaviest: {meta.bestWeight.ex} •{" "}
                 {Math.round(meta.bestWeight.weight)}kg ({meta.bestWeight.sets}×
                 {meta.bestWeight.reps})
@@ -288,9 +411,15 @@ export default function WorkoutRecapScreen() {
               <Ionicons
                 name="sparkles-outline"
                 size={16}
-                color={withAlpha("#68D7FF", 0.95)}
+                color={withAlpha(accent, 0.95)}
               />
-              <Text style={styles.highlightText} numberOfLines={2}>
+              <Text
+                style={[
+                  styles.highlightText,
+                  { color: withAlpha(colors.text, isDark ? 0.82 : 0.78) },
+                ]}
+                numberOfLines={2}
+              >
                 Best volume: {meta.bestVol.ex} • {meta.bestVol.sets}×
                 {meta.bestVol.reps} @ {Math.round(meta.bestVol.weight)}kg
               </Text>
@@ -299,15 +428,31 @@ export default function WorkoutRecapScreen() {
         </View>
 
         {/* Unified log */}
-        <View style={[styles.card, { marginTop: 12 }]}>
-          <Text style={styles.sectionLabel}>Workout log</Text>
-          <Text style={styles.smallMuted}>
+        <View
+          style={[
+            styles.card,
+            {
+              marginTop: 12,
+              backgroundColor: glassBg,
+              borderColor: glassBorder,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.sectionLabel,
+              { color: withAlpha(colors.text, isDark ? 0.7 : 0.62) },
+            ]}
+          >
+            Workout log
+          </Text>
+          <Text style={[styles.smallMuted, { color: textMuted }]}>
             Logged order, with exercises grouped as they first appear.
           </Text>
 
           <View style={{ marginTop: 12, gap: 10 }}>
             {logItems.length === 0 ? (
-              <Text style={styles.smallMuted}>
+              <Text style={[styles.smallMuted, { color: textMuted }]}>
                 No entries found for this session.
               </Text>
             ) : (
@@ -318,14 +463,22 @@ export default function WorkoutRecapScreen() {
                       key={`h-${item.exercise}-${i}`}
                       style={styles.exerciseHeader}
                     >
-                      <View style={styles.exercisePill}>
+                      <View
+                        style={[
+                          styles.exercisePill,
+                          { backgroundColor: pillBg, borderColor: pillBorder },
+                        ]}
+                      >
                         <Ionicons
                           name="barbell-outline"
                           size={14}
-                          color={withAlpha("#FFFFFF", 0.86)}
+                          color={withAlpha(colors.text, isDark ? 0.86 : 0.78)}
                         />
                         <Text
-                          style={styles.exerciseHeaderText}
+                          style={[
+                            styles.exerciseHeaderText,
+                            { color: textStrong },
+                          ]}
                           numberOfLines={1}
                         >
                           {item.exercise}
@@ -337,22 +490,60 @@ export default function WorkoutRecapScreen() {
 
                 const time = item.t ? fmtTime(item.t) : "";
                 return (
-                  <View key={item.id} style={styles.logRow}>
+                  <View
+                    key={item.id}
+                    style={[
+                      styles.logRow,
+                      {
+                        backgroundColor: softRowBg,
+                        borderColor: softRowBorder,
+                      },
+                    ]}
+                  >
                     <View style={styles.logLeft}>
-                      <View style={styles.logDot} />
-                      <Text style={styles.logIndex}>{item.index}</Text>
+                      <View
+                        style={[
+                          styles.logDot,
+                          {
+                            backgroundColor: withAlpha(accent, 0.92),
+                            shadowColor: accent,
+                            shadowOpacity: isDark ? 0.5 : 0.25,
+                          },
+                        ]}
+                      />
+                      <Text style={[styles.logIndex, { color: textMid }]}>
+                        {item.index}
+                      </Text>
                     </View>
 
                     <View style={{ flex: 1 }}>
                       <View style={styles.logTopLine}>
-                        <Text style={styles.logTitle} numberOfLines={1}>
+                        <Text
+                          style={[styles.logTitle, { color: textStrong }]}
+                          numberOfLines={1}
+                        >
                           {item.sets}×{item.reps} @ {Math.round(item.weight)}kg
                         </Text>
-                        {!!time && <Text style={styles.logTime}>{time}</Text>}
+                        {!!time && (
+                          <Text style={[styles.logTime, { color: textMuted }]}>
+                            {time}
+                          </Text>
+                        )}
                       </View>
 
                       {!!item.notes && (
-                        <Text style={styles.note} numberOfLines={4}>
+                        <Text
+                          style={[
+                            styles.note,
+                            {
+                              color: withAlpha(
+                                colors.text,
+                                isDark ? 0.7 : 0.68
+                              ),
+                            },
+                          ]}
+                          numberOfLines={4}
+                        >
                           {item.notes}
                         </Text>
                       )}
@@ -369,11 +560,17 @@ export default function WorkoutRecapScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#05060C" },
+  root: { flex: 1 },
+
+  glow: {
+    position: "absolute",
+    width: 280,
+    height: 280,
+    borderRadius: 280,
+  },
 
   headerBlur: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: withAlpha("#FFFFFF", 0.12),
   },
   headerRow: {
     paddingHorizontal: 14,
@@ -390,25 +587,20 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 999,
-    backgroundColor: withAlpha("#FFFFFF", 0.06),
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.14),
   },
   backText: {
-    color: withAlpha("#FFFFFF", 0.9),
     fontWeight: "800",
     fontSize: 13,
   },
 
   title: {
-    color: withAlpha("#FFFFFF", 0.94),
     fontSize: 18,
     fontWeight: "900",
     letterSpacing: -0.2,
   },
   subtitle: {
     marginTop: 2,
-    color: withAlpha("#FFFFFF", 0.58),
     fontSize: 12,
     fontWeight: "700",
   },
@@ -416,12 +608,9 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 18,
     padding: 14,
-    backgroundColor: withAlpha("#FFFFFF", 0.06),
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.14),
   },
   sectionLabel: {
-    color: withAlpha("#FFFFFF", 0.7),
     fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.8,
@@ -429,7 +618,6 @@ const styles = StyleSheet.create({
   },
   smallMuted: {
     marginTop: 6,
-    color: withAlpha("#FFFFFF", 0.58),
     fontSize: 12,
     fontWeight: "600",
   },
@@ -440,19 +628,15 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 10,
     paddingHorizontal: 10,
-    backgroundColor: withAlpha("#FFFFFF", 0.05),
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.12),
     alignItems: "center",
   },
   kpiVal: {
-    color: withAlpha("#FFFFFF", 0.94),
     fontSize: 18,
     fontWeight: "900",
   },
   kpiLab: {
     marginTop: 2,
-    color: withAlpha("#FFFFFF", 0.58),
     fontSize: 11,
     fontWeight: "700",
   },
@@ -465,15 +649,11 @@ const styles = StyleSheet.create({
   },
   highlightText: {
     flex: 1,
-    color: withAlpha("#FFFFFF", 0.82),
     fontSize: 12,
     fontWeight: "700",
   },
 
-  /* Unified log */
-  exerciseHeader: {
-    marginTop: 2,
-  },
+  exerciseHeader: { marginTop: 2 },
   exercisePill: {
     alignSelf: "flex-start",
     flexDirection: "row",
@@ -482,12 +662,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: withAlpha("#FFFFFF", 0.05),
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.12),
   },
   exerciseHeaderText: {
-    color: withAlpha("#FFFFFF", 0.9),
     fontWeight: "900",
     fontSize: 12,
   },
@@ -498,9 +675,7 @@ const styles = StyleSheet.create({
     gap: 10,
     padding: 12,
     borderRadius: 16,
-    backgroundColor: withAlpha("#FFFFFF", 0.05),
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.12),
   },
   logLeft: { width: 44, alignItems: "center" },
   logDot: {
@@ -508,15 +683,11 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 10,
     marginTop: 2,
-    backgroundColor: withAlpha("#68D7FF", 0.92),
-    shadowColor: "#68D7FF",
-    shadowOpacity: 0.5,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 0 },
   },
   logIndex: {
     marginTop: 6,
-    color: withAlpha("#FFFFFF", 0.62),
     fontSize: 12,
     fontWeight: "900",
     fontVariant: ["tabular-nums"],
@@ -529,18 +700,15 @@ const styles = StyleSheet.create({
   },
   logTitle: {
     flex: 1,
-    color: withAlpha("#FFFFFF", 0.92),
     fontSize: 13,
     fontWeight: "900",
   },
   logTime: {
-    color: withAlpha("#FFFFFF", 0.55),
     fontSize: 12,
     fontWeight: "800",
   },
   note: {
     marginTop: 6,
-    color: withAlpha("#FFFFFF", 0.7),
     fontSize: 12,
     fontWeight: "600",
     lineHeight: 16,
