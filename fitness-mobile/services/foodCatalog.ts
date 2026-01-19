@@ -27,6 +27,13 @@ export type FoodCatalogItem = {
   fat: number;
   sugar?: number;
   fiber?: number;
+  addedSugar?: number;
+  satFat?: number;
+  sodium?: number;
+  wholeFoodRatio?: number;
+  veggieFruitServings?: number;
+  unsatFatRatio?: number;
+  alcoholCalories?: number;
   nameLower: string;
   tokens: string[];
   createdAt: number;
@@ -43,8 +50,48 @@ function slugify(s: string) {
     .replace(/\s+/g, " ")
     .trim();
 }
-export function foodIdFor(name: string, unit: string) {
-  return `${slugify(name)}|${slugify(unit)}`;
+function numKey(n: any) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "0";
+  return String(Math.round(v * 1000) / 1000);
+}
+
+export function foodIdFor(item: {
+  name: string;
+  unit: string;
+  qty?: number;
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  sugar?: number;
+  fiber?: number;
+  addedSugar?: number;
+  satFat?: number;
+  sodium?: number;
+  wholeFoodRatio?: number;
+  veggieFruitServings?: number;
+  unsatFatRatio?: number;
+  alcoholCalories?: number;
+}) {
+  return [
+    slugify(item.name),
+    slugify(item.unit),
+    numKey(item.qty),
+    numKey(item.calories),
+    numKey(item.protein),
+    numKey(item.carbs),
+    numKey(item.fat),
+    numKey(item.sugar),
+    numKey(item.fiber),
+    numKey(item.addedSugar),
+    numKey(item.satFat),
+    numKey(item.sodium),
+    numKey(item.wholeFoodRatio),
+    numKey(item.veggieFruitServings),
+    numKey(item.unsatFatRatio),
+    numKey(item.alcoholCalories),
+  ].join("|");
 }
 function tokenize(name: string) {
   return slugify(name).split(" ").filter(Boolean);
@@ -57,7 +104,7 @@ export async function upsertFoodToCatalog(
     "nameLower" | "tokens" | "createdAt" | "updatedAt" | "uses"
   > & { submitterUid?: string }
 ) {
-  const id = foodIdFor(item.name, item.unit);
+  const id = foodIdFor(item);
   const now = Date.now();
   const ref = doc(db, "foodCatalog", id);
 
@@ -125,10 +172,11 @@ export async function searchCatalog(qstr: string, max = 25) {
       fbLimit(max)
     );
     const snap = await getDocs(q);
-    return snap.docs.map((d) => ({
+    const rows = snap.docs.map((d) => ({
       id: d.id,
       ...(d.data() as any),
     })) as (FoodCatalogItem & { id: string })[];
+    return dedupeCatalogRows(rows).slice(0, max);
   } catch (e) {
     // Fallback when the composite index isn't ready
     const q = fbQuery(
@@ -141,8 +189,39 @@ export async function searchCatalog(qstr: string, max = 25) {
       id: d.id,
       ...(d.data() as any),
     })) as (FoodCatalogItem & { id: string })[];
-    return arr.sort((a: any, b: any) => (b?.uses ?? 0) - (a?.uses ?? 0));
+    return dedupeCatalogRows(arr).sort(
+      (a: any, b: any) => (b?.uses ?? 0) - (a?.uses ?? 0)
+    );
   }
+}
+
+function dedupeCatalogRows<T extends { [key: string]: any }>(rows: T[]) {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const r of rows) {
+    const key = foodIdFor({
+      name: r.name || "",
+      unit: r.unit || "serving",
+      qty: r.qty,
+      calories: r.calories,
+      protein: r.protein,
+      carbs: r.carbs,
+      fat: r.fat,
+      sugar: r.sugar,
+      fiber: r.fiber,
+      addedSugar: r.addedSugar,
+      satFat: r.satFat,
+      sodium: r.sodium,
+      wholeFoodRatio: r.wholeFoodRatio,
+      veggieFruitServings: r.veggieFruitServings,
+      unsatFatRatio: r.unsatFatRatio,
+      alcoholCalories: r.alcoholCalories,
+    });
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
+  }
+  return out;
 }
 
 // --- Barcode linking helpers & scan submit ---
@@ -185,6 +264,13 @@ export async function submitSuggestionFromScan(args: {
   fat?: number;
   sugar?: number;
   fiber?: number;
+  addedSugar?: number;
+  satFat?: number;
+  sodium?: number;
+  wholeFoodRatio?: number;
+  veggieFruitServings?: number;
+  unsatFatRatio?: number;
+  alcoholCalories?: number;
   submitterUid?: string | null;
   verified?: boolean; // default false
   bumpPopularity?: boolean; // default true
@@ -216,12 +302,36 @@ export async function submitSuggestionFromScan(args: {
     fat,
     sugar,
     fiber,
+    addedSugar: args.addedSugar,
+    satFat: args.satFat,
+    sodium: args.sodium,
+    wholeFoodRatio: args.wholeFoodRatio,
+    veggieFruitServings: args.veggieFruitServings,
+    unsatFatRatio: args.unsatFatRatio,
+    alcoholCalories: args.alcoholCalories,
     submitterUid: submitterUid || undefined,
     verified,
   });
 
   // Link barcode -> foodId
-  const fid = foodIdFor(name, unit);
+  const fid = foodIdFor({
+    name,
+    unit,
+    qty,
+    calories,
+    protein,
+    carbs,
+    fat,
+    sugar,
+    fiber,
+    addedSugar: args.addedSugar,
+    satFat: args.satFat,
+    sodium: args.sodium,
+    wholeFoodRatio: args.wholeFoodRatio,
+    veggieFruitServings: args.veggieFruitServings,
+    unsatFatRatio: args.unsatFatRatio,
+    alcoholCalories: args.alcoholCalories,
+  });
   if (barcode) await linkBarcode(barcode, fid);
 
   // Optionally bump popularity since it was just used

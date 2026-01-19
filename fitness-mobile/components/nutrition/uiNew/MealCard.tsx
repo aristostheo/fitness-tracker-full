@@ -5,6 +5,9 @@ import { LinearGradient } from "expo-linear-gradient";
 import { GlassCard } from "./GlassCard";
 import type { FoodEntry } from "@/services/nutrition";
 
+// ✅ NEW
+import MealHealthScoreIndicator from "@/components/nutrition/uiNew/MealHealthScoreIndicator";
+
 export type MealKey = "breakfast" | "lunch" | "dinner" | "snacks";
 
 function withAlpha(color: string, alpha = 0.2) {
@@ -80,6 +83,76 @@ export function MealCard({
       items.length === 1 ? "" : "s"
     } • ${kcal} kcal`;
   }, [items.length, totals.calories]);
+
+  // ✅ NEW: aggregate optional fields from items (so the score + confidence can actually change)
+  const extras = useMemo(() => {
+    let sugarG: number | undefined = undefined;
+    let fiberG: number | undefined = undefined;
+
+    let sugarSum = 0;
+    let fiberSum = 0;
+
+    let hasSugar = false;
+    let hasFiber = false;
+
+    for (const it of items) {
+      const s = (it as any)?.sugar;
+      const f = (it as any)?.fiber;
+
+      if (Number.isFinite(Number(s))) {
+        hasSugar = true;
+        sugarSum += Number(s);
+      }
+      if (Number.isFinite(Number(f))) {
+        hasFiber = true;
+        fiberSum += Number(f);
+      }
+    }
+
+    if (hasSugar) sugarG = sugarSum;
+    if (hasFiber) fiberG = fiberSum;
+
+    return { sugarG, fiberG };
+  }, [items]);
+
+  // ✅ FIX: depend on the actual numeric values (not the totals object reference),
+  // and include optional sugar/fiber when available.
+  const mealScoreInput = useMemo(
+    () => ({
+      calories: Number(totals.calories || 0) || 0,
+      proteinG: Number(totals.protein || 0) || 0,
+      carbsG: Number(totals.carbs || 0) || 0,
+      fatG: Number(totals.fat || 0) || 0,
+      sugarG: extras.sugarG,
+      fiberG: extras.fiberG,
+    }),
+    [
+      totals.calories,
+      totals.protein,
+      totals.carbs,
+      totals.fat,
+      extras.sugarG,
+      extras.fiberG,
+    ]
+  );
+
+  // ✅ FIX: force the indicator to re-mount when inputs change (covers internal memo/state bugs)
+  const indicatorKey = useMemo(() => {
+    const c = Math.round(Number(totals.calories || 0) || 0);
+    const p = Math.round(Number(totals.protein || 0) || 0);
+    const cb = Math.round(Number(totals.carbs || 0) || 0);
+    const f = Math.round(Number(totals.fat || 0) || 0);
+    const s = extras.sugarG != null ? Math.round(extras.sugarG) : "na";
+    const fi = extras.fiberG != null ? Math.round(extras.fiberG) : "na";
+    return `mealScore:${c}:${p}:${cb}:${f}:${s}:${fi}`;
+  }, [
+    totals.calories,
+    totals.protein,
+    totals.carbs,
+    totals.fat,
+    extras.sugarG,
+    extras.fiberG,
+  ]);
 
   return (
     <View
@@ -158,6 +231,17 @@ export function MealCard({
             </Text>
           </Pressable>
         </View>
+
+        {/* ✅ Meal-level Health Score (NEW) */}
+        {items.length > 0 ? (
+          <MealHealthScoreIndicator
+            key={indicatorKey}
+            input={mealScoreInput}
+            variant="pill"
+            compact
+            style={{ marginTop: 12 }}
+          />
+        ) : null}
 
         {/* Empty / List */}
         <View style={{ marginTop: 12, gap: 8 }}>

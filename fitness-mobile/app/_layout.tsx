@@ -11,6 +11,7 @@ import {
   Platform,
   Animated,
   Easing,
+  LogBox,
 } from "react-native";
 import { Stack, usePathname, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -274,6 +275,12 @@ function Gate() {
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    LogBox.ignoreLogs([
+      "SafeAreaView has been deprecated and will be removed in a future release.",
+    ]);
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SettingsProvider>

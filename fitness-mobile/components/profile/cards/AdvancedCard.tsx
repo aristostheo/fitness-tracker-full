@@ -21,33 +21,26 @@ export type Targets = {
 type JobActivity = "sedentary" | "light" | "active";
 
 type Props = {
-  // ✅ current weight in KG (you already pass this)
   currentWeightKg: number;
 
-  // ✅ goal weight is editable in this card (you already did)
   targetWeightKg: number;
   targetWeightInput: string;
   onChangeTargetWeight: (v: string) => void;
   weightUnit: "kg" | "lb";
 
-  // ✅ baseline from computeTargets("maintain") — still used as a fallback,
-  // but engine calculation does NOT depend on “last saved macros”
   maintenanceTargets: Targets;
 
-  // ✅ NEW (RECOMMENDED): pass these from profile.tsx for accurate BMR/TDEE
-  // If you don't pass them yet, we use safe defaults (but accuracy will be lower).
   sex?: "male" | "female";
   age?: number;
   heightCm?: number;
 
-  // ✅ OPTIONAL: if you already track them in profile, you can pass in as defaults
   defaultStepsPerDay?: number;
   defaultGymSessionsPerWeek?: number;
   defaultSportSessionsPerWeek?: number;
   defaultJobActivity?: JobActivity;
 
-  // ✅ parent uses this to update TargetsGlassPanel
-  onPreview?: (t: Targets) => void;
+  savedTargets?: Targets;
+  onPreview?: (t: Targets, meta?: { userInitiated?: boolean }) => void;
 };
 
 const onlyNum = (t: string) => t.replace(/[^0-9.]/g, "");
@@ -77,6 +70,7 @@ export default function AdvancedGoalsEngineCard({
   defaultGymSessionsPerWeek,
   defaultSportSessionsPerWeek,
   defaultJobActivity,
+  savedTargets,
   onPreview,
 }: Props) {
   const { colors, isDark } = useTheme();
@@ -102,6 +96,27 @@ export default function AdvancedGoalsEngineCard({
   const [jobActivity, setJobActivity] = useState<JobActivity>(
     defaultJobActivity ?? "light"
   );
+  const userTouchedRef = useRef(false);
+
+  const markTouched = () => {
+    userTouchedRef.current = true;
+  };
+  const seededRef = useRef(false);
+
+  useEffect(() => {
+    if (seededRef.current) return;
+    if (!savedTargets?.calorieGoal) return;
+
+    // ✅ seed goalType based on saved calories vs maintenance
+    const maint = maintenanceTargets?.calorieGoal ?? 2200;
+    const saved = savedTargets.calorieGoal;
+
+    if (saved < maint - 50) setGoalType("cut");
+    else if (saved > maint + 50) setGoalType("bulk");
+    else setGoalType("maintain");
+
+    seededRef.current = true;
+  }, [savedTargets?.calorieGoal, maintenanceTargets?.calorieGoal]);
 
   /* ───────────── engine output ───────────── */
 
@@ -112,7 +127,10 @@ export default function AdvancedGoalsEngineCard({
     const safeAge = Number.isFinite(age) ? age : 25;
     const safeHeight = Number.isFinite(heightCm) ? heightCm : 175;
 
-    const parsedSteps = Math.max(0, Number(stepsPerDay || 0) || 0) || 7000;
+    const parsedStepsRaw = Number(stepsPerDay);
+    const parsedSteps = Number.isFinite(parsedStepsRaw)
+      ? Math.max(0, parsedStepsRaw)
+      : 7000;
     const parsedGym = Math.max(0, Number(gymSessions || 0) || 0);
     const parsedSport = Math.max(0, Number(sportSessions || 0) || 0);
 
@@ -207,11 +225,14 @@ export default function AdvancedGoalsEngineCard({
   useEffect(() => {
     if (!onPreview) return;
 
+    // ✅ don’t push preview until user interacts
+    if (!userTouchedRef.current) return;
+
     const key = `${targets.calorieGoal}|${targets.proteinGoal}|${targets.carbGoal}|${targets.fatGoal}`;
     if (key === prevKeyRef.current) return;
 
     prevKeyRef.current = key;
-    onPreview(targets);
+    onPreview(targets, { userInitiated: true });
   }, [
     onPreview,
     targets.calorieGoal,
@@ -246,7 +267,10 @@ export default function AdvancedGoalsEngineCard({
         {(["cut", "maintain", "bulk"] as GoalType[]).map((g) => (
           <Pressable
             key={g}
-            onPress={() => setGoalType(g)}
+            onPress={() => {
+              markTouched();
+              setGoalType(g);
+            }}
             style={{
               flex: 1,
               paddingVertical: 8,
@@ -290,7 +314,10 @@ export default function AdvancedGoalsEngineCard({
         >
           <TextInput
             value={targetWeightInput}
-            onChangeText={(t) => onChangeTargetWeight(onlyNum(t))}
+            onChangeText={(t) => {
+              markTouched();
+              onChangeTargetWeight(onlyNum(t));
+            }}
             keyboardType="decimal-pad"
             style={{
               flex: 1,
@@ -322,7 +349,10 @@ export default function AdvancedGoalsEngineCard({
             <LabeledInput
               label="Steps/day"
               value={stepsPerDay}
-              onChangeText={(t) => setStepsPerDay(onlyNum(t))}
+              onChangeText={(t) => {
+                markTouched();
+                setStepsPerDay(onlyNum(t));
+              }}
               placeholder="7000"
               colors={colors}
             />
@@ -331,7 +361,10 @@ export default function AdvancedGoalsEngineCard({
             <LabeledInput
               label="Gym/wk"
               value={gymSessions}
-              onChangeText={(t) => setGymSessions(onlyNum(t))}
+              onChangeText={(t) => {
+                markTouched();
+                setGymSessions(onlyNum(t));
+              }}
               placeholder="4"
               colors={colors}
             />
@@ -343,7 +376,10 @@ export default function AdvancedGoalsEngineCard({
             <LabeledInput
               label="Sport/wk"
               value={sportSessions}
-              onChangeText={(t) => setSportSessions(onlyNum(t))}
+              onChangeText={(t) => {
+                markTouched();
+                setSportSessions(onlyNum(t));
+              }}
               placeholder="0"
               colors={colors}
             />
@@ -362,7 +398,10 @@ export default function AdvancedGoalsEngineCard({
                     return (
                       <Pressable
                         key={j}
-                        onPress={() => setJobActivity(j)}
+                        onPress={() => {
+                          markTouched();
+                          setJobActivity(j);
+                        }}
                         style={{
                           flex: 1,
                           paddingVertical: 8,
@@ -400,24 +439,29 @@ export default function AdvancedGoalsEngineCard({
         value={aggression}
         onChange={setAggression}
         hint="Deficit/surplus % (engine-based)"
+        onTouch={markTouched}
       />
+
       <SliderBlock
         label="Training Bias"
         value={trainingBias}
         onChange={setTrainingBias}
         hint="Higher = more calories on training days"
+        onTouch={markTouched}
       />
       <SliderBlock
         label="Protein Bias"
         value={proteinBias}
         onChange={setProteinBias}
         hint="Maps to g/lb range (engine-based)"
+        onTouch={markTouched}
       />
       <SliderBlock
         label="Metabolic Adaptation"
         value={neatAdaptation}
         onChange={setNeatAdaptation}
         hint="Accounts for adaptive thermogenesis (cuts)"
+        onTouch={markTouched}
       />
 
       {/* Results */}
@@ -509,11 +553,13 @@ function SliderBlock({
   value,
   onChange,
   hint,
+  onTouch,
 }: {
   label: string;
   value: number;
   onChange: (v: number) => void;
   hint: string;
+  onTouch?: () => void;
 }) {
   const { colors } = useTheme();
 
@@ -527,7 +573,10 @@ function SliderBlock({
         step={0.01}
         minimumTrackTintColor={colors.primary}
         maximumTrackTintColor={colors.border}
-        onValueChange={onChange}
+        onValueChange={(v: number) => {
+          onTouch?.();
+          onChange(v);
+        }}
       />
       <Text style={{ color: colors.muted, fontSize: 12 }}>{hint}</Text>
     </View>

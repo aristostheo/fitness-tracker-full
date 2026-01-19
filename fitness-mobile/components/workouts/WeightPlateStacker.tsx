@@ -486,8 +486,6 @@ function PlateStack({
           return (
             <AView
               key={`${p.value}-${idx}-${direction}`}
-              entering={FadeInDown.springify().damping(18).stiffness(180)}
-              exiting={FadeOutDown.duration(140)}
               layout={Layout.springify().damping(18).stiffness(170)}
               style={[
                 styles.plateWrap,
@@ -495,18 +493,23 @@ function PlateStack({
                   // anchor to center WITHOUT percentages
                   left: "50%",
                   marginLeft: -w / 2,
-                  transform: [{ translateX: x }, { translateY: y }],
                 },
               ]}
             >
-              <PlateGloss
-                width={w}
-                height={h}
-                tone={p.tone}
-                theme={theme}
-                label={p.label ?? fmt(p.value)}
-                direction={direction}
-              />
+              <AView
+                entering={FadeInDown.springify().damping(18).stiffness(180)}
+                exiting={FadeOutDown.duration(140)}
+                style={{ transform: [{ translateX: x }, { translateY: y }] }}
+              >
+                <PlateGloss
+                  width={w}
+                  height={h}
+                  tone={p.tone}
+                  theme={theme}
+                  label={p.label ?? fmt(p.value)}
+                  direction={direction}
+                />
+              </AView>
             </AView>
           );
         })}

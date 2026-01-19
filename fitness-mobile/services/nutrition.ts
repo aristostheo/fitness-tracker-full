@@ -19,17 +19,27 @@ import { db } from "@/lib/firebase";
 
 export type FoodEntry = {
   id: string;
-  date: string; // "YYYY-MM-DD"
+  date: string;
   meal: "breakfast" | "lunch" | "dinner" | "snacks" | string;
   name: string;
   qty: number;
-  unit: string; // "serving" | "g" | "ml" | custom
+  unit: string;
   calories: number;
   protein: number;
   carbs: number;
   fat: number;
   sugar?: number;
   fiber?: number;
+
+  // ✅ ADD THESE:
+  addedSugar?: number;
+  satFat?: number;
+  sodium?: number;
+  wholeFoodRatio?: number; // 0..1
+  veggieFruitServings?: number; // 0..6+
+  unsatFatRatio?: number; // 0..1
+  alcoholCalories?: number;
+
   source?: "manual" | "mock-ai" | string;
   createdAt?: Timestamp | number | null;
 };
@@ -45,6 +55,15 @@ export type FoodPatch = Partial<
   fat?: number;
   sugar?: number;
   fiber?: number;
+
+  // ✅ ADD THESE:
+  addedSugar?: number;
+  satFat?: number;
+  sodium?: number;
+  wholeFoodRatio?: number;
+  veggieFruitServings?: number;
+  unsatFatRatio?: number;
+  alcoholCalories?: number;
 };
 
 export type ExerciseEntry = {
@@ -88,8 +107,34 @@ export function subscribeFoodsByDate(
           protein: Number(data.protein || 0),
           carbs: Number(data.carbs || 0),
           fat: Number(data.fat || 0),
-          sugar: Number(data.sugar || 0),
-          fiber: Number(data.fiber || 0),
+          sugar: data.sugar != null ? Number(data.sugar) : undefined,
+          fiber: data.fiber != null ? Number(data.fiber) : undefined,
+
+          // ✅ ADD THESE:
+          addedSugar:
+            data.addedSugar != null ? Number(data.addedSugar) : undefined,
+          satFat: data.satFat != null ? Number(data.satFat) : undefined,
+          sodium:
+            data.sodium != null
+              ? Number(data.sodium)
+              : data.sodiumMg != null
+              ? Number(data.sodiumMg)
+              : undefined,
+          wholeFoodRatio:
+            data.wholeFoodRatio != null
+              ? Number(data.wholeFoodRatio)
+              : undefined,
+          veggieFruitServings:
+            data.veggieFruitServings != null
+              ? Number(data.veggieFruitServings)
+              : undefined,
+          unsatFatRatio:
+            data.unsatFatRatio != null ? Number(data.unsatFatRatio) : undefined,
+          alcoholCalories:
+            data.alcoholCalories != null
+              ? Number(data.alcoholCalories)
+              : undefined,
+
           source: data.source,
           createdAt: data.createdAt ?? null,
         });

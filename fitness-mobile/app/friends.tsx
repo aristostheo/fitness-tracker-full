@@ -1,16 +1,51 @@
-// app/friends.tsx
-import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, ScrollView, Alert } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { MotiView } from "moti";
-import { LinearGradient } from "expo-linear-gradient";
-import { useAuth } from "@/content/AuthContext";
-import { useTheme } from "@/content/ThemeProvider";
-import { Field } from "@/components/workouts/ui/Field";
-import Card from "@/components/Card";
-import BottomTabSpacer from "@/components/ui/BottomTapSpacer";
-import { GradientButton } from "@/components/workouts/ui/GradientButton";
+// app/(tabs)/friends.tsx
+// Drop-in ✅ Premium Friends page (Apple-inspired glossy dark UI)
+//
+// Depends on:
+// - expo-router
+// - expo-linear-gradient
+// - expo-blur
+// - expo-haptics
+// - react-native-reanimated
+//
+// Uses your existing backend logic:
+// - subscribeFriends, subscribeFriendRequests, sendFriendRequest, respondToFriendRequest,
+//   removeFriendship, pingFriend, cancelFriendRequest
+// - notifyFriendRequestSafe, notifyFriendAccepted, notifyPingSafe
+//
+// Adds privacy-first block/report via new service: services/friendsSafety.ts
+
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  Platform,
+  StatusBar,
+  Pressable,
+  Alert,
+  RefreshControl,
+} from "react-native";
 import { useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
+import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import Animated, {
+  FadeInDown,
+  FadeIn,
+  useSharedValue,
+  withTiming,
+  useAnimatedStyle,
+} from "react-native-reanimated";
+
+import { useTheme } from "@/content/ThemeProvider";
+import { useAuth } from "@/content/AuthContext";
+
+import BottomTabSpacer from "@/components/ui/BottomTapSpacer";
+import { withAlpha } from "@/lib/color";
+
 import {
   subscribeFriends,
   subscribeFriendRequests,
@@ -18,73 +53,249 @@ import {
   respondToFriendRequest,
   removeFriendship,
   pingFriend,
+  cancelFriendRequest,
   type FriendEdge,
-} from "@/services/friends";
+} from "@/services/friends/friends";
+
 import {
-  notifyFriendRequest,
+  notifyFriendRequestSafe,
   notifyFriendAccepted,
-  notifyPing,
+  notifyPingSafe,
 } from "@/services/notifications";
-import { withAlpha } from "@/components/workouts/utils/withAlpha";
 
-const ribbonColors = ["#5ce1ff", "#ff5ac8", "#8cfb9f", "#ffc857"];
+import {
+  PremiumSegmented,
+  type FriendsTabKey,
+} from "@/components/friends/premium/PremiumSegmented";
+import { FriendRowPremium } from "@/components/friends/premium/FriendRowPremium";
+import { RequestRowPremium } from "@/components/friends/premium/RequestRowPremium";
+import { FriendsAddSheet } from "@/components/friends/premium/FriendsAddSheet";
+import {
+  FriendActionsSheet,
+  type FriendAction,
+} from "@/components/friends/premium/FriendsActionSheet";
+import { upsertBlock, createReport } from "@/services/friends/friendsSafety";
 
-export default function FriendsScreen() {
-  const { user } = useAuth();
+type UIFriend = {
+  id: string; // edge doc id
+  friendUid: string;
+  name: string;
+  handle?: string;
+  subtitle?: string;
+  accentSeed: string;
+  raw: FriendEdge;
+};
+
+function displayFromEdge(e: FriendEdge): string {
+  return e.friendDisplayName || e.friendEmail || e.friendUid;
+}
+
+function toMillis(t: any) {
+  return t && typeof t.toMillis === "function"
+    ? t.toMillis()
+    : typeof t === "number"
+    ? t
+    : 0;
+}
+
+function relativeTimeFrom(ts: any): string | null {
+  const ms = toMillis(ts);
+  if (!ms) return null;
+  const diff = Date.now() - ms;
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const d = Math.floor(hr / 24);
+  return `${d}d ago`;
+}
+
+function safeHandleFromEmail(email?: string | null) {
+  if (!email) return undefined;
+  const left = (email.split("@")[0] || "user").toLowerCase();
+  return `@${left.replace(/[^a-z0-9._-]/g, "")}`;
+}
+
+function calmSubtitleForFriend(e: FriendEdge) {
+  const ping = relativeTimeFrom(e.lastPingAt);
+  const updated = relativeTimeFrom(e.updatedAt);
+  if (ping) return `Last ping • ${ping}`;
+  if (updated) return `Updated • ${updated}`;
+  return "Connected";
+}
+
+function calmSubtitleForIncoming(e: FriendEdge) {
+  const when = relativeTimeFrom(e.requestedAt);
+  return when ? `Requested • ${when}` : "Incoming request";
+}
+
+function calmSubtitleForSent(e: FriendEdge) {
+  const when = relativeTimeFrom(e.requestedAt);
+  return when ? `Pending • ${when}` : "Pending approval";
+}
+
+export default function FriendsPage() {
   const { colors, isDark } = useTheme();
+  const { user } = useAuth();
   const router = useRouter();
-  const uid = user?.uid ?? "__demo__";
 
-  const [friends, setFriends] = useState<FriendEdge[]>([]);
-  const [requests, setRequests] = useState<FriendEdge[]>([]);
-  const [input, setInput] = useState("");
-  const [displayName, setDisplayName] = useState("");
+  const [tab, setTab] = useState<FriendsTabKey>("friends");
+  const [friendsEdges, setFriendsEdges] = useState<FriendEdge[]>([]);
+  const [incomingEdges, setIncomingEdges] = useState<FriendEdge[]>([]);
+
+  // loading/error states
+  const [loadingA, setLoadingA] = useState(true);
+  const [loadingB, setLoadingB] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const [addOpen, setAddOpen] = useState(false);
   const [sending, setSending] = useState(false);
+
+  const [selected, setSelected] = useState<UIFriend | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  const topInset = Platform.OS === "android" ? StatusBar.currentHeight ?? 0 : 0;
 
   useEffect(() => {
     if (!user?.uid) return;
-    const unsubA = subscribeFriends(user.uid, setFriends, ["accepted", "pending"]);
-    const unsubB = subscribeFriendRequests(user.uid, setRequests);
+
+    setErrorMsg(null);
+    setLoadingA(true);
+    setLoadingB(true);
+
+    const unsubA = subscribeFriends(
+      user.uid,
+      (edges) => {
+        setFriendsEdges(edges);
+        setLoadingA(false);
+      },
+      ["accepted", "pending"]
+    );
+
+    const unsubB = subscribeFriendRequests(user.uid, (edges) => {
+      setIncomingEdges(edges);
+      setLoadingB(false);
+    });
+
+    // defensive timeout so UI doesn’t “hang” if offline without events
+    const t = setTimeout(() => {
+      setLoadingA(false);
+      setLoadingB(false);
+    }, 3500);
+
     return () => {
+      clearTimeout(t);
       unsubA && unsubA();
       unsubB && unsubB();
     };
   }, [user?.uid]);
 
   const pendingOutgoing = useMemo(
-    () => friends.filter((f) => f.status === "pending" && f.direction === "outgoing"),
-    [friends]
+    () =>
+      friendsEdges.filter(
+        (f) => f.status === "pending" && f.direction === "outgoing"
+      ),
+    [friendsEdges]
   );
+
   const accepted = useMemo(
-    () => friends.filter((f) => f.status === "accepted"),
-    [friends]
+    () => friendsEdges.filter((f) => f.status === "accepted"),
+    [friendsEdges]
   );
 
-  const totalRequests = requests.length;
+  const friendsUI: UIFriend[] = useMemo(
+    () =>
+      accepted.map((e) => ({
+        id: e.id,
+        friendUid: e.friendUid,
+        name: displayFromEdge(e),
+        handle: safeHandleFromEmail(e.friendEmail),
+        subtitle: calmSubtitleForFriend(e),
+        accentSeed: e.friendUid,
+        raw: e,
+      })),
+    [accepted]
+  );
 
-  async function handleSend() {
-    const target = input.trim();
+  const requestsUI: UIFriend[] = useMemo(
+    () =>
+      incomingEdges.map((e) => ({
+        id: e.id,
+        friendUid: e.friendUid,
+        name: displayFromEdge(e),
+        handle: safeHandleFromEmail(e.friendEmail),
+        subtitle: calmSubtitleForIncoming(e),
+        accentSeed: e.friendUid,
+        raw: e,
+      })),
+    [incomingEdges]
+  );
+
+  const sentUI: UIFriend[] = useMemo(
+    () =>
+      pendingOutgoing.map((e) => ({
+        id: e.id,
+        friendUid: e.friendUid,
+        name: displayFromEdge(e),
+        handle: safeHandleFromEmail(e.friendEmail),
+        subtitle: calmSubtitleForSent(e),
+        accentSeed: e.friendUid,
+        raw: e,
+      })),
+    [pendingOutgoing]
+  );
+
+  const data =
+    tab === "friends" ? friendsUI : tab === "requests" ? requestsUI : sentUI;
+
+  const isLoading = loadingA || loadingB;
+
+  const headerGlow = useMemo(() => {
+    return isDark
+      ? ([
+          "rgba(255,255,255,0.08)",
+          "rgba(255,255,255,0.02)",
+          "rgba(0,0,0,0)",
+        ] as const)
+      : ([
+          "rgba(0,0,0,0.06)",
+          "rgba(255,255,255,0.00)",
+          "rgba(255,255,255,0)",
+        ] as const);
+  }, [isDark]);
+
+  async function handleSend(targetRaw: string, displayNameRaw: string) {
+    const target = targetRaw.trim();
+    const displayName = displayNameRaw.trim();
     if (!target || !user?.uid) return;
+
     setSending(true);
+    setErrorMsg(null);
+
     try {
       await sendFriendRequest(
         user.uid,
         {
           friendUid: target,
           friendEmail: target.includes("@") ? target : null,
-          friendDisplayName: displayName.trim() || null,
+          friendDisplayName: displayName || null,
         },
         { email: user.email ?? null, displayName: user.displayName ?? null }
       );
-      await notifyFriendRequest(target, {
+
+      await notifyFriendRequestSafe(target, {
         uid: user.uid,
         email: user.email ?? null,
         displayName: user.displayName ?? null,
       });
-      setInput("");
-      setDisplayName("");
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setAddOpen(false);
     } catch (e: any) {
+      setErrorMsg(e?.message || "Could not send request.");
       Alert.alert("Could not send request", e?.message || "Unknown error");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setSending(false);
     }
@@ -99,410 +310,670 @@ export default function FriendsScreen() {
           uid: user.uid,
           displayName: user.displayName ?? user.email ?? "Friend",
         });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     } catch (e: any) {
       Alert.alert("Couldn't update request", e?.message || "Unknown error");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   }
 
   async function handleRemove(friendUid: string) {
     if (!user?.uid) return;
-    Alert.alert("Remove friend?", "This will remove both sides of the friendship.", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(
+      "Remove friend?",
+      "This removes the connection for both sides. They won’t be notified.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await removeFriendship(user.uid!, friendUid);
+              Haptics.notificationAsync(
+                Haptics.NotificationFeedbackType.Success
+              );
+              setSheetOpen(false);
+            } catch (e: any) {
+              Alert.alert("Couldn't remove", e?.message || "Unknown error");
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  async function handlePing(friendUid: string) {
+    if (!user?.uid) return;
+    try {
+      await pingFriend(user.uid, friendUid);
+      try {
+        await notifyPingSafe(friendUid, {
+          uid: user.uid,
+          displayName: user.displayName ?? user.email ?? "Friend",
+        });
+      } catch {}
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      Alert.alert("Couldn't ping", e?.message || "Unknown error");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  }
+
+  async function handleCancelOutgoing(toUid: string) {
+    if (!user?.uid) return;
+    Alert.alert("Cancel request?", "This will remove the pending request.", [
+      { text: "Keep", style: "cancel" },
       {
-        text: "Remove",
+        text: "Cancel request",
         style: "destructive",
         onPress: async () => {
           try {
-            await removeFriendship(user.uid!, friendUid);
+            await cancelFriendRequest(user.uid!, toUid);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           } catch (e: any) {
-            Alert.alert("Couldn't remove", e?.message || "Unknown error");
+            Alert.alert("Couldn't cancel", e?.message || "Unknown error");
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           }
         },
       },
     ]);
   }
 
-  async function handlePing(friendUid: string, friendName?: string | null) {
+  async function handleBlock(friendUid: string) {
     if (!user?.uid) return;
-    try {
-      await pingFriend(user.uid, friendUid);
-      await notifyPing(friendUid, {
-        uid: user.uid,
-        displayName: user.displayName ?? user.email ?? "Friend",
-      });
-    } catch (e: any) {
-      Alert.alert("Couldn't ping", e?.message || "Unknown error");
-    }
+    Alert.alert(
+      "Block this person?",
+      "Blocking hides you from each other here. You can unblock later in Privacy settings (future).",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Block",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await upsertBlock(user.uid!, friendUid, true);
+              Haptics.notificationAsync(
+                Haptics.NotificationFeedbackType.Success
+              );
+              // Optional: remove friendship if connected
+              // (privacy-first default)
+              try {
+                await removeFriendship(user.uid!, friendUid);
+              } catch {}
+              setSheetOpen(false);
+            } catch (e: any) {
+              Alert.alert("Couldn't block", e?.message || "Unknown error");
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            }
+          },
+        },
+      ]
+    );
   }
 
+  async function handleReport(friendUid: string) {
+    if (!user?.uid) return;
+    Alert.alert(
+      "Report",
+      "Reports are private. Share the reason on the next screen (simple prompt).",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Continue",
+          onPress: async () => {
+            // Minimal privacy-first prompt (no heavy UI)
+            Alert.prompt?.(
+              "Report reason",
+              "Briefly describe what happened (stored securely).",
+              async (text) => {
+                try {
+                  await createReport(user.uid!, friendUid, text || "No reason");
+                  Haptics.notificationAsync(
+                    Haptics.NotificationFeedbackType.Success
+                  );
+                  setSheetOpen(false);
+                } catch (e: any) {
+                  Alert.alert("Couldn't report", e?.message || "Unknown error");
+                  Haptics.notificationAsync(
+                    Haptics.NotificationFeedbackType.Error
+                  );
+                }
+              }
+            );
+
+            // Android fallback (no Alert.prompt)
+            if (Platform.OS === "android") {
+              try {
+                await createReport(user.uid!, friendUid, "Reported");
+                Haptics.notificationAsync(
+                  Haptics.NotificationFeedbackType.Success
+                );
+                setSheetOpen(false);
+              } catch (e: any) {
+                Alert.alert("Couldn't report", e?.message || "Unknown error");
+                Haptics.notificationAsync(
+                  Haptics.NotificationFeedbackType.Error
+                );
+              }
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  const actions: FriendAction[] = useMemo(() => {
+    if (!selected) return [];
+    const name = selected.name;
+    const uid = selected.friendUid;
+
+    const goMeals = () => {
+      router.push(
+        `/friends/${encodeURIComponent(uid)}?name=${encodeURIComponent(
+          selected.raw.friendDisplayName || name
+        )}`
+      );
+    };
+    const goWorkouts = () => {
+      router.push(
+        `/friends/${encodeURIComponent(uid)}/workouts?name=${encodeURIComponent(
+          selected.raw.friendDisplayName || name
+        )}`
+      );
+    };
+    const goProfile = () => {
+      router.push(
+        `/friends/${encodeURIComponent(uid)}/profile?name=${encodeURIComponent(
+          selected.raw.friendDisplayName || name
+        )}`
+      );
+    };
+
+    return [
+      {
+        key: "ping",
+        title: "Ping",
+        subtitle: "A gentle nudge — no pressure",
+        icon: "notifications-outline",
+        onPress: () => handlePing(uid),
+      },
+      {
+        key: "profile",
+        title: "View Profile",
+        subtitle: "Minimal public info",
+        icon: "person-outline",
+        onPress: goProfile,
+      },
+      {
+        key: "meals",
+        title: "View Meals",
+        subtitle: "Read-only history",
+        icon: "restaurant-outline",
+        onPress: goMeals,
+      },
+      {
+        key: "workouts",
+        title: "View Workouts",
+        subtitle: "Read-only history",
+        icon: "barbell-outline",
+        onPress: goWorkouts,
+      },
+      {
+        key: "remove",
+        title: "Remove Friend",
+        subtitle: "Quietly disconnect",
+        icon: "trash-outline",
+        destructive: true,
+        onPress: () => handleRemove(uid),
+      },
+      {
+        key: "block",
+        title: "Block",
+        subtitle: "Privacy-first: hide each other",
+        icon: "ban-outline",
+        destructive: true,
+        onPress: () => handleBlock(uid),
+      },
+      {
+        key: "report",
+        title: "Report",
+        subtitle: "Private and secure",
+        icon: "flag-outline",
+        onPress: () => handleReport(uid),
+      },
+    ];
+  }, [router, selected]);
+
+  const shimmer = useSharedValue(0);
+  useEffect(() => {
+    shimmer.value = withTiming(isLoading ? 1 : 0, { duration: 280 });
+  }, [isLoading, shimmer]);
+
+  const loadingStyle = useAnimatedStyle(() => ({
+    opacity: shimmer.value,
+    transform: [{ translateY: (1 - shimmer.value) * 6 }],
+  }));
+
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 28 }}
-    >
-      {/* floating ribbons */}
-      <GradientRibbon
-        side="right"
-        colors={[ribbonColors[1], ribbonColors[0]] as const}
-        opacity={isDark ? 0.18 : 0.24}
-      />
-      <GradientRibbon
-        side="left"
-        colors={[ribbonColors[2], ribbonColors[3]] as const}
-        top={320}
-        opacity={isDark ? 0.14 : 0.2}
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <LinearGradient
+        colors={headerGlow}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
       />
 
-      <MotiView
-        from={{ opacity: 0, translateY: 10 }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={{ type: "timing", duration: 420 }}
-      >
-        <LinearGradient
-          colors={[withAlpha(colors.primary, 0.22), colors.card]}
-          start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{
-          borderRadius: 22,
-          padding: 16,
-          borderWidth: 1,
-          borderColor: withAlpha(colors.primary, 0.35),
-        }}
-      >
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ color: colors.text, fontWeight: "900", fontSize: 20 }}>
-                Friends & Meals
+      {/* Header */}
+      <View style={{ paddingTop: topInset + 14, paddingHorizontal: 16 }}>
+        <Animated.View entering={FadeInDown.duration(420)}>
+          <View style={styles.headerRow}>
+            <Pressable
+              onPress={() => {
+                Haptics.selectionAsync();
+                router.back();
+              }}
+              style={({ pressed }) => [
+                styles.backBtn,
+                {
+                  backgroundColor: withAlpha(colors.card, pressed ? 0.6 : 0.42),
+                  borderColor: withAlpha(colors.border, 0.5),
+                },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <Ionicons name="chevron-back" size={18} color={colors.text} />
+            </Pressable>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.title, { color: colors.text }]}>
+                Friends
               </Text>
-              <Text style={{ color: colors.muted, marginTop: 4, fontWeight: "600" }}>
-                Add buddies, watch their meals, and nudge them to log today.
+              <Text style={[styles.subtitle, { color: colors.muted }]}>
+                Calm connection. Private by default.
               </Text>
             </View>
-            <Pressable
-              onPress={() => router.push("/notifications")}
-              style={({ pressed }) => ({
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: withAlpha(colors.primary, 0.35),
-                backgroundColor: withAlpha(colors.primary, pressed ? 0.18 : 0.12),
-              })}
+
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <Pressable
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setAddOpen(true);
+                }}
+                style={({ pressed }) => [
+                  styles.headerPill,
+                  {
+                    backgroundColor: withAlpha(colors.text, pressed ? 0.1 : 0.08),
+                    borderColor: withAlpha(colors.text, 0.12),
+                  },
+                ]}
+              >
+                <BlurView
+                  intensity={22}
+                  tint={isDark ? "dark" : "light"}
+                  style={StyleSheet.absoluteFillObject}
+                />
+                <Ionicons
+                  name="person-add-outline"
+                  size={18}
+                  color={colors.text}
+                />
+                <Text style={[styles.headerPillText, { color: colors.text }]}>
+                  Add
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={{ height: 12 }} />
+          <PremiumSegmented value={tab} onChange={setTab} />
+        </Animated.View>
+
+        {errorMsg ? (
+          <Animated.View
+            entering={FadeIn.duration(240)}
+            style={{ marginTop: 10 }}
+          >
+            <View
+              style={[
+                styles.banner,
+                {
+                  backgroundColor: withAlpha(colors.danger, 0.12),
+                  borderColor: withAlpha(colors.danger, 0.28),
+                },
+              ]}
             >
-              <Ionicons name="arrow-back" size={16} color={colors.primary} />
-              <Text style={{ color: colors.primary, fontWeight: "800" }}>Back</Text>
-            </Pressable>
-          </View>
-
-          <View style={{ marginTop: 12, gap: 10 }}>
-            <Field
-              icon="person-add-outline"
-              placeholder="Friend UID or email"
-              value={input}
-              onChangeText={setInput}
-            />
-            <Field
-              icon="pricetag-outline"
-              placeholder="Display name (optional)"
-              value={displayName}
-              onChangeText={setDisplayName}
-            />
-            <GradientButton
-              label={sending ? "Sending..." : "Send friend request"}
-              onPress={handleSend}
-              disabled={!input.trim() || sending || !user?.uid}
-            />
-          </View>
-        </LinearGradient>
-      </MotiView>
-
-      {/* Requests */}
-      <Card
-        style={{
-          padding: 12,
-          borderWidth: 1,
-          borderColor: colors.border,
-          gap: 10,
-        }}
-      >
-        <SectionHeader
-          icon="mail-unread-outline"
-          title="Requests"
-          subtitle={
-            totalRequests
-              ? `${totalRequests} awaiting response`
-              : "No pending requests"
-          }
-        />
-        {requests.length === 0 ? (
-          <EmptyLine label="No incoming requests" />
-        ) : (
-          requests.map((r) => (
-            <FriendRow
-              key={r.id}
-              colors={colors}
-              title={r.friendDisplayName || r.friendEmail || r.friendUid}
-              subtitle="Incoming request"
-              actions={[
-                { label: "Accept", onPress: () => handleRespond(r.friendUid, true) },
-                { label: "Decline", onPress: () => handleRespond(r.friendUid, false) },
-              ]}
-            />
-          ))
-        )}
-      </Card>
-
-      {/* Outgoing */}
-      <Card
-        style={{
-          padding: 12,
-          borderWidth: 1,
-          borderColor: colors.border,
-          gap: 10,
-        }}
-      >
-        <SectionHeader
-          icon="send-outline"
-          title="Sent requests"
-          subtitle={
-            pendingOutgoing.length
-              ? `${pendingOutgoing.length} pending`
-              : "None pending"
-          }
-        />
-        {pendingOutgoing.length === 0 ? (
-          <EmptyLine label="No outgoing requests" />
-        ) : (
-          pendingOutgoing.map((r) => (
-            <FriendRow
-              key={r.id}
-              colors={colors}
-              title={r.friendDisplayName || r.friendEmail || r.friendUid}
-              subtitle="Waiting for approval"
-            />
-          ))
-        )}
-      </Card>
-
-      {/* Friends */}
-      <Card
-        style={{
-          padding: 12,
-          borderWidth: 1,
-          borderColor: colors.border,
-          gap: 10,
-        }}
-      >
-        <SectionHeader
-          icon="people-outline"
-          title="Friends"
-          subtitle={
-            accepted.length
-              ? `${accepted.length} connected`
-              : "Add friends to share progress"
-          }
-        />
-        {accepted.length === 0 ? (
-          <EmptyLine label="No friends yet" />
-        ) : (
-          accepted.map((f) => (
-            <FriendRow
-              key={f.id}
-              colors={colors}
-              title={f.friendDisplayName || f.friendEmail || f.friendUid}
-              subtitle="Can view meals & streaks"
-              actions={[
-                { label: "Ping", onPress: () => handlePing(f.friendUid, f.friendDisplayName) },
-                { label: "Remove", onPress: () => handleRemove(f.friendUid) },
-                {
-                  label: "View meals",
-                  onPress: () =>
-                    router.push(
-                      `/friends/${encodeURIComponent(
-                        f.friendUid
-                      )}?name=${encodeURIComponent(f.friendDisplayName || "")}`
-                    ),
-                },
-                {
-                  label: "View workouts",
-                  onPress: () =>
-                    router.push(
-                      `/friends/${encodeURIComponent(
-                        f.friendUid
-                      )}/workouts?name=${encodeURIComponent(f.friendDisplayName || "")}`
-                    ),
-                },
-              ]}
-            />
-          ))
-        )}
-      </Card>
-
-      <BottomTabSpacer extra={20} />
-    </ScrollView>
-  );
-}
-
-function SectionHeader({
-  icon,
-  title,
-  subtitle,
-}: {
-  icon: any;
-  title: string;
-  subtitle?: string;
-}) {
-  const { colors } = useTheme();
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-      <View
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: 10,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: withAlpha(colors.primary, 0.16),
-          borderWidth: 1,
-          borderColor: withAlpha(colors.primary, 0.35),
-        }}
-      >
-        <Ionicons name={icon} size={18} color={colors.primary} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ color: colors.text, fontWeight: "800", fontSize: 15 }}>
-          {title}
-        </Text>
-        {subtitle ? (
-          <Text style={{ color: colors.muted, fontSize: 13 }}>{subtitle}</Text>
+              <Ionicons
+                name="alert-circle-outline"
+                size={16}
+                color={colors.danger}
+              />
+              <Text style={[styles.bannerText, { color: colors.text }]}>
+                {errorMsg}
+              </Text>
+            </View>
+          </Animated.View>
         ) : null}
       </View>
-    </View>
-  );
-}
 
-function FriendRow({
-  colors,
-  title,
-  subtitle,
-  actions = [],
-}: {
-  colors: any;
-  title: string;
-  subtitle?: string;
-  actions?: { label: string; onPress: () => void }[];
-}) {
-  return (
-    <View
-      style={{
-        padding: 12,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: withAlpha(colors.border, 0.9),
-        backgroundColor: withAlpha(colors.card, 0.96),
-        gap: 10,
-      }}
-    >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-        <View
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 12,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: withAlpha(colors.primary, 0.12),
-            borderWidth: 1,
-            borderColor: withAlpha(colors.primary, 0.3),
-          }}
-        >
-          <Ionicons name="person-circle-outline" size={22} color={colors.primary} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: colors.text, fontWeight: "800" }}>{title}</Text>
-          {subtitle ? (
-            <Text style={{ color: colors.muted, fontSize: 13 }}>{subtitle}</Text>
-          ) : null}
-        </View>
-      </View>
+      {/* List */}
+      <FlatList
+        data={data}
+        keyExtractor={(i) => i.id}
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingTop: 14,
+          paddingBottom: 28,
+        }}
+        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={false}
+            onRefresh={() => {
+              Haptics.selectionAsync();
+              // Firestore onSnapshot refreshes automatically; this is a calm affordance.
+            }}
+            tintColor={colors.muted}
+          />
+        }
+        ListHeaderComponent={
+          isLoading ? (
+            <Animated.View style={[styles.loadingWrap, loadingStyle]}>
+              <View
+                style={[
+                  styles.skeletonCard,
+                  {
+                    backgroundColor: withAlpha(colors.text, 0.06),
+                  },
+                ]}
+              />
+              <View
+                style={[
+                  styles.skeletonCard,
+                  {
+                    backgroundColor: withAlpha(colors.text, 0.05),
+                  },
+                ]}
+              />
+              <View
+                style={[
+                  styles.skeletonCard,
+                  {
+                    backgroundColor: withAlpha(colors.text, 0.04),
+                  },
+                ]}
+              />
+              <View style={{ height: 6 }} />
+            </Animated.View>
+          ) : null
+        }
+        ListEmptyComponent={
+          <View style={{ paddingTop: 34, alignItems: "center" }}>
+            <View
+                style={[
+                  styles.emptyIcon,
+                  {
+                    backgroundColor: withAlpha(colors.text, 0.06),
+                    borderColor: withAlpha(colors.text, 0.12),
+                  },
+                ]}
+              >
+              <Ionicons
+                name={
+                  tab === "friends"
+                    ? "people-outline"
+                    : tab === "requests"
+                    ? "mail-unread-outline"
+                    : "time-outline"
+                }
+                size={18}
+                color={colors.muted}
+              />
+            </View>
 
-      {actions.length ? (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {actions.map((a) => (
-            <Pressable key={a.label} onPress={a.onPress}>
-              {({ pressed }) => (
-                <MotiView
-                  animate={{ scale: pressed ? 0.97 : 1 }}
-                  transition={{ type: "timing", duration: 120 }}
-                  style={{
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderRadius: 10,
-                    borderWidth: 1,
-                    borderColor: withAlpha(colors.primary, 0.4),
-                    backgroundColor: withAlpha(colors.primary, 0.12),
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>
+              {tab === "friends"
+                ? "Your circle starts small"
+                : tab === "requests"
+                ? "No incoming requests"
+                : "No sent requests"}
+            </Text>
+            <Text style={[styles.emptyBody, { color: colors.muted }]}>
+              {tab === "friends"
+                ? "Add a friend by email or UID. You control what you share."
+                : tab === "requests"
+                ? "When someone requests you, it shows up here."
+                : "Requests you’ve sent will appear here until accepted."}
+            </Text>
+
+            {tab === "friends" ? (
+              <Pressable
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setAddOpen(true);
+                }}
+                style={({ pressed }) => [
+                  styles.primaryCta,
+                  {
+                    backgroundColor: withAlpha(
+                      colors.primary || "#6ee7ff",
+                      pressed ? 0.22 : 0.18
+                    ),
+                    borderColor: withAlpha(colors.primary || "#6ee7ff", 0.28),
+                  },
+                ]}
+              >
+                <BlurView
+                  intensity={18}
+                  tint="dark"
+                  style={StyleSheet.absoluteFillObject}
+                />
+                <Ionicons
+                  name="person-add-outline"
+                  size={16}
+                  color={colors.text}
+                />
+                <Text style={[styles.primaryCtaText, { color: colors.text }]}>
+                  Add friend
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        }
+        renderItem={({ item, index }) => {
+          if (tab === "friends") {
+            return (
+              <Animated.View
+                entering={FadeInDown.duration(360).delay(20 + index * 22)}
+              >
+                <FriendRowPremium
+                  name={item.name}
+                  handle={item.handle}
+                  subtitle={item.subtitle}
+                  accentSeed={item.accentSeed}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setSelected(item);
+                    setSheetOpen(true);
                   }}
-                >
-                  <Text style={{ color: colors.primary, fontWeight: "800" }}>
-                    {a.label}
-                  </Text>
-                </MotiView>
-              )}
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
+                  onPing={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    handlePing(item.friendUid);
+                  }}
+                />
+              </Animated.View>
+            );
+          }
+
+          if (tab === "requests") {
+            return (
+              <Animated.View
+                entering={FadeInDown.duration(360).delay(20 + index * 22)}
+              >
+                <RequestRowPremium
+                  name={item.name}
+                  handle={item.handle}
+                  subtitle={item.subtitle}
+                  accentSeed={item.accentSeed}
+                  mode="incoming"
+                  onAccept={() => handleRespond(item.friendUid, true)}
+                  onDecline={() => handleRespond(item.friendUid, false)}
+                  onOpenActions={() => {
+                    Haptics.selectionAsync();
+                    setSelected(item);
+                    setSheetOpen(true);
+                  }}
+                />
+              </Animated.View>
+            );
+          }
+
+          return (
+            <Animated.View
+              entering={FadeInDown.duration(360).delay(20 + index * 22)}
+            >
+              <RequestRowPremium
+                name={item.name}
+                handle={item.handle}
+                subtitle={item.subtitle}
+                accentSeed={item.accentSeed}
+                mode="sent"
+                onCancel={() => handleCancelOutgoing(item.friendUid)}
+                onOpenActions={() => {
+                  Haptics.selectionAsync();
+                  setSelected(item);
+                  setSheetOpen(true);
+                }}
+              />
+            </Animated.View>
+          );
+        }}
+      />
+
+      <BottomTabSpacer />
+
+      {/* Sheets */}
+      <FriendsAddSheet
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        sending={sending}
+        disabled={!user?.uid}
+        onSend={handleSend}
+        privacyNote="Requests are private. No public search directory."
+      />
+
+      <FriendActionsSheet
+        open={sheetOpen}
+        title={selected?.name ?? ""}
+        subtitle={selected?.handle ?? ""}
+        onClose={() => setSheetOpen(false)}
+        actions={actions}
+      />
     </View>
   );
 }
 
-function EmptyLine({ label }: { label: string }) {
-  const { colors } = useTheme();
-  return (
-    <View
-      style={{
-        padding: 12,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: withAlpha(colors.border, 0.8),
-        backgroundColor: withAlpha(colors.card, 0.9),
-      }}
-    >
-      <Text style={{ color: colors.muted }}>{label}</Text>
-    </View>
-  );
-}
-
-function GradientRibbon({
-  side,
-  colors,
-  top = -50,
-  opacity = 0.2,
-}: {
-  side: "left" | "right";
-  colors: readonly [string, string];
-  top?: number;
-  opacity?: number;
-}) {
-  return (
-    <LinearGradient
-      colors={colors}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={{
-        position: "absolute",
-        [side]: -70,
-        top,
-        width: 220,
-        height: 220,
-        borderRadius: 120,
-        opacity,
-        transform: [{ rotate: side === "left" ? "-14deg" : "16deg" }],
-      }}
-    />
-  );
-}
+const styles = StyleSheet.create({
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  title: {
+    fontSize: 30,
+    fontWeight: "900",
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    letterSpacing: -0.1,
+  },
+  headerPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+  },
+  headerPillText: {
+    fontSize: 13,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+  },
+  banner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  bannerText: {
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: "600",
+  },
+  loadingWrap: {
+    marginBottom: 8,
+    gap: 10,
+  },
+  skeletonCard: {
+    height: 72,
+    borderRadius: 18,
+  },
+  emptyIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyTitle: {
+    marginTop: 14,
+    fontSize: 16,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+  },
+  emptyBody: {
+    marginTop: 6,
+    fontSize: 13,
+    textAlign: "center",
+    maxWidth: 320,
+    lineHeight: 18,
+  },
+  primaryCta: {
+    marginTop: 14,
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+  },
+  primaryCtaText: {
+    fontSize: 13,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+  },
+});
