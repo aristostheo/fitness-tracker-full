@@ -17,16 +17,23 @@ export type WorkoutTemplateItem = {
   sets?: number;
   reps?: number;
   weight?: number;
+  weightKg?: number;
   notes?: string;
 };
 
 export type WorkoutTemplate = {
   id: string;
   name: string;
+  title?: string;
+  emoji?: string;
   tags?: string[];
+  tag?: string[] | string;
   items: WorkoutTemplateItem[];
+  exercises?: WorkoutTemplateItem[];
   createdAt?: any;
   updatedAt?: any;
+  lastUsedAt?: any;
+  pinned?: boolean;
 };
 
 export type MealTemplateItem = {
@@ -86,10 +93,16 @@ export function subscribeWorkoutTemplates(
         rows.push({
           id: d.id,
           name: x.name ?? x.title ?? "Template",
+          title: x.title ?? x.name ?? "Template",
+          emoji: x.emoji ?? null,
           tags: x.tags ?? x.tag ?? [],
+          tag: x.tag ?? x.tags ?? [],
           items: x.items ?? x.exercises ?? [],
+          exercises: x.exercises ?? x.items ?? [],
           createdAt: x.createdAt ?? null,
           updatedAt: x.updatedAt ?? null,
+          lastUsedAt: x.lastUsedAt ?? null,
+          pinned: !!x.pinned,
         });
       });
       cb(rows);

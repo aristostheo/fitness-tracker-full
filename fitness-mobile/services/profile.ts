@@ -84,6 +84,21 @@ export type Profile = {
   equipment?: string[];
   workoutPlace?: "home" | "gym";
   injuries?: string[];
+
+  // macro goals engine inputs (persisted)
+  goalIntensity?: number;
+  performanceFocus?: number;
+  proteinFocus?: number;
+  trackingAccurate?: boolean;
+  bodyFatPct?: number;
+  waistCm?: number;
+  macroEngineMode?: "cut" | "maintain" | "lean_bulk" | "bulk";
+  macroEngineSimple?: boolean;
+
+  stepsPerDay?: number;
+  gymSessionsPerWeek?: number;
+  sportSessionsPerWeek?: number;
+  jobActivity?: "sedentary" | "light" | "active";
 };
 
 const ref = (uid: string) => doc(getFirestore() ?? db, "users", uid);

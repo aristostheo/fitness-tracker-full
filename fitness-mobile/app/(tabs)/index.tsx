@@ -27,7 +27,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useTheme } from "@/content/ThemeProvider";
 import { useAuth } from "@/content/AuthContext";
-import ActivityCard from "@/components/activity/ActivityCard";
 
 import {
   subscribeActivityBetween,
@@ -67,6 +66,18 @@ import { TextInput, KeyboardAvoidingView } from "react-native";
 import * as Haptics from "expo-haptics"; // optional
 import { setStepsForDate, addStepsForDate } from "@/services/profile";
 import ActivityLogSheet from "@/components/activity/ActivityLogSheet";
+
+import { useFocusEffect } from "expo-router";
+import BadgeMedallion from "@/components/badges/new/BadgeMedalion";
+import { BADGE_BY_ID, BADGES } from "@/services/badges/registry";
+import { useBadgesLocal } from "@/services/badges/useBadgesLocal";
+
+type IoniconName = keyof typeof Ionicons.glyphMap;
+
+function toIoniconName(icon: any): IoniconName {
+  const key = String(icon || "");
+  return (key in Ionicons.glyphMap ? key : "ribbon") as IoniconName;
+}
 
 /* ───────────────── helpers (from your old page) ───────────────── */
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -201,6 +212,39 @@ export default function HomeScreen() {
   const [editingActivity, setEditingActivity] = useState<CardioEntry | null>(
     null
   );
+  const { badgeUnlocks, featuredBadges, refreshBadgesLocal } =
+    useBadgesLocal(true);
+
+  const unlockedBadgeCount = useMemo(
+    () => Object.keys(badgeUnlocks || {}).length,
+    [badgeUnlocks]
+  );
+
+  const unseenBadgeCount = useMemo(() => {
+    return Object.values(badgeUnlocks || {}).filter(
+      (s) => s && s.seen === false
+    ).length;
+  }, [badgeUnlocks]);
+
+  const featuredBadgeIdsForRow = useMemo(() => {
+    // Prefer featured, and prefer unlocked ones first
+    const featured = (featuredBadges || []).filter((id) => !!BADGE_BY_ID[id]);
+
+    const unlockedFeatured = featured.filter((id) => !!badgeUnlocks?.[id]);
+    const lockedFeatured = featured.filter((id) => !badgeUnlocks?.[id]);
+
+    // Fallback fill: use any unlocked badges if user hasn’t featured 3 yet
+    const unlockedAny = BADGES.map((b) => b.id).filter(
+      (id) => !!badgeUnlocks?.[id]
+    );
+    const fill = unlockedAny.filter((id) => !featured.includes(id));
+
+    const finalIds = [...unlockedFeatured, ...lockedFeatured, ...fill].slice(
+      0,
+      3
+    );
+    return finalIds;
+  }, [featuredBadges, badgeUnlocks]);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -247,6 +291,12 @@ export default function HomeScreen() {
       } catch {}
     };
   }, [user?.uid, user?.email, todayStr]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      refreshBadgesLocal();
+    }, [refreshBadgesLocal])
+  );
 
   /* ───────────────── Derivations (copied from old logic) ───────────────── */
   const kcalGoal =
@@ -302,7 +352,6 @@ export default function HomeScreen() {
       Math.floor(Number(stepsInput.replace(/[^\d]/g, "")) || 0)
     );
 
-    // allow setting to 0 only in "set" mode
     if (stepsMode === "add" && n <= 0) {
       setStepsSheetOpen(false);
       return;
@@ -319,7 +368,6 @@ export default function HomeScreen() {
         await addStepsForDate(user.uid, todayStr, n);
       }
 
-      // 🔥 force-close after confirmed write
       setStepsSheetOpen(false);
 
       try {
@@ -333,11 +381,9 @@ export default function HomeScreen() {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       } catch {}
       alert(e?.message ?? "Failed to save steps.");
-      return; // keep sheet open if you want
-    } finally {
-      setStepsSheetOpen(false);
     }
   }
+
   async function handleCreateActivity(e: CardioEntry) {
     if (!user?.uid) return;
     try {
@@ -486,7 +532,7 @@ export default function HomeScreen() {
       {
         key: "log-meal",
         label: "Log Meal",
-        icon: "restaurant",
+        icon: toIoniconName("restaurant"),
         hint: "Open meal logging",
         onPress: () =>
           router.push(`/(modals)/add-meal?date=${todayStr}` as any),
@@ -495,7 +541,7 @@ export default function HomeScreen() {
       {
         key: "scan",
         label: "Scan",
-        icon: "scan",
+        icon: toIoniconName("scan"),
         hint: "Scan a barcode",
         onPress: () =>
           router.push(`/(modals)/add-meal?date=${todayStr}&tab=scan` as any),
@@ -504,7 +550,7 @@ export default function HomeScreen() {
       {
         key: "steps",
         label: "Add Steps",
-        icon: "walk",
+        icon: toIoniconName("walk"),
         hint: "Manually add today’s steps",
         onPress: () => openStepsSheet("add"),
         color: t.good,
@@ -512,7 +558,7 @@ export default function HomeScreen() {
       {
         key: "water",
         label: "Water",
-        icon: "water",
+        icon: toIoniconName("water"),
         hint: "Log hydration",
         onPress: () => router.push("/(tabs)/nutrition"),
         color: "#4FD1FF",
@@ -520,7 +566,7 @@ export default function HomeScreen() {
       {
         key: "workout",
         label: "Workout",
-        icon: "barbell",
+        icon: toIoniconName("barbell"),
         hint: "Log a workout",
         onPress: () => router.push("/(modals)/quick-workout" as any),
         color: t.good,
@@ -528,7 +574,7 @@ export default function HomeScreen() {
       {
         key: "ai",
         label: "AI Coach",
-        icon: "sparkles",
+        icon: toIoniconName("sparkles"),
         hint: "Get smart suggestions",
         onPress: () => router.push("/(tabs)/nutrition"),
         color: "#FF7CEB",
@@ -556,7 +602,7 @@ export default function HomeScreen() {
           proteinRemaining > 0
             ? `${proteinRemaining}g to goal`
             : "Goal reached",
-        icon: "flash",
+        icon: toIoniconName("flash"),
         actionLabel: "Suggest meals",
         onAction: () => router.push("/(tabs)/nutrition"),
       },
@@ -574,7 +620,7 @@ export default function HomeScreen() {
           caloriesRemaining > 0
             ? `~${caloriesRemaining} kcal left`
             : "At target",
-        icon: "leaf",
+        icon: toIoniconName("leaf"),
         actionLabel: "Get options",
         onAction: () => router.push("/(tabs)/nutrition"),
       },
@@ -587,7 +633,7 @@ export default function HomeScreen() {
             )} kcal in workouts. Keep steps moving for recovery.`
           : "No workout logged yet. A 20–30 min walk or quick session keeps momentum.",
         pill: hasWorkout ? "Workout logged" : "No workout yet",
-        icon: "walk",
+        icon: toIoniconName("walk"),
         actionLabel: "Open activity",
         onAction: () => router.push("/(tabs)/workouts"),
       },
@@ -596,7 +642,7 @@ export default function HomeScreen() {
         title: "Consistency",
         body: `Protein hit rate: ${weeklyProteinHits}/7 · Steps avg: ${stepsAvg.toLocaleString()}/day · Logs: ${mealCount} today.`,
         pill: `${streakDays} day streak`,
-        icon: "trophy",
+        icon: toIoniconName("trophy"),
         actionLabel: "View history",
         onAction: () => router.push("/(tabs)/nutrition"),
       },
@@ -781,6 +827,123 @@ export default function HomeScreen() {
                     Calm progress. One log at a time.
                   </Text>
                 </View>
+                {/* Badges (quiet recognition) */}
+                <Pressable
+                  onPress={() =>
+                    router.push({
+                      pathname: "/(modals)/badges",
+                      params: { source: "home" },
+                    } as any)
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel="Open badges"
+                  accessibilityHint="Shows your unlocked badges and progress"
+                  hitSlop={10}
+                  style={({ pressed }) => ({
+                    opacity: pressed ? 0.92 : 1,
+                    transform: [{ scale: pressed ? 0.995 : 1 }],
+                  })}
+                >
+                  <View
+                    style={{
+                      marginTop: 6,
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      borderRadius: 18,
+                      borderWidth: 1,
+                      borderColor: withAlpha(t.hairline, 1),
+                      backgroundColor: withAlpha(
+                        isDark ? "#FFFFFF" : "#0B1020",
+                        isDark ? 0.06 : 0.04
+                      ),
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                    }}
+                  >
+                    {/* Left: label + count */}
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: t.text,
+                            fontWeight: "900",
+                            fontSize: 14,
+                            letterSpacing: -0.1,
+                          }}
+                          numberOfLines={1}
+                        >
+                          Badges
+                        </Text>
+
+                        {/* tiny “new” dot */}
+                        {unseenBadgeCount > 0 ? (
+                          <View
+                            style={{
+                              width: 7,
+                              height: 7,
+                              borderRadius: 99,
+                              backgroundColor: t.tint,
+                              opacity: 0.95,
+                            }}
+                          />
+                        ) : null}
+                      </View>
+
+                      <Text
+                        style={{
+                          marginTop: 2,
+                          color: t.muted,
+                          fontWeight: "700",
+                          fontSize: 12,
+                        }}
+                        numberOfLines={1}
+                      >
+                        {unlockedBadgeCount} unlocked
+                        {unseenBadgeCount > 0
+                          ? ` • ${unseenBadgeCount} new`
+                          : ""}
+                      </Text>
+                    </View>
+
+                    {/* Right: medallions */}
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      {featuredBadgeIdsForRow.map((id) => {
+                        const def = BADGE_BY_ID[id];
+                        if (!def) return null;
+                        const unlocked = !!badgeUnlocks?.[id];
+                        return (
+                          <BadgeMedallion
+                            key={id}
+                            icon={toIoniconName(def.icon)}
+                            unlocked={unlocked}
+                            accent={def.accent}
+                            size={34}
+                          />
+                        );
+                      })}
+
+                      <Ionicons
+                        name="chevron-forward"
+                        size={16}
+                        color={withAlpha(t.text, isDark ? 0.55 : 0.4)}
+                      />
+                    </View>
+                  </View>
+                </Pressable>
               </View>
             </BlurView>
           </LinearGradient>
@@ -1238,7 +1401,7 @@ export default function HomeScreen() {
                           fontSize: 12,
                         }}
                       >
-                        Tap for workouts →
+                        Tap for activities →
                       </Text>
                     </View>
                   </BlurView>

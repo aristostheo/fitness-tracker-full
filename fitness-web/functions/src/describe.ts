@@ -128,6 +128,42 @@ type ExerciseEstimate = {
   rationale?: string;
 };
 
+// scan meal types
+type ScanConfidence = "high" | "medium" | "low" | "manual";
+
+type ScanMacros = {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  sugar: number;
+  fiber: number;
+  sodiumMg: number;
+  satFat: number;
+};
+
+type ScanPortion = {
+  amount: number; // default 1
+  unit: "g" | "oz" | "cups" | "tbsp" | "piece";
+  multiplier: number; // usually same as amount (your UI expects this)
+};
+
+type ScanFood = {
+  id: string;
+  name: string;
+  confidence: ScanConfidence;
+  portion: ScanPortion;
+  macros: ScanMacros;
+  // ✅ schema requires suggestions always; keep it required in runtime too
+  suggestions: string[];
+};
+
+type ScanMealResponse = {
+  foods: ScanFood[];
+  // ✅ schema requires rationale always; keep it required in runtime too
+  rationale: string;
+};
+
 /* ─────────────────────────── HTTPS endpoint ─────────────────────────── */
 export const describe = onRequest(
   { cors: true, secrets: [OPENAI_SECRET] },
@@ -187,9 +223,17 @@ export const describe = onRequest(
         count?: number; // 3..5
         seed?: string;
         forceNew?: boolean;
+
+        // scan meal fields
+        imageUrl?: string;
+        imageBase64?: string; // can be "data:image/jpeg;base64,...." or raw base64
+        units?: "metric" | "imperial"; // optional hint
       };
 
-      const mode = (body.mode || "").trim();
+      const mode = String(body.mode || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "_");
 
       if (mode === "workout_plan:v1") {
         try {
@@ -634,7 +678,6 @@ export const describe = onRequest(
         }
 
         try {
-          // ✅ cheaper prompt (no few-shots; minimal instructions; small max_tokens)
           const prompt = buildMealPromptV2Cheap({
             text,
             context: body.context ?? {},
@@ -642,10 +685,8 @@ export const describe = onRequest(
           });
 
           const v2 = await callOpenAIForMealV2(prompt);
-
           const payload = withMealV1Mirror(v2);
 
-          // write cache + bump quota (best-effort)
           try {
             await cacheRef.set(
               {
@@ -667,17 +708,73 @@ export const describe = onRequest(
           const msg = String(e?.message ?? e);
           console.error("[meal:v2] failed", msg);
 
-          // ✅ error-proof fallback (always returns a usable macro object)
           const fallback = heuristicMealTotals(text, body.context);
 
-          // bump quota even on error (optional; prevents tight retry loops)
           try {
             await quotaRef.set({ count: qCount + 1 }, { merge: true });
           } catch {}
 
           res.set("Cache-Control", "no-store");
-          // If OpenAI rate-limited, still return 200 with fallback so UX stays smooth
           res.status(200).json(withMealV1Mirror(fallback));
+          return;
+        }
+      }
+
+      // ───────────── scan meal (vision) ─────────────
+      if (mode === "scan_meal:v1") {
+        const imageUrl = String(body.imageUrl || "").trim();
+        let imageBase64 = String(body.imageBase64 || "").trim();
+
+        if (!imageUrl && !imageBase64) {
+          res.set("Cache-Control", "no-store");
+          res.status(400).json({ error: "missing-image" });
+          return;
+        }
+
+        // Normalize raw base64 -> data URL (OpenAI accepts data URLs)
+        if (imageBase64 && !imageBase64.startsWith("data:image/")) {
+          imageBase64 = `data:image/jpeg;base64,${imageBase64}`;
+        }
+
+        // light throttle (avoid spam)
+        {
+          const ok = await enforceMinInterval({
+            uid,
+            namespace: "scanmealv1",
+            minMs: 2500,
+          });
+          if (!ok.allowed) {
+            res.set("Cache-Control", "no-store");
+            res
+              .status(429)
+              .json({ error: "rate-exceeded", retryAfterMs: ok.retryAfterMs });
+            return;
+          }
+        }
+
+        try {
+          const prompt = buildScanMealPromptV1({
+            units: body.units,
+            system: body.system,
+          });
+
+          const out = await callOpenAIForScanMealV1(prompt, {
+            imageUrl: imageUrl || undefined,
+            imageDataUrl: imageBase64 || undefined,
+          });
+
+          res.set("Cache-Control", "no-store");
+          res.status(200).json(out);
+          return;
+        } catch (e: any) {
+          console.error("[scan_meal:v1] failed", e?.message || e);
+          const fallback: ScanMealResponse = {
+            foods: [],
+            rationale:
+              "Scan failed; please retake photo or add items manually.",
+          };
+          res.set("Cache-Control", "no-store");
+          res.status(200).json(fallback);
           return;
         }
       }
@@ -849,6 +946,35 @@ function buildWorkoutPrompt(args: {
   return { system: sys, user };
 }
 
+function buildScanMealPromptV1(args: {
+  units?: "metric" | "imperial";
+  system?: string;
+}) {
+  const sys =
+    args.system ||
+    [
+      "You are a nutrition analyst. Identify foods in the photo and estimate macros.",
+      "Return ONLY strict JSON that matches the schema.",
+      "Rules:",
+      "• Detect 1–8 foods max. Use common names (e.g., 'chicken breast', 'rice').",
+      "• Confidence: high/medium/low. Use low when unsure.",
+      "• For each food, output macros for the estimated portion.",
+      "• Portion must include amount, unit, multiplier. Use unit in [g, oz, cups, tbsp, piece].",
+      "• If you cannot estimate a nutrient, output 0 (never null).",
+      "• Include sauces/oils if visible as separate items (e.g., 'olive oil', 'sauce').",
+      "• suggestions must ALWAYS be an array (use [] if none).",
+      "• rationale must ALWAYS be a string (use '' if none).",
+      "• Keep suggestions short (0–4).",
+    ].join(" ");
+
+  const user = [
+    `Units preference: ${args.units || "metric"}`,
+    "Return JSON only.",
+  ].join("\n");
+
+  return { system: sys, user };
+}
+
 /** Strict v1 (items[]) — preserved for legacy clients */
 function buildMealPromptV1(args: {
   text: string;
@@ -936,7 +1062,6 @@ function buildMealPromptV2Cheap(args: {
       "If amounts unclear, assume common single serving (quantity=1).",
     ].join(" ");
 
-  // Keep context small (avoid huge objects)
   const ctx = stableCtx(args.context);
 
   const user = `Meal: ${String(args.text || "").slice(
@@ -999,7 +1124,6 @@ function buildSuggestionListPrompt(args: {
   return { system: sys, user };
 }
 
-// ⬇️ exercise prompt (kept)
 function buildExerciseDescribePrompt(args: {
   text: string;
   profile?: {
@@ -1123,6 +1247,284 @@ async function callOpenAIForJson(
   }
 }
 
+function extractResponsesText(data: any): string {
+  const out = Array.isArray(data?.output) ? data.output : [];
+  for (const item of out) {
+    if (item?.type !== "message") continue;
+    const content = Array.isArray(item?.content) ? item.content : [];
+    const textPart = content.find((c: any) => c?.type === "output_text");
+    if (textPart?.text) return String(textPart.text);
+    const alt = content.find((c: any) => typeof c?.text === "string");
+    if (alt?.text) return String(alt.text);
+  }
+  if (typeof data?.output_text === "string") return data.output_text;
+  return "";
+}
+
+function looksLikeGsUrl(url: string) {
+  return /^gs:\/\//i.test(url);
+}
+function looksLikeHttpUrl(url: string) {
+  return /^https?:\/\//i.test(url);
+}
+function stripDataUrl(s: string) {
+  const m = s.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/);
+  if (!m) return { mime: "", b64: s };
+  return { mime: m[1], b64: m[2] };
+}
+function detectMimeFromBase64(b64: string): string {
+  const head = b64.slice(0, 20);
+  if (head.startsWith("/9j/")) return "image/jpeg";
+  if (head.startsWith("iVBORw0KGgo")) return "image/png";
+  if (head.startsWith("R0lGOD")) return "image/gif";
+  if (head.startsWith("UklGR")) return "image/webp";
+  return "";
+}
+function isSupportedMime(mime: string) {
+  return (
+    mime === "image/jpeg" ||
+    mime === "image/png" ||
+    mime === "image/gif" ||
+    mime === "image/webp"
+  );
+}
+
+async function callOpenAIForScanMealV1(
+  prompt: { system: string; user: string },
+  img: { imageUrl?: string; imageDataUrl?: string }
+): Promise<ScanMealResponse> {
+  const key = getOpenAIKey();
+
+  // ✅ pick + validate image input BEFORE calling OpenAI
+  const rawUrl = String(img.imageUrl || "").trim();
+  let rawData = String(img.imageDataUrl || "").trim();
+
+  let image_url = "";
+
+  if (rawUrl) {
+    if (looksLikeGsUrl(rawUrl)) {
+      throw new Error(
+        "imageUrl is gs:// (not supported). Send a public https URL or send base64 data URL."
+      );
+    }
+    if (!looksLikeHttpUrl(rawUrl)) {
+      throw new Error("imageUrl must be http(s)://");
+    }
+    image_url = rawUrl;
+  } else if (rawData) {
+    // remove whitespace/newlines that often break base64
+    rawData = rawData.replace(/\s+/g, "");
+
+    const { mime: declaredMime, b64 } = stripDataUrl(rawData);
+    const detectedMime = detectMimeFromBase64(b64);
+    const mime = detectedMime || declaredMime || "image/jpeg";
+
+    if (!isSupportedMime(mime)) {
+      throw new Error(
+        `Unsupported image mime '${mime}'. Use jpeg/png/gif/webp (HEIC not supported).`
+      );
+    }
+
+    // verify decode works + non-trivial size
+    const buf = Buffer.from(b64, "base64");
+    if (!buf || buf.length < 200) {
+      throw new Error("Invalid image base64 (too small or not an image).");
+    }
+
+    image_url = `data:${mime};base64,${b64}`;
+  } else {
+    throw new Error("Missing imageUrl/imageDataUrl.");
+  }
+
+  const rsp = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      temperature: 0.2,
+      max_output_tokens: 650,
+      instructions: prompt.system,
+      input: [
+        {
+          role: "user",
+          content: [
+            { type: "input_text", text: prompt.user },
+            { type: "input_image", image_url }, // ✅ use validated/normalized value
+          ],
+        },
+      ],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "ScanMealResponse",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["foods", "rationale"],
+            properties: {
+              foods: {
+                type: "array",
+                minItems: 0,
+                maxItems: 8,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: [
+                    "id",
+                    "name",
+                    "confidence",
+                    "portion",
+                    "macros",
+                    "suggestions",
+                  ],
+                  properties: {
+                    id: { type: "string" },
+                    name: { type: "string", maxLength: 80 },
+                    confidence: {
+                      type: "string",
+                      enum: ["high", "medium", "low", "manual"],
+                    },
+                    portion: {
+                      type: "object",
+                      additionalProperties: false,
+                      required: ["amount", "unit", "multiplier"],
+                      properties: {
+                        amount: { type: "number", minimum: 0.1 },
+                        unit: {
+                          type: "string",
+                          enum: ["g", "oz", "cups", "tbsp", "piece"],
+                        },
+                        multiplier: { type: "number", minimum: 0.1 },
+                      },
+                    },
+                    macros: {
+                      type: "object",
+                      additionalProperties: false,
+                      required: [
+                        "calories",
+                        "protein",
+                        "carbs",
+                        "fat",
+                        "sugar",
+                        "fiber",
+                        "sodiumMg",
+                        "satFat",
+                      ],
+                      properties: {
+                        calories: { type: "number", minimum: 0 },
+                        protein: { type: "number", minimum: 0 },
+                        carbs: { type: "number", minimum: 0 },
+                        fat: { type: "number", minimum: 0 },
+                        sugar: { type: "number", minimum: 0 },
+                        fiber: { type: "number", minimum: 0 },
+                        sodiumMg: { type: "number", minimum: 0 },
+                        satFat: { type: "number", minimum: 0 },
+                      },
+                    },
+                    suggestions: {
+                      type: "array",
+                      minItems: 0,
+                      maxItems: 4,
+                      items: { type: "string", maxLength: 40 },
+                    },
+                  },
+                },
+              },
+              rationale: { type: "string", maxLength: 220 },
+            },
+          },
+        },
+      },
+    }),
+  });
+
+  if (!rsp.ok) {
+    const t = await safeText(rsp);
+    console.error(
+      "[openai scan_meal:v1] http_error",
+      rsp.status,
+      t.slice(0, 600)
+    );
+    throw new Error(`OpenAI ${rsp.status}: ${t}`);
+  }
+
+  const data: any = await rsp.json();
+  const text = extractResponsesText(data) || "{}";
+
+  // Defensive parse + normalization
+  let parsed: any = {};
+  try {
+    parsed = JSON.parse(typeof text === "string" ? text : String(text));
+  } catch {
+    return { foods: [], rationale: "Could not parse scan response." };
+  }
+
+  const foodsRaw = Array.isArray(parsed?.foods) ? parsed.foods : [];
+  const foods: ScanFood[] = foodsRaw.slice(0, 8).map((f: any, idx: number) => {
+    const id = String(f?.id || `food_${idx}_${Date.now()}`);
+
+    const unit =
+      f?.portion?.unit === "g" ||
+      f?.portion?.unit === "oz" ||
+      f?.portion?.unit === "cups" ||
+      f?.portion?.unit === "tbsp" ||
+      f?.portion?.unit === "piece"
+        ? f.portion.unit
+        : "piece";
+
+    const amount = num(f?.portion?.amount, 1);
+    const multiplier = num(f?.portion?.multiplier, amount || 1);
+
+    const conf =
+      f?.confidence === "high" ||
+      f?.confidence === "medium" ||
+      f?.confidence === "low" ||
+      f?.confidence === "manual"
+        ? (f.confidence as ScanConfidence)
+        : "medium";
+
+    const m = f?.macros || {};
+    const macros: ScanMacros = {
+      calories: num(m.calories, 0),
+      protein: num(m.protein, 0),
+      carbs: num(m.carbs, 0),
+      fat: num(m.fat, 0),
+      sugar: num(m.sugar, 0),
+      fiber: num(m.fiber, 0),
+      sodiumMg: num(m.sodiumMg, 0),
+      satFat: num(m.satFat, 0),
+    };
+
+    // ✅ suggestions MUST always be array for schema compliance
+    const suggestions = Array.isArray(f?.suggestions)
+      ? f.suggestions.map((s: any) => String(s).slice(0, 40)).slice(0, 4)
+      : [];
+
+    return {
+      id,
+      name: String(f?.name || "Food").slice(0, 80),
+      confidence: conf,
+      portion: {
+        amount: Math.max(0.1, amount),
+        unit,
+        multiplier: Math.max(0.1, multiplier),
+      },
+      macros,
+      suggestions,
+    };
+  });
+
+  // ✅ rationale MUST always be string for schema compliance
+  const rationale =
+    typeof parsed?.rationale === "string" ? parsed.rationale : "";
+
+  return { foods, rationale };
+}
+
 /** OpenAI caller for meal_suggest:v1 — exact n (3..5) + optional seed */
 async function callOpenAIForMealIdeas(
   prompt: { system: string; user: string },
@@ -1220,7 +1622,6 @@ async function callOpenAIForMealIdeas(
   }
 }
 
-/** ✅ meal:v2 caller — adds max_tokens + 429-friendly errors */
 async function callOpenAIForMealV2(prompt: {
   system: string;
   user: string;
@@ -1230,7 +1631,7 @@ async function callOpenAIForMealV2(prompt: {
   const body = {
     model: "gpt-4o-mini",
     temperature: 0.2,
-    max_tokens: 220, // ✅ keep cheap (schema is small)
+    max_tokens: 220,
     messages: [
       { role: "system", content: prompt.system },
       { role: "user", content: prompt.user },
@@ -1281,7 +1682,6 @@ async function callOpenAIForMealV2(prompt: {
 
   if (!rsp.ok) {
     const t = await safeText(rsp);
-    // keep a short log to debug rate limits
     console.error("[openai meal:v2] http_error", rsp.status, t.slice(0, 400));
     throw new Error(`OpenAI ${rsp.status}: ${t}`);
   }
@@ -1293,7 +1693,6 @@ async function callOpenAIForMealV2(prompt: {
     data?.choices?.[0]?.text ??
     "{}";
 
-  // strict schema *should* make this safe, but still defensive:
   const out: MealV2 = {
     name: "Meal",
     quantity: 1,
@@ -1329,7 +1728,6 @@ async function callOpenAIForMealV2(prompt: {
   }
 }
 
-/** OpenAI caller for suggest:v1 — returns ARRAY of cards */
 async function callOpenAIForSuggestionList(
   prompt: { system: string; user: string },
   seed?: string
@@ -1403,7 +1801,6 @@ async function callOpenAIForSuggestionList(
   return [];
 }
 
-/** (kept for backward compat in case you still need a single card) */
 async function callOpenAIForSuggestion(prompt: {
   system: string;
   user: string;
@@ -1479,7 +1876,6 @@ async function callOpenAIForSuggestion(prompt: {
   throw new Error("bad-suggestion-json");
 }
 
-// ⬇️ exercise estimate caller (kept)
 async function callOpenAIForExerciseEstimate(prompt: {
   system: string;
   user: string;
@@ -1619,11 +2015,9 @@ function hashKey(payload: any) {
     .slice(0, 16);
 }
 
-/** keep context small + stable */
 function stableCtx(context: any) {
   if (!context || typeof context !== "object") return {};
   const out: any = {};
-  // only allow a few small fields if you pass them from client
   const allow = ["meal", "notes", "unit", "qty", "brand", "restaurant"];
   for (const k of allow) {
     if (context[k] == null) continue;
@@ -1633,7 +2027,6 @@ function stableCtx(context: any) {
   return out;
 }
 
-/** per-user min-interval throttle */
 async function enforceMinInterval(args: {
   uid: string;
   namespace: string;
@@ -1651,12 +2044,10 @@ async function enforceMinInterval(args: {
     await ref.set({ ts: now }, { merge: true });
     return { allowed: true };
   } catch {
-    // if firestore is unavailable, don't block the request
     return { allowed: true };
   }
 }
 
-/** make meal:v2 response backward-compatible with your items[] mirror */
 function withMealV1Mirror(v2: MealV2) {
   const v1Mirror: MealResultV1 = {
     items: [
@@ -1678,11 +2069,9 @@ function withMealV1Mirror(v2: MealV2) {
   return { ...v2, ...v1Mirror };
 }
 
-/** ultra-simple heuristic meal fallback so UX never breaks */
 function heuristicMealTotals(text: string, _context?: any): MealV2 {
   const t = String(text || "").toLowerCase();
 
-  // default: generic "meal"
   let name = "Meal";
   let calories = 550;
   let protein = 35;
@@ -1691,14 +2080,12 @@ function heuristicMealTotals(text: string, _context?: any): MealV2 {
   let sugar = 10;
   let fiber = 6;
 
-  // protein anchors
   if (/\b(chicken|turkey|beef|steak|salmon|tuna|shrimp|eggs?)\b/.test(t)) {
     protein += 15;
     calories += 150;
     fat += 5;
     name = "Protein-based meal";
   }
-  // carb-heavy signals
   if (
     /\b(rice|pasta|bread|bagel|wrap|tortilla|fries|potato|sweet potato)\b/.test(
       t
@@ -1708,14 +2095,12 @@ function heuristicMealTotals(text: string, _context?: any): MealV2 {
     calories += 160;
     name = name === "Meal" ? "Carb + protein meal" : name;
   }
-  // sauces / oils / cheese
   if (/\b(cheese|mayo|aioli|cream|butter|oil|sauce|dressing)\b/.test(t)) {
     fat += 10;
     calories += 120;
     sugar += /\b(bbq|teriyaki|sweet)\b/.test(t) ? 8 : 0;
     name = name === "Meal" ? "Meal with sauce" : name;
   }
-  // salad / veggies
   if (/\b(salad|veggies|vegetable|greens)\b/.test(t)) {
     fiber += 4;
     calories -= 80;
@@ -1723,12 +2108,8 @@ function heuristicMealTotals(text: string, _context?: any): MealV2 {
     name = name === "Meal" ? "Salad-style meal" : name;
   }
 
-  // clamp non-negative + round
   const clamp0 = (n: number) => Math.max(0, Math.round(n));
-
-  // calories should roughly match macros (very rough sanity)
   const macroCals = protein * 4 + carbs * 4 + fat * 9;
-  // pull calories toward macro-derived calories
   calories = Math.round((calories + macroCals) / 2);
 
   return {
@@ -1744,7 +2125,6 @@ function heuristicMealTotals(text: string, _context?: any): MealV2 {
   };
 }
 
-/** Tiny, conservative heuristic as last-ditch fallback (exercise) */
 function heuristicCaloriesEstimate(
   text: string,
   p?: { weight_kg?: number }
@@ -1817,7 +2197,6 @@ function profileEnergyShape(src: any | null) {
   return { sex, age, height_cm: heightCm, weight_kg: weightKg, fitnessLevel };
 }
 
-/** Server-side rule fallback (single) */
 function ruleBasedSuggestion(args: {
   isRestDay: boolean;
   calories: number;
@@ -1885,7 +2264,6 @@ function ruleBasedSuggestion(args: {
   };
 }
 
-/** Rule fallback ARRAY (3–5 diverse cards) */
 function ruleBasedSuggestions(args: {
   count: number;
   context: {

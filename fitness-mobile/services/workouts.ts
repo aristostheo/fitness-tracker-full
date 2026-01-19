@@ -28,6 +28,10 @@ export type Workout = {
   weight?: number; // stored as KG
   notes?: string;
   createdAt?: Timestamp | number | null;
+  sessionId?: string;
+  sessionTitle?: string;
+  sessionStartedAt?: number;
+  setCreatedAt?: number;
 };
 
 const col = (uid: string) =>
@@ -76,6 +80,16 @@ export function subscribeWorkouts(
           weight: Number(x.weight ?? 0), // kg
           notes: x.notes || "",
           createdAt: x.createdAt ?? null,
+          sessionId: x.sessionId ?? null,
+          sessionTitle: x.sessionTitle ?? null,
+          sessionStartedAt:
+            typeof x.sessionStartedAt === "number"
+              ? x.sessionStartedAt
+              : x.sessionStartedAt?.toMillis?.() ?? null,
+          setCreatedAt:
+            typeof x.setCreatedAt === "number"
+              ? x.setCreatedAt
+              : x.setCreatedAt?.toMillis?.() ?? null,
         });
       });
 
@@ -126,6 +140,16 @@ export async function addWorkout(uid: string, entry: Omit<Workout, "id">) {
     notes: entry.notes ?? "",
     date: iso, // ✅ canonical string
     dateMs, // ✅ numeric for future range queries
+    sessionId: entry.sessionId ?? null,
+    sessionTitle: entry.sessionTitle ?? null,
+    sessionStartedAt:
+      typeof entry.sessionStartedAt === "number"
+        ? entry.sessionStartedAt
+        : entry.sessionStartedAt?.toMillis?.() ?? null,
+    setCreatedAt:
+      typeof entry.setCreatedAt === "number"
+        ? entry.setCreatedAt
+        : entry.setCreatedAt?.toMillis?.() ?? null,
     createdAt: serverTimestamp(),
   });
   return ref;

@@ -1,3 +1,4 @@
+// app/(tabs)/nutrition.tsx
 import React, { useMemo, useRef, useState } from "react";
 import {
   View,
@@ -21,6 +22,7 @@ import {
   deleteFood,
   type FoodEntry,
 } from "@/services/nutrition";
+import { bumpUse, upsertFoodToCatalog } from "@/services/foodCatalog";
 import { useNutritionHistory, isoAddDays } from "@/hooks/useNutritionHistory";
 
 import { NutritionSummaryCard } from "@/components/nutrition/uiNew/NutritionSummaryCard";
@@ -28,8 +30,17 @@ import { HydrationCard } from "@/components/nutrition/uiNew/HydrationCard";
 import { DayStrip } from "@/components/nutrition/uiNew/DayStrip";
 import { SectionHeader } from "@/components/nutrition/uiNew/SectionHeader";
 import { MealCard, MealKey } from "@/components/nutrition/uiNew/MealCard";
-import { EditFoodSheet } from "@/components/nutrition/uiNew/EditFoodSheet";
+import EditFoodSheet from "@/components/nutrition/uiNew/EditFoodSheet";
 import { NutritionCalendarStrip } from "@/components/nutrition/uiNew/NutritionCalendarStrip";
+
+// ✅ NEW: subscribe to backend profile goals
+import { doc, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+
+import { reconcileBadgesFromSnapshot } from "@/services/badges/reconcile";
+import { useBadgesLocal } from "@/services/badges/useBadgesLocal";
+import { DailyGoalsCard } from "@/components/nutrition/uiNew/DailyGoalsCard";
+import { HydrationCardPremium } from "@/components/nutrition/uiNew/HydrationCardPremium";
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -70,6 +81,7 @@ const softShadow = {
 };
 
 const MEALS: MealKey[] = ["breakfast", "lunch", "dinner", "snacks"];
+const PENDING_BATCH_KEY = "@pending_add_meal_batch_v1";
 
 function sumMacros(items: FoodEntry[]) {
   return items.reduce(
@@ -142,6 +154,12 @@ function CalendarLaunchButton({
   );
 }
 
+// ✅ NEW: safe number helper for profile fields
+function toNum(v: any, fallback: number) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 export default function NutritionScreen() {
   const { colors, isDark } = useTheme() as any;
   const { user } = useAuth();
@@ -150,9 +168,34 @@ export default function NutritionScreen() {
   const [dateISO, setDateISO] = useState<string>(isoToday());
   const [historyMode, setHistoryMode] = useState<"week" | "month">("week");
 
+  const { refreshBadgesLocal } = useBadgesLocal(true);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      refreshBadgesLocal();
+    }, [refreshBadgesLocal])
+  );
+
+  const [goals, setGoals] = useState(() => ({
+    calories: 2400,
+    protein: 170,
+    carbs: 260,
+    fat: 80,
+
+    // optional secondary targets (tweak anytime)
+    fiber: 30,
+    sugarTotal: 60,
+    sugarAdded: 30,
+    satFat: 20,
+    sodiumMg: 2300,
+    cholesterolMg: 300,
+
+    // hydration (optional)
+    waterMl: 2400,
+  }));
   // ---------- Hydration (per-day, stored locally) ----------
   const [waterMl, setWaterMl] = useState(0);
-  const waterGoalMl = 2400;
+  const waterGoalMl = goals.waterMl ?? 2400;
   const waterKey = useMemo(() => `@water:${dateISO}`, [dateISO]);
 
   React.useEffect(() => {
@@ -194,11 +237,72 @@ export default function NutritionScreen() {
     historyDaysCount
   );
 
-  // ---------- Goals (keep your placeholder) ----------
-  const goals = useMemo(
-    () => ({ calories: 2400, protein: 170, carbs: 260, fat: 80 }),
-    []
-  );
+  React.useEffect(() => {
+    if (!user?.uid) return;
+
+    // your app already uses users/{uid} in other places
+    const ref = doc(db as any, "users", user.uid);
+
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        const p = (snap.exists() ? (snap.data() as any) : {}) || {};
+
+        // Support multiple field names (so you don't have to refactor backend today)
+        const calories =
+          p.dailyCaloriesTarget ??
+          p.calorieGoal ??
+          p.caloriesGoal ??
+          p.kcalGoal;
+        const protein =
+          p.dailyProteinTarget ?? p.proteinGoal ?? p.protein_target ?? p.pGoal;
+        const carbs =
+          p.carbGoal ?? p.carbsGoal ?? p.dailyCarbsTarget ?? p.cGoal;
+        const fat = p.fatGoal ?? p.fatsGoal ?? p.dailyFatTarget ?? p.fGoal;
+
+        setGoals({
+          calories: toNum(calories, 2400),
+          protein: toNum(protein, 170),
+          carbs: toNum(carbs, 260),
+          fat: toNum(fat, 80),
+
+          fiber: toNum(p.fiberGoal ?? p.dailyFiberTarget ?? p.fiber_target, 30),
+          sugarTotal: toNum(
+            p.sugarTotalGoal ?? p.dailySugarTarget ?? p.sugarGoal,
+            60
+          ),
+          sugarAdded: toNum(
+            p.sugarAddedGoal ?? p.addedSugarGoal ?? p.addedSugar_target,
+            30
+          ),
+          satFat: toNum(
+            p.satFatGoal ?? p.saturatedFatGoal ?? p.sat_fat_goal,
+            20
+          ),
+          sodiumMg: toNum(
+            p.sodiumGoalMg ?? p.sodiumMgGoal ?? p.dailySodiumMgTarget,
+            2300
+          ),
+          cholesterolMg: toNum(
+            p.cholesterolGoalMg ??
+              p.cholesterolMgGoal ??
+              p.dailyCholesterolMgTarget,
+            300
+          ),
+
+          waterMl: toNum(
+            p.waterGoalMl ?? p.dailyWaterTargetMl ?? p.hydrationGoalMl,
+            2400
+          ),
+        });
+      },
+      () => {
+        // if snapshot errors, keep last known goals (no UI break)
+      }
+    );
+
+    return () => unsub();
+  }, [user?.uid]);
 
   const dayTotals = useMemo(() => {
     if (totals && typeof totals === "object") {
@@ -207,8 +311,23 @@ export default function NutritionScreen() {
         protein: Number((totals as any).protein || 0),
         carbs: Number((totals as any).carbs || 0),
         fat: Number((totals as any).fat || 0),
-        sugar: Number((totals as any).sugar || 0),
+
         fiber: Number((totals as any).fiber || 0),
+
+        // If you only track one sugar value today, treat it as total sugar for now.
+        sugarTotal: Number(
+          (totals as any).sugarTotal ?? (totals as any).sugar ?? 0
+        ),
+        sugarAdded: Number((totals as any).sugarAdded ?? 0),
+
+        satFat: Number((totals as any).satFat ?? 0),
+        sodiumMg: Number(
+          (totals as any).sodiumMg ?? (totals as any).sodium ?? 0
+        ),
+        cholesterolMg: Number((totals as any).cholesterolMg ?? 0),
+
+        // you already track waterMl locally
+        waterMl,
       };
     }
     const all = [
@@ -217,8 +336,69 @@ export default function NutritionScreen() {
       ...(mealsMap?.dinner || []),
       ...(mealsMap?.snacks || []),
     ] as FoodEntry[];
-    return sumMacros(all);
-  }, [totals, mealsMap]);
+    const base = sumMacros(all);
+    return {
+      ...base,
+      sugarTotal: (base as any).sugar ?? 0,
+      sugarAdded: 0,
+      satFat: 0,
+      sodiumMg: 0,
+      cholesterolMg: 0,
+      waterMl,
+    };
+  }, [totals, mealsMap, waterMl]);
+
+  React.useEffect(() => {
+    if (!user?.uid) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        await reconcileBadgesFromSnapshot({
+          // ✅ use whatever your BadgeStatsSnapshot expects; these names are common
+          dateISO,
+          calories: dayTotals.calories,
+          protein: dayTotals.protein,
+          carbs: dayTotals.carbs,
+          fat: dayTotals.fat,
+          sugar: (dayTotals as any).sugarTotal ?? 0,
+          fiber: dayTotals.fiber,
+          waterMl,
+
+          goalCalories: goals.calories,
+          goalProtein: goals.protein,
+          goalCarbs: goals.carbs,
+          goalFat: goals.fat,
+
+          // optional: helps badge rules like "logged X foods"
+          foodsLogged: foods?.length ?? 0,
+        } as any);
+
+        // ✅ pull updated unlocks/progress into app state consumers
+        refreshBadgesLocal();
+      } catch {
+        // non-critical
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [
+    user?.uid,
+    dateISO,
+    waterMl,
+    foods?.length,
+    goals.calories,
+    goals.protein,
+    goals.carbs,
+    goals.fat,
+    dayTotals.calories,
+    dayTotals.protein,
+    dayTotals.carbs,
+    dayTotals.fat,
+    (dayTotals as any).sugarTotal,
+    (dayTotals as any).sugarAdded,
+    dayTotals.fiber,
+    refreshBadgesLocal,
+  ]);
 
   // ---------- Add-meal modal result (keeps your contract) ----------
   useFocusEffect(
@@ -249,6 +429,27 @@ export default function NutritionScreen() {
             fat: Number(data.fat || 0) as FoodEntry["fat"],
             ...(data.sugar != null ? { sugar: Number(data.sugar) as any } : {}),
             ...(data.fiber != null ? { fiber: Number(data.fiber) as any } : {}),
+            ...(data.addedSugar != null
+              ? { addedSugar: Number(data.addedSugar) as any }
+              : {}),
+            ...(data.satFat != null
+              ? { satFat: Number(data.satFat) as any }
+              : {}),
+            ...(data.sodium != null
+              ? { sodium: Number(data.sodium) as any }
+              : {}),
+            ...(data.wholeFoodRatio != null
+              ? { wholeFoodRatio: Number(data.wholeFoodRatio) as any }
+              : {}),
+            ...(data.veggieFruitServings != null
+              ? { veggieFruitServings: Number(data.veggieFruitServings) as any }
+              : {}),
+            ...(data.unsatFatRatio != null
+              ? { unsatFatRatio: Number(data.unsatFatRatio) as any }
+              : {}),
+            ...(data.alcoholCalories != null
+              ? { alcoholCalories: Number(data.alcoholCalories) as any }
+              : {}),
           };
 
           const tempId = `temp-${Date.now()}`;
@@ -260,6 +461,13 @@ export default function NutritionScreen() {
             setFoods((prev: FoodEntry[]) =>
               prev.map((f) => (f.id === tempId ? { ...f, id: ref.id } : f))
             );
+            try {
+              const catalogRef = await upsertFoodToCatalog({
+                ...base,
+                submitterUid: user.uid,
+              });
+              await bumpUse(catalogRef.id);
+            } catch {}
           } catch {
             setFoods((prev: FoodEntry[]) =>
               prev.filter((f) => f.id !== tempId)
@@ -272,6 +480,119 @@ export default function NutritionScreen() {
         cancelled = true;
       };
     }, [user?.uid, dateISO, setFoods])
+  );
+
+  // ---------- Scan-meal batch handoff (@pending_add_meal_batch_v1) ----------
+  useFocusEffect(
+    React.useCallback(() => {
+      let cancelled = false;
+
+      (async () => {
+        if (!user?.uid) return;
+
+        const raw = await AsyncStorage.getItem(PENDING_BATCH_KEY);
+        if (!raw) return;
+
+        // ✅ remove first so we don't double-log if anything crashes mid-way
+        await AsyncStorage.removeItem(PENDING_BATCH_KEY);
+        if (cancelled) return;
+
+        try {
+          const data = JSON.parse(raw) as {
+            date: string;
+            meal: MealKey;
+            items: any[];
+          };
+
+          const items = Array.isArray(data?.items) ? data.items : [];
+          if (!items.length) return;
+
+          // Optional: if the scan was logged for a different day, jump there so user sees it instantly
+          if (data?.date && data.date !== dateISO) {
+            setDateISO(data.date);
+          }
+
+          // Add each scanned food
+          for (const it of items) {
+            const base: Omit<FoodEntry, "id"> = {
+              date: (it.date || data.date || dateISO) as FoodEntry["date"],
+              meal: (it.meal || data.meal || "breakfast") as FoodEntry["meal"],
+              name: String(it.name || "").trim(),
+              unit: (it.unit || "serving") as FoodEntry["unit"],
+              qty: Number(it.qty || 1) as FoodEntry["qty"],
+              calories: Number(it.calories || 0) as FoodEntry["calories"],
+              protein: Number(it.protein || 0) as FoodEntry["protein"],
+              carbs: Number(it.carbs || 0) as FoodEntry["carbs"],
+              fat: Number(it.fat || 0) as FoodEntry["fat"],
+
+              // ✅ include advanced fields your app supports
+              ...(it.sugar != null ? { sugar: Number(it.sugar) as any } : {}),
+              ...(it.fiber != null ? { fiber: Number(it.fiber) as any } : {}),
+              ...(it.sodium != null
+                ? { sodium: Number(it.sodium) as any }
+                : {}),
+              ...(it.satFat != null
+                ? { satFat: Number(it.satFat) as any }
+                : {}),
+              ...(it.addedSugar != null
+                ? { addedSugar: Number(it.addedSugar) as any }
+                : {}),
+              ...(it.wholeFoodRatio != null
+                ? { wholeFoodRatio: Number(it.wholeFoodRatio) as any }
+                : {}),
+              ...(it.veggieFruitServings != null
+                ? {
+                    veggieFruitServings: Number(it.veggieFruitServings) as any,
+                  }
+                : {}),
+              ...(it.unsatFatRatio != null
+                ? { unsatFatRatio: Number(it.unsatFatRatio) as any }
+                : {}),
+              ...(it.alcoholCalories != null
+                ? { alcoholCalories: Number(it.alcoholCalories) as any }
+                : {}),
+
+              // optional meta
+              ...(it.source != null
+                ? { source: String(it.source) as any }
+                : {}),
+            };
+
+            // optimistic UI
+            const tempId = `temp-scan-${Date.now()}-${Math.random()
+              .toString(16)
+              .slice(2)}`;
+            const tempItem: FoodEntry = { ...(base as any), id: tempId };
+            setFoods((prev: FoodEntry[]) => [tempItem, ...prev]);
+
+            try {
+              const ref = await addFood(user.uid, { ...base });
+              setFoods((prev: FoodEntry[]) =>
+                prev.map((f) => (f.id === tempId ? { ...f, id: ref.id } : f))
+              );
+              try {
+                const catalogRef = await upsertFoodToCatalog({
+                  ...base,
+                  submitterUid: user.uid,
+                });
+                await bumpUse(catalogRef.id);
+              } catch {}
+            } catch {
+              // rollback optimistic insert
+              setFoods((prev: FoodEntry[]) =>
+                prev.filter((f) => f.id !== tempId)
+              );
+            }
+          }
+        } catch (e) {
+          // if corrupted payload, don't block future logs
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [user?.uid, dateISO, setFoods, setDateISO])
   );
 
   function openAdd(meal: MealKey) {
@@ -364,7 +685,7 @@ export default function NutritionScreen() {
         <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
       )}
 
-      {/* Sticky mini date bar (calm, supportive, always reachable) */}
+      {/* Sticky mini date bar */}
       <Animated.View
         pointerEvents="box-none"
         style={{
@@ -493,7 +814,7 @@ export default function NutritionScreen() {
           paddingTop: Platform.OS === "ios" ? 12 : 8,
         }}
       >
-        {/* HERO (calm gradient wash) */}
+        {/* HERO */}
         <Animated.View style={{ transform: [{ translateY: headerLift }] }}>
           <View style={{ paddingTop: Platform.OS === "ios" ? 54 : 18 }}>
             <View style={{ paddingHorizontal: 16 }}>
@@ -535,7 +856,7 @@ export default function NutritionScreen() {
                 isDark={isDark}
                 days={historyDays}
                 activeISO={dateISO}
-                goals={goals}
+                goals={{ calories: goals.calories }}
                 mode={historyMode}
                 onPressDay={(d) => setDateISO(d)}
                 onToggleMode={() =>
@@ -552,12 +873,21 @@ export default function NutritionScreen() {
             </View>
 
             <View style={{ paddingHorizontal: 16, marginTop: 14 }}>
-              <NutritionSummaryCard
+              {/* <NutritionSummaryCard
+                colors={colors}
+                isDark={isDark}
+                goals={goals} // ✅ now from backend
+                totals={dayTotals}
+                onPressLog={() => openAdd("snacks")}
+              /> */}
+              <DailyGoalsCard
                 colors={colors}
                 isDark={isDark}
                 goals={goals}
-                totals={dayTotals}
+                totals={dayTotals as any}
                 onPressLog={() => openAdd("snacks")}
+                forecast={{ enabled: true }}
+                reduceMotion={false /* wire your setting if you have it */}
               />
             </View>
           </View>
@@ -569,7 +899,7 @@ export default function NutritionScreen() {
               subtitle="Quick add, no friction."
               colors={colors}
             />
-            <HydrationCard
+            {/* <HydrationCard
               colors={colors}
               isDark={isDark}
               currentMl={waterMl}
@@ -577,6 +907,16 @@ export default function NutritionScreen() {
               onAdd={(ml) => addWater(ml)}
               onClear={clearWater}
               style={{ marginTop: 10, ...softShadow }}
+            /> */}
+            <HydrationCardPremium
+              colors={colors}
+              isDark={isDark}
+              currentMl={waterMl}
+              goalMl={waterGoalMl}
+              onAdd={(ml) => addWater(ml)}
+              onClear={clearWater}
+              style={{ marginTop: 10, ...softShadow }}
+              unit="ml" // or "oz" if you want display-only
             />
           </View>
         </Animated.View>
@@ -635,7 +975,7 @@ export default function NutritionScreen() {
         </View>
       </Animated.ScrollView>
 
-      {/* Floating “Log food” (calm pill) */}
+      {/* Floating “Log food” */}
       <View
         pointerEvents="box-none"
         style={{
@@ -693,14 +1033,14 @@ export default function NutritionScreen() {
       {/* Edit Sheet */}
       <EditFoodSheet
         open={editOpen}
-        colors={colors}
-        isDark={isDark}
         item={editItem}
         onClose={() => {
           setEditOpen(false);
           setEditItem(null);
         }}
-        onSave={(patch) => saveEdit(patch)}
+        onSave={(patch) => {
+          void saveEdit(patch as any);
+        }}
       />
     </View>
   );

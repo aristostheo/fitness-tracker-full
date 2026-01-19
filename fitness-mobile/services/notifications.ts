@@ -33,6 +33,7 @@ export type AppNotification = {
   data?: Record<string, any> | null;
   readAt?: any;
   createdAt?: any;
+  createdAtMs?: number;
 };
 
 const col = (uid: string) =>
@@ -42,6 +43,7 @@ export async function addNotification(
   uid: string,
   payload: Omit<AppNotification, "id" | "readAt" | "createdAt">
 ) {
+  const createdAtMs = Date.now();
   const ref = await addDoc(col(uid), {
     type: payload.type,
     title: payload.title,
@@ -49,6 +51,7 @@ export async function addNotification(
     data: payload.data ?? null,
     readAt: null,
     createdAt: serverTimestamp(),
+    createdAtMs,
   });
   return ref;
 }
@@ -87,6 +90,7 @@ export function subscribeNotifications(
           data: x.data ?? null,
           readAt: x.readAt ?? null,
           createdAt: x.createdAt ?? null,
+          createdAtMs: x.createdAtMs ?? null,
         });
       });
       cb(rows);
@@ -257,8 +261,12 @@ async function hasRecentSimilar(
     if (found) return;
     const x = d.data() as any;
     const createdMs =
-      x.createdAt && typeof x.createdAt.toMillis === "function"
+      typeof x.createdAtMs === "number"
+        ? x.createdAtMs
+        : x.createdAt && typeof x.createdAt.toMillis === "function"
         ? x.createdAt.toMillis()
+        : typeof x.createdAt === "number"
+        ? x.createdAt
         : 0;
 
     if (!createdMs) return;
@@ -276,12 +284,17 @@ export async function notifyPingSafe(
 ) {
   const cooldownMs = (opts.cooldownHours ?? 6) * 60 * 60 * 1000;
 
-  const exists = await hasRecentSimilar(
-    toUid,
-    "ping",
-    (n) => n?.data?.fromUid === from.uid,
-    cooldownMs
-  );
+  let exists = false;
+  try {
+    exists = await hasRecentSimilar(
+      toUid,
+      "ping",
+      (n) => n?.data?.fromUid === from.uid,
+      cooldownMs
+    );
+  } catch {
+    exists = false;
+  }
 
   if (exists) return; // silently ignore to feel respectful
 
@@ -295,12 +308,17 @@ export async function notifyFriendRequestSafe(
 ) {
   const cooldownMs = (opts.cooldownHours ?? 24) * 60 * 60 * 1000;
 
-  const exists = await hasRecentSimilar(
-    toUid,
-    "friend:request",
-    (n) => n?.data?.fromUid === from.uid,
-    cooldownMs
-  );
+  let exists = false;
+  try {
+    exists = await hasRecentSimilar(
+      toUid,
+      "friend:request",
+      (n) => n?.data?.fromUid === from.uid,
+      cooldownMs
+    );
+  } catch {
+    exists = false;
+  }
 
   if (exists) return;
 
