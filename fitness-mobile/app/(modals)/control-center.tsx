@@ -49,6 +49,7 @@ import { useAuth } from "@/content/AuthContext";
 import { useEntitlements } from "@/content/useEntitlements";
 
 import { withAlpha } from "@/lib/color";
+import ThemeChooserCard from "@/components/settings/ThemeChooserCard";
 
 import {
   useSettingBool,
@@ -1073,7 +1074,16 @@ export default function ControlCenterModal() {
                 ]);
               }}
             />
+
             <Divider />
+
+            {/* ✅ Theme Chooser (premium) */}
+            <View style={{ paddingHorizontal: 14, paddingVertical: 12 }}>
+              <ThemeChooserCard />
+            </View>
+
+            <Divider />
+
             <Row
               icon="sparkles-outline"
               title="Low Power UI"
@@ -1093,6 +1103,7 @@ export default function ControlCenterModal() {
                 />
               }
             />
+
             <Divider />
             <Row
               icon="walk-outline"

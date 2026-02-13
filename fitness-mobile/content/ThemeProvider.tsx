@@ -10,8 +10,9 @@ import { Appearance, ColorSchemeName } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type ThemeMode = "system" | "light" | "dark";
+export type GradientPairingStyle = "subtle" | "balanced" | "bold";
 
-type ThemeColors = {
+export type ThemeColors = {
   // existing (keep)
   background: string;
   text: string;
@@ -30,8 +31,8 @@ type ThemeColors = {
   primary: string;
   accent: string;
 
-  // NEW (aliases + semantic tokens for sleek UI)
-  bg: string; // alias of background
+  // NEW semantic tokens
+  bg: string;
   surface: string;
   surface2: string;
   glass: string;
@@ -43,13 +44,41 @@ type ThemeColors = {
   ringTrack: string;
 };
 
+type ThemeAccents = {
+  light: {
+    primary?: string;
+    accent?: string;
+    gradientStyle?: GradientPairingStyle;
+  };
+  dark: {
+    primary?: string;
+    accent?: string;
+    gradientStyle?: GradientPairingStyle;
+  };
+};
+
 type ThemeContextShape = {
   colors: ThemeColors;
   isDark: boolean;
   modeSetting: ThemeMode;
   setModeSetting: (m: ThemeMode) => void;
+
+  // existing API (kept): sets BOTH light+dark
   setAccents: (primary?: string, accent?: string) => void;
   resetAccents: () => void;
+
+  // new API
+  themeAccents: ThemeAccents;
+  setAccentsFor: (
+    target: "light" | "dark" | "both",
+    primary?: string,
+    accent?: string
+  ) => void;
+  setGradientStyleFor: (
+    target: "light" | "dark" | "both",
+    style?: GradientPairingStyle
+  ) => void;
+  resetAccentsFor: (target: "light" | "dark" | "both") => void;
 };
 
 const ThemeContext = createContext<ThemeContextShape | null>(null);
@@ -63,17 +92,33 @@ export function useTheme() {
 // defaults if user hasn't customized
 const DEFAULT_PRIMARY = "#6366F1"; // indigo
 const DEFAULT_ACCENT = "#8B5CF6"; // violet
+const DEFAULT_STYLE: GradientPairingStyle = "balanced";
 
 const STORAGE_KEYS = {
   MODE: "@theme:mode",
+
+  // legacy keys (keep reading for migration)
   PRIMARY: "@theme:primary",
   ACCENT: "@theme:accent",
+
+  // per-mode keys (new)
+  LIGHT_PRIMARY: "@theme:light:primary",
+  LIGHT_ACCENT: "@theme:light:accent",
+  DARK_PRIMARY: "@theme:dark:primary",
+  DARK_ACCENT: "@theme:dark:accent",
+
+  LIGHT_STYLE: "@theme:light:gradientStyle",
+  DARK_STYLE: "@theme:dark:gradientStyle",
 };
+
+function isStyle(x: any): x is GradientPairingStyle {
+  return x === "subtle" || x === "balanced" || x === "bold";
+}
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [modeSetting, setModeSetting] = useState<ThemeMode>("system");
 
-  // ✅ IMPORTANT: keep system scheme in state and subscribe to changes
+  // system scheme tracking
   const [systemScheme, setSystemScheme] = useState<ColorSchemeName>(
     Appearance.getColorScheme()
   );
@@ -83,7 +128,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setSystemScheme(colorScheme);
     });
     return () => {
-      // RN compatibility: newer returns { remove }, older returns unsubscribe function
+      // RN compatibility
       // @ts-ignore
       if (typeof sub?.remove === "function") sub.remove();
       // @ts-ignore
@@ -93,25 +138,75 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const isSystemDark = systemScheme === "dark";
 
-  const [accentPrimary, setAccentPrimary] = useState<string | undefined>(
-    undefined
-  );
-  const [accentAccent, setAccentAccent] = useState<string | undefined>(
-    undefined
-  );
+  const [themeAccents, setThemeAccentsState] = useState<ThemeAccents>({
+    light: {
+      primary: undefined,
+      accent: undefined,
+      gradientStyle: DEFAULT_STYLE,
+    },
+    dark: {
+      primary: undefined,
+      accent: undefined,
+      gradientStyle: DEFAULT_STYLE,
+    },
+  });
 
-  // hydrate once
+  // hydrate once (with legacy migration)
   useEffect(() => {
     (async () => {
       try {
-        const [m, p, a] = await Promise.all([
-          AsyncStorage.getItem(STORAGE_KEYS.MODE),
-          AsyncStorage.getItem(STORAGE_KEYS.PRIMARY),
-          AsyncStorage.getItem(STORAGE_KEYS.ACCENT),
-        ]);
+        const [m, legacyP, legacyA, lp, la, dp, da, ls, ds] = await Promise.all(
+          [
+            AsyncStorage.getItem(STORAGE_KEYS.MODE),
+            AsyncStorage.getItem(STORAGE_KEYS.PRIMARY),
+            AsyncStorage.getItem(STORAGE_KEYS.ACCENT),
+            AsyncStorage.getItem(STORAGE_KEYS.LIGHT_PRIMARY),
+            AsyncStorage.getItem(STORAGE_KEYS.LIGHT_ACCENT),
+            AsyncStorage.getItem(STORAGE_KEYS.DARK_PRIMARY),
+            AsyncStorage.getItem(STORAGE_KEYS.DARK_ACCENT),
+            AsyncStorage.getItem(STORAGE_KEYS.LIGHT_STYLE),
+            AsyncStorage.getItem(STORAGE_KEYS.DARK_STYLE),
+          ]
+        );
+
         if (m === "system" || m === "light" || m === "dark") setModeSetting(m);
-        if (p) setAccentPrimary(p);
-        if (a) setAccentAccent(a);
+
+        // If new per-mode exists, use it. Else migrate from legacy (apply to both).
+        const migratedPrimary = legacyP ?? undefined;
+        const migratedAccent = legacyA ?? undefined;
+
+        const next: ThemeAccents = {
+          light: {
+            primary: lp ?? migratedPrimary,
+            accent: la ?? migratedAccent,
+            gradientStyle: isStyle(ls) ? ls : DEFAULT_STYLE,
+          },
+          dark: {
+            primary: dp ?? migratedPrimary,
+            accent: da ?? migratedAccent,
+            gradientStyle: isStyle(ds) ? ds : DEFAULT_STYLE,
+          },
+        };
+
+        setThemeAccentsState(next);
+
+        // one-time migration persistence (non-destructive)
+        if (!lp && migratedPrimary)
+          await AsyncStorage.setItem(
+            STORAGE_KEYS.LIGHT_PRIMARY,
+            migratedPrimary
+          );
+        if (!la && migratedAccent)
+          await AsyncStorage.setItem(STORAGE_KEYS.LIGHT_ACCENT, migratedAccent);
+        if (!dp && migratedPrimary)
+          await AsyncStorage.setItem(
+            STORAGE_KEYS.DARK_PRIMARY,
+            migratedPrimary
+          );
+        if (!da && migratedAccent)
+          await AsyncStorage.setItem(STORAGE_KEYS.DARK_ACCENT, migratedAccent);
+
+        // Optional: keep legacy keys in sync for older screens (write active values later on save)
       } catch {}
     })();
   }, []);
@@ -123,26 +218,113 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   };
 
-  const setAccents = (primary?: string, accent?: string) => {
-    setAccentPrimary(primary);
-    setAccentAccent(accent);
-    (async () => {
-      try {
-        if (primary) await AsyncStorage.setItem(STORAGE_KEYS.PRIMARY, primary);
-        else await AsyncStorage.removeItem(STORAGE_KEYS.PRIMARY);
-        if (accent) await AsyncStorage.setItem(STORAGE_KEYS.ACCENT, accent);
-        else await AsyncStorage.removeItem(STORAGE_KEYS.ACCENT);
-      } catch {}
-    })();
+  const setAccentsFor: ThemeContextShape["setAccentsFor"] = (
+    target,
+    primary,
+    accent
+  ) => {
+    setThemeAccentsState((prev) => {
+      const next: ThemeAccents = {
+        ...prev,
+        light: { ...prev.light },
+        dark: { ...prev.dark },
+      };
+      const apply = (t: "light" | "dark") => {
+        next[t].primary = primary;
+        next[t].accent = accent;
+      };
+      if (target === "both") {
+        apply("light");
+        apply("dark");
+      } else apply(target);
+
+      (async () => {
+        try {
+          const tasks: Promise<any>[] = [];
+          const write = async (key: string, value?: string) => {
+            if (value) return AsyncStorage.setItem(key, value);
+            return AsyncStorage.removeItem(key);
+          };
+
+          if (target === "light" || target === "both") {
+            tasks.push(write(STORAGE_KEYS.LIGHT_PRIMARY, primary));
+            tasks.push(write(STORAGE_KEYS.LIGHT_ACCENT, accent));
+          }
+          if (target === "dark" || target === "both") {
+            tasks.push(write(STORAGE_KEYS.DARK_PRIMARY, primary));
+            tasks.push(write(STORAGE_KEYS.DARK_ACCENT, accent));
+          }
+
+          // Keep legacy keys synced to "both" when applying both (helps old screens)
+          if (target === "both") {
+            tasks.push(write(STORAGE_KEYS.PRIMARY, primary));
+            tasks.push(write(STORAGE_KEYS.ACCENT, accent));
+          }
+
+          await Promise.all(tasks);
+        } catch {}
+      })();
+
+      return next;
+    });
   };
 
-  const resetAccents = () => setAccents(undefined, undefined);
+  const setGradientStyleFor: ThemeContextShape["setGradientStyleFor"] = (
+    target,
+    style
+  ) => {
+    setThemeAccentsState((prev) => {
+      const next: ThemeAccents = {
+        ...prev,
+        light: { ...prev.light },
+        dark: { ...prev.dark },
+      };
+      const apply = (t: "light" | "dark") => {
+        next[t].gradientStyle = style ?? DEFAULT_STYLE;
+      };
+      if (target === "both") {
+        apply("light");
+        apply("dark");
+      } else apply(target);
+
+      (async () => {
+        try {
+          const write = async (key: string, value?: string) => {
+            if (value) return AsyncStorage.setItem(key, value);
+            return AsyncStorage.removeItem(key);
+          };
+          const tasks: Promise<any>[] = [];
+          if (target === "light" || target === "both")
+            tasks.push(write(STORAGE_KEYS.LIGHT_STYLE, style));
+          if (target === "dark" || target === "both")
+            tasks.push(write(STORAGE_KEYS.DARK_STYLE, style));
+          await Promise.all(tasks);
+        } catch {}
+      })();
+
+      return next;
+    });
+  };
+
+  const resetAccentsFor: ThemeContextShape["resetAccentsFor"] = (target) => {
+    setAccentsFor(target, undefined, undefined);
+    // styles reset separately if you want:
+    setGradientStyleFor(target, DEFAULT_STYLE);
+  };
+
+  // existing API: sets BOTH
+  const setAccents: ThemeContextShape["setAccents"] = (primary, accent) =>
+    setAccentsFor("both", primary, accent);
+  const resetAccents: ThemeContextShape["resetAccents"] = () =>
+    resetAccentsFor("both");
 
   const isDark =
     modeSetting === "system" ? isSystemDark : modeSetting === "dark";
 
-  const primary = accentPrimary ?? DEFAULT_PRIMARY;
-  const accent = accentAccent ?? DEFAULT_ACCENT;
+  const activeAccents = isDark ? themeAccents.dark : themeAccents.light;
+
+  const primary = activeAccents.primary ?? DEFAULT_PRIMARY;
+  const accent = activeAccents.accent ?? DEFAULT_ACCENT;
 
   const colors: ThemeColors = useMemo(() => {
     if (isDark) {
@@ -220,8 +402,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     isDark,
     modeSetting,
     setModeSetting: setModePersist,
+
     setAccents,
     resetAccents,
+
+    themeAccents,
+    setAccentsFor,
+    setGradientStyleFor,
+    resetAccentsFor,
   };
 
   return (

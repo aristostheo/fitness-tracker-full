@@ -54,7 +54,7 @@ import GoalSummaryCard from "@/components/profile/cards/GoalSummaryCard";
 import MacroMethodExplainer from "@/components/profile/cards/MacroMethodExplainer";
 import MealTimingHintCard from "@/components/profile/cards/MealTimingHintCard";
 
-import StickySaveBar from "@/components/profile/StickySaveBar";
+// import StickySaveBar from "@/components/profile/StickySaveBar";
 
 /* ✅ GLOSSY UI */
 import { GlassSurface } from "@/components/profile/uiNew/GlassSurface";
@@ -526,12 +526,12 @@ export default function ProfileScreen() {
         <BottomTabSpacer extra={16} />
       </ScrollView>
 
-      <StickySaveBar
+      {/* <StickySaveBar
         saving={saving}
         status={saveStatus}
         dirty={dirty}
         onSave={onSave}
-      />
+      /> */}
     </KeyboardAvoidingView>
   );
 }

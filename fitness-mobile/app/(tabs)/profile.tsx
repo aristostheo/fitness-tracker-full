@@ -41,22 +41,18 @@ import { kgToLb, lbToKg } from "@/utils/units";
 import ThemeToggle from "@/components/ThemeToggle";
 
 import { PremiumProfileHeader } from "@/components/profile/premium/PremiumProfileHeader";
-import { GoalsCard } from "@/components/profile/premium/GoalsCard";
 import { MetricsCard } from "@/components/profile/premium/MetricsCard";
 import { LongTermProgressCard } from "@/components/profile/premium/TrendsCard";
 import { BodyTwinEvolveCard } from "@/components/profile/premium/BodyTwinEvolveCard";
 import { BadgesPreviewCard } from "@/components/profile/premium/BadgesPreviewReviewCard";
 import { FriendsPreviewCard } from "@/components/profile/premium/FriendsPreviewCard";
-import { QuickActionsRow } from "@/components/profile/premium/QuickActionsRow";
 import { GlassCard } from "@/components/profile/premium/GlassCard";
 import { EmptyState } from "@/components/profile/premium/EmptyState";
 import { withAlpha } from "@/components/profile/premium/ui";
 import MacroGoalsEngineCard from "@/components/profile/premium/MacroGoalsEngineCard";
 
 import { AppearanceCard } from "@/components/profile/premium/AppearenceCard";
-import { MealSchedulePremiumCard } from "@/components/profile/premium/MealSchedulePremiumCard";
 import { MacroMethodCard } from "@/components/profile/premium/MacroMethodCard";
-import { GoalInsightsCard } from "@/components/profile/premium/GoalInsightsCard";
 import { loadUnlocksLocal, loadFeaturedLocal } from "@/services/badges/store";
 import type { UnlockMap } from "@/services/badges/types";
 import {

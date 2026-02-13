@@ -164,6 +164,37 @@ type ScanMealResponse = {
   rationale: string;
 };
 
+// ───────────── Macro Completion (Finish the Day) ─────────────
+type MacroCompletionPrefs = {
+  restrictions?: string[];
+  allergies?: string[];
+  dislikes?: string[];
+  likes?: string[];
+  moreOf?: string[];
+  avoidLimit?: string[];
+  notes?: string;
+};
+
+type MacroCompletionSuggestion = {
+  id: string;
+  label: string; // "1 meal + 1 snack"
+  foods: string[]; // meal ideas only (no recipes)
+  macros: { calories: number; protein: number; carbs: number; fat: number };
+  tags: string[]; // "high_protein", "higher_fiber", "lower_added_sugar", ...
+  notes?: string;
+};
+
+type MacroCompletionResponse = {
+  v: 1;
+  date: string;
+  remaining: { calories: number; protein: number; carbs: number; fat: number };
+  preferencesUsed?: MacroCompletionPrefs;
+  quotaUsed?: number;
+  quotaLimit?: number;
+  suggestions: MacroCompletionSuggestion[];
+  rationale: string;
+};
+
 /* ─────────────────────────── HTTPS endpoint ─────────────────────────── */
 export const describe = onRequest(
   { cors: true, secrets: [OPENAI_SECRET] },
@@ -218,11 +249,17 @@ export const describe = onRequest(
 
         system?: string;
         regenToken?: string | number;
+        nonce?: string | number;
 
         // suggest:v1 / meal_suggest:v1 control
         count?: number; // 3..5
         seed?: string;
         forceNew?: boolean;
+
+        // macro_completion:v1 fields
+        dietPreferences?: any;
+        lockedSuggestionIds?: string[];
+        swapIndex?: number | null;
 
         // scan meal fields
         imageUrl?: string;
@@ -605,6 +642,297 @@ export const describe = onRequest(
           return;
         }
       }
+      // ───────────── MACRO COMPLETION (Finish the Day) ─────────────
+      if (mode === "macro_completion:v1") {
+        const date = (body.date || new Date().toISOString().slice(0, 10)).slice(
+          0,
+          10
+        );
+
+        const goals = body?.goals || {};
+        const totals = body?.totals || {};
+
+        const remaining = {
+          calories: Math.max(
+            0,
+            Math.round(num(goals?.calories, 2200) - num(totals?.calories, 0))
+          ),
+          protein: Math.max(
+            0,
+            Math.round(num(goals?.protein, 120) - num(totals?.protein, 0))
+          ),
+          carbs: Math.max(
+            0,
+            Math.round(num(goals?.carbs, 220) - num(totals?.carbs, 0))
+          ),
+          fat: Math.max(
+            0,
+            Math.round(num(goals?.fat, 75) - num(totals?.fat, 0))
+          ),
+        };
+
+        const nRaw = Number(body.count ?? 3);
+        const count = Math.max(
+          2,
+          Math.min(4, Number.isFinite(nRaw) ? nRaw : 3)
+        );
+
+        const prefs: MacroCompletionPrefs | null = body?.dietPreferences
+          ? {
+              restrictions: Array.isArray(body.dietPreferences?.restrictions)
+                ? body.dietPreferences.restrictions
+                : [],
+              allergies: Array.isArray(body.dietPreferences?.allergies)
+                ? body.dietPreferences.allergies
+                : [],
+              dislikes: Array.isArray(body.dietPreferences?.dislikes)
+                ? body.dietPreferences.dislikes
+                : [],
+              likes: Array.isArray(body.dietPreferences?.likes)
+                ? body.dietPreferences.likes
+                : [],
+              moreOf: Array.isArray(body.dietPreferences?.moreOf)
+                ? body.dietPreferences.moreOf
+                : [],
+              avoidLimit: Array.isArray(body.dietPreferences?.avoidLimit)
+                ? body.dietPreferences.avoidLimit
+                : [],
+              notes:
+                typeof body.dietPreferences?.notes === "string"
+                  ? body.dietPreferences.notes.slice(0, 220)
+                  : "",
+            }
+          : null;
+
+        const locked = Array.isArray(body.lockedSuggestionIds)
+          ? body.lockedSuggestionIds
+              .map((x: any) => String(x).slice(0, 32))
+              .slice(0, 6)
+          : [];
+
+        const swapIndex =
+          typeof body.swapIndex === "number" && Number.isFinite(body.swapIndex)
+            ? Math.max(0, Math.min(3, Math.floor(body.swapIndex)))
+            : null;
+
+        const regenToken = String(
+          body.nonce || body.regenToken || body.seed || ""
+        ).slice(0, 64);
+
+        // Cache key (bucket remaining + prefs hash)
+        const key = hashKey({
+          v: 1,
+          date,
+          r: {
+            k: bucket(remaining.calories, [200, 500, 900]),
+            p: bucket(remaining.protein, [20, 40, 70]),
+            c: bucket(remaining.carbs, [30, 80, 140]),
+            f: bucket(remaining.fat, [10, 25, 45]),
+          },
+          p: prefs
+            ? hashKey({
+                a: prefs.allergies,
+                r: prefs.restrictions,
+                l: prefs.likes,
+                d: prefs.dislikes,
+                m: prefs.moreOf,
+                av: prefs.avoidLimit,
+              })
+            : "no-prefs",
+          n: count,
+        });
+
+        const dayId = new Date().toISOString().slice(0, 10);
+        const cacheRef = db
+          .collection("aiMacroCompletion")
+          .doc(uid)
+          .collection("days")
+          .doc(`${date}_${key}`);
+
+        // Quota counter (per day)
+        const quotaRef = db
+          .collection("aiQuota")
+          .doc(`${uid}_${dayId}_macro_completion`);
+        let qCount = 0;
+        try {
+          const qSnap = await quotaRef.get();
+          qCount = (qSnap.exists ? qSnap.data()?.count || 0 : 0) as number;
+        } catch {}
+        const qLimit = uid === "fcM9kLgkV0gDljvq74CScLLqdqO2" ? Infinity : 3;
+
+        const forceNew = !!body.forceNew;
+        if (!forceNew && swapIndex == null) {
+          try {
+            const snap = await cacheRef.get();
+            if (snap.exists) {
+              const cached = snap.data() as any;
+              // remove non-schema fields we store in Firestore
+              const { createdAt, key: _k, ...clean } = cached;
+
+              res.set("Cache-Control", "no-store");
+              res.status(200).json({
+                ...clean,
+                quotaUsed: qCount,
+                quotaLimit: qLimit,
+              });
+              return;
+            }
+          } catch (e: any) {
+            console.warn("[macro_completion] cache read error", e);
+          }
+        }
+
+        // Quota guard (new AI calls only)
+        if (qLimit !== Infinity && qCount >= qLimit) {
+          res.set("Cache-Control", "no-store");
+          res.status(429).json({
+            error: "macro_completion_quota",
+            message: "Daily macro completion limit reached.",
+            limit: qLimit,
+          });
+          return;
+        }
+
+        try {
+          const prompt = buildMacroCompletionPrompt({
+            date,
+            remaining,
+            goals: {
+              calories: num(goals?.calories, 2200),
+              protein: num(goals?.protein, 120),
+              carbs: num(goals?.carbs, 220),
+              fat: num(goals?.fat, 75),
+            },
+            totals: {
+              calories: num(totals?.calories, 0),
+              protein: num(totals?.protein, 0),
+              carbs: num(totals?.carbs, 0),
+              fat: num(totals?.fat, 0),
+            },
+            prefs,
+            count,
+            lockedSuggestionIds: locked,
+            swapIndex,
+            regenToken,
+            system: body.system,
+          });
+
+          const seed = forceNew
+            ? ""
+            : String(body.seed || body.regenToken || Date.now());
+          const out = await callOpenAIForMacroCompletion(prompt, {
+            count,
+            seed: seed || undefined,
+            temperature: forceNew ? 0.9 : 0.55,
+          });
+          console.log("[macro_completion] AI response", {
+            uid,
+            date,
+            count,
+            forceNew,
+            swapIndex,
+            regenToken,
+          });
+          (out as any).v = 1;
+          (out as any).date = date;
+          (out as any).remaining = remaining;
+          (out as any).preferencesUsed = prefs || undefined;
+
+          // If swapIndex is provided, merge: keep locked + swap one slot
+          let finalOut = out;
+          if (swapIndex != null && !forceNew) {
+            try {
+              const snap = await cacheRef.get();
+              if (snap.exists) {
+                const prevRaw = snap.data() as any;
+                const { createdAt, key: _k, ...prev } = prevRaw as any;
+                const prevSug = Array.isArray(prev?.suggestions)
+                  ? prev.suggestions
+                  : [];
+
+                const lockedSet = new Set(locked);
+                const keep = prevSug.filter((s) =>
+                  lockedSet.has(String(s?.id))
+                );
+
+                const candidate =
+                  (out?.suggestions || []).find(
+                    (s) => !lockedSet.has(String(s?.id))
+                  ) || (out?.suggestions || [])[0];
+
+                const merged = prevSug.slice(0);
+                if (candidate && merged[swapIndex])
+                  merged[swapIndex] = candidate;
+
+                // Ensure locked ones still present
+                for (const kSug of keep) {
+                  if (!merged.some((x) => String(x?.id) === String(kSug?.id)))
+                    merged.push(kSug);
+                }
+
+                finalOut = {
+                  ...prev,
+                  suggestions: merged.slice(0, count),
+                  rationale: out?.rationale || prev?.rationale || "",
+                };
+              }
+            } catch {}
+          }
+          (finalOut as any).quotaUsed = qCount + 1;
+          (finalOut as any).quotaLimit = qLimit;
+
+          try {
+            await cacheRef.set(
+              {
+                ...finalOut,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                key,
+              },
+              { merge: true }
+            );
+            await quotaRef.set({ count: qCount + 1 }, { merge: true });
+          } catch (e: any) {
+            console.warn("[macro_completion] cache/quota write error", e);
+          }
+
+          res.set("Cache-Control", "no-store");
+          res.status(200).json(finalOut);
+          return;
+        } catch (e: any) {
+          console.error("[macro_completion] OpenAI failed", e?.message || e);
+
+          const fallback: MacroCompletionResponse = {
+            v: 1,
+            date,
+            remaining,
+            preferencesUsed: prefs || undefined,
+            suggestions: [
+              {
+                id: "fb1",
+                label: "1 meal + 1 snack",
+                foods: ["Chicken wrap", "Greek yogurt + berries"],
+                macros: {
+                  calories: Math.min(remaining.calories || 620, 720),
+                  protein: Math.min(remaining.protein || 55, 65),
+                  carbs: 68,
+                  fat: 14,
+                },
+                tags: ["high_protein", "quick"],
+                notes: "Swap sauces if you’re limiting added sugar.",
+              },
+            ].slice(0, count),
+            rationale: "Model unavailable; served safe defaults.",
+          };
+
+          try {
+            await quotaRef.set({ count: qCount + 1 }, { merge: true });
+          } catch {}
+
+          res.set("Cache-Control", "no-store");
+          res.status(200).json(fallback);
+          return;
+        }
+      }
 
       // ───────────── v2 meal (flat totals) ─────────────
       if (mode === "meal:v2") {
@@ -941,6 +1269,52 @@ function buildWorkoutPrompt(args: {
     `Recent (last 12): ${JSON.stringify(recentCompressed)}`,
     args.regenToken ? `Regenerate token: ${args.regenToken}` : "",
     "Output JSON only.",
+  ].join("\n");
+
+  return { system: sys, user };
+}
+
+function buildMacroCompletionPrompt(args: {
+  date: string;
+  remaining: { calories: number; protein: number; carbs: number; fat: number };
+  goals: { calories: number; protein: number; carbs: number; fat: number };
+  totals: { calories: number; protein: number; carbs: number; fat: number };
+  prefs: MacroCompletionPrefs | null;
+  count: number;
+  lockedSuggestionIds: string[];
+  swapIndex: number | null;
+  regenToken?: string;
+  system?: string;
+}) {
+  const sys =
+    args.system ||
+    [
+      "You are a calm, precise nutrition planner.",
+      "Goal: suggest 2–4 meal/snack ideas to finish TODAY based on remaining macros.",
+      "IMPORTANT:",
+      "• Return ONLY strict JSON matching the schema (no extra text).",
+      "• Suggest foods/meal ideas, NOT recipes.",
+      "• Respect dietary restrictions + allergies strictly (never include allergens).",
+      "• Avoid dislikes; bias toward likes.",
+      "• Align to 'moreOf' and 'avoidLimit' goals (e.g., more protein/fiber, less added sugar).",
+      "• Keep tone neutral and not pushy.",
+      "Output diversity: avoid repeating the same core protein/carb across suggestions.",
+      "If a regenerate token is provided, change the options meaningfully.",
+    ].join(" ");
+
+  const user = [
+    `Date: ${args.date}`,
+    `Remaining macros (kcal/P/C/F): ${args.remaining.calories}/${args.remaining.protein}/${args.remaining.carbs}/${args.remaining.fat}`,
+    `Totals so far (kcal/P/C/F): ${args.totals.calories}/${args.totals.protein}/${args.totals.carbs}/${args.totals.fat}`,
+    `Daily targets (kcal/P/C/F): ${args.goals.calories}/${args.goals.protein}/${args.goals.carbs}/${args.goals.fat}`,
+    `Preferences: ${JSON.stringify(args.prefs || {})}`,
+    `Count: ${args.count}`,
+    `Locked suggestion IDs: ${JSON.stringify(args.lockedSuggestionIds || [])}`,
+    `Swap index (optional): ${
+      args.swapIndex == null ? "none" : String(args.swapIndex)
+    }`,
+    args.regenToken ? `Regenerate token: ${args.regenToken}` : "",
+    "Return JSON only.",
   ].join("\n");
 
   return { system: sys, user };
@@ -1523,6 +1897,153 @@ async function callOpenAIForScanMealV1(
     typeof parsed?.rationale === "string" ? parsed.rationale : "";
 
   return { foods, rationale };
+}
+
+async function callOpenAIForMacroCompletion(
+  prompt: { system: string; user: string },
+  opts: { count: number; seed?: string; temperature?: number }
+): Promise<MacroCompletionResponse> {
+  const key = getOpenAIKey();
+  const n = Math.max(2, Math.min(4, Number(opts.count) || 3));
+
+  const body: any = {
+    model: "gpt-4o-mini",
+    temperature:
+      typeof opts.temperature === "number" ? opts.temperature : 0.55,
+    presence_penalty: 0.25,
+    frequency_penalty: 0.15,
+    messages: [
+      { role: "system", content: prompt.system },
+      { role: "user", content: prompt.user },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "MacroCompletionResponse",
+        strict: true,
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          required: ["v", "date", "remaining", "suggestions", "rationale"],
+          properties: {
+            v: { type: "number", enum: [1] },
+            date: { type: "string", maxLength: 10 },
+            remaining: {
+              type: "object",
+              additionalProperties: false,
+              required: ["calories", "protein", "carbs", "fat"],
+              properties: {
+                calories: { type: "number", minimum: 0 },
+                protein: { type: "number", minimum: 0 },
+                carbs: { type: "number", minimum: 0 },
+                fat: { type: "number", minimum: 0 },
+              },
+            },
+            preferencesUsed: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                restrictions: {
+                  type: "array",
+                  items: { type: "string", maxLength: 32 },
+                },
+                allergies: {
+                  type: "array",
+                  items: { type: "string", maxLength: 32 },
+                },
+                dislikes: {
+                  type: "array",
+                  items: { type: "string", maxLength: 40 },
+                },
+                likes: {
+                  type: "array",
+                  items: { type: "string", maxLength: 40 },
+                },
+                moreOf: {
+                  type: "array",
+                  items: { type: "string", maxLength: 32 },
+                },
+                avoidLimit: {
+                  type: "array",
+                  items: { type: "string", maxLength: 32 },
+                },
+                notes: { type: "string", maxLength: 220 },
+              },
+            },
+            suggestions: {
+              type: "array",
+              minItems: n,
+              maxItems: n,
+              items: {
+                type: "object",
+                additionalProperties: false,
+                required: ["id", "label", "foods", "macros", "tags"],
+                properties: {
+                  id: { type: "string", maxLength: 32 },
+                  label: { type: "string", maxLength: 28 },
+                  foods: {
+                    type: "array",
+                    minItems: 1,
+                    maxItems: 4,
+                    items: { type: "string", maxLength: 60 },
+                  },
+                  macros: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["calories", "protein", "carbs", "fat"],
+                    properties: {
+                      calories: { type: "number", minimum: 0 },
+                      protein: { type: "number", minimum: 0 },
+                      carbs: { type: "number", minimum: 0 },
+                      fat: { type: "number", minimum: 0 },
+                    },
+                  },
+                  tags: {
+                    type: "array",
+                    minItems: 0,
+                    maxItems: 6,
+                    items: { type: "string", maxLength: 28 },
+                  },
+                  notes: { type: "string", maxLength: 160 },
+                },
+              },
+            },
+            rationale: { type: "string", maxLength: 220 },
+          },
+        },
+      },
+    },
+  };
+
+  if (opts.seed) body.seed = stringToSeed(String(opts.seed));
+
+  const rsp = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!rsp.ok) {
+    const t = await safeText(rsp);
+    console.error(
+      "[openai macro_completion] HTTP",
+      rsp.status,
+      t.slice(0, 600)
+    );
+    throw new Error(`OpenAI ${rsp.status}: ${t}`);
+  }
+
+  const data: any = await rsp.json();
+  const text =
+    data?.choices?.[0]?.message?.content ??
+    data?.choices?.[0]?.message ??
+    data?.choices?.[0]?.text ??
+    "{}";
+
+  return JSON.parse(typeof text === "string" ? text : String(text));
 }
 
 /** OpenAI caller for meal_suggest:v1 — exact n (3..5) + optional seed */

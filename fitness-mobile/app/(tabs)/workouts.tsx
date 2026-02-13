@@ -26,7 +26,6 @@ import {
   Modal,
   ActivityIndicator,
   Alert as RNAlert,
-  ListRenderItem,
 } from "react-native";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
@@ -34,14 +33,12 @@ import { Ionicons } from "@expo/vector-icons";
 import Animated, {
   Easing,
   FadeInDown,
-  FadeIn,
   interpolate,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
   useAnimatedScrollHandler,
   withSpring,
-  Extrapolate,
 } from "react-native-reanimated";
 import { useFocusEffect, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";

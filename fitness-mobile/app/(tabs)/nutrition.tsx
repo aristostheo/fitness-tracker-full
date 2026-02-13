@@ -25,13 +25,10 @@ import {
 import { bumpUse, upsertFoodToCatalog } from "@/services/foodCatalog";
 import { useNutritionHistory, isoAddDays } from "@/hooks/useNutritionHistory";
 
-import { NutritionSummaryCard } from "@/components/nutrition/uiNew/NutritionSummaryCard";
-import { HydrationCard } from "@/components/nutrition/uiNew/HydrationCard";
 import { DayStrip } from "@/components/nutrition/uiNew/DayStrip";
 import { SectionHeader } from "@/components/nutrition/uiNew/SectionHeader";
 import { MealCard, MealKey } from "@/components/nutrition/uiNew/MealCard";
 import EditFoodSheet from "@/components/nutrition/uiNew/EditFoodSheet";
-import { NutritionCalendarStrip } from "@/components/nutrition/uiNew/NutritionCalendarStrip";
 
 // ✅ NEW: subscribe to backend profile goals
 import { doc, onSnapshot } from "firebase/firestore";
@@ -41,6 +38,7 @@ import { reconcileBadgesFromSnapshot } from "@/services/badges/reconcile";
 import { useBadgesLocal } from "@/services/badges/useBadgesLocal";
 import { DailyGoalsCard } from "@/components/nutrition/uiNew/DailyGoalsCard";
 import { HydrationCardPremium } from "@/components/nutrition/uiNew/HydrationCardPremium";
+// import { MacroCompletionCard } from "@/components/nutrition/uiNew/MacroCompletionCard";
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -169,6 +167,7 @@ export default function NutritionScreen() {
   const [historyMode, setHistoryMode] = useState<"week" | "month">("week");
 
   const { refreshBadgesLocal } = useBadgesLocal(true);
+  const [dietPreferences, setDietPreferences] = useState<any>(null);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -247,6 +246,7 @@ export default function NutritionScreen() {
       ref,
       (snap) => {
         const p = (snap.exists() ? (snap.data() as any) : {}) || {};
+        setDietPreferences(p?.dietPreferences ?? null);
 
         // Support multiple field names (so you don't have to refactor backend today)
         const calories =
@@ -920,6 +920,33 @@ export default function NutritionScreen() {
             />
           </View>
         </Animated.View>
+        {/* MACRO COMPLETION ---------------------- FIX THIS*/}
+        {/* <View style={{ paddingHorizontal: 16, marginTop: 16 }}>
+          <MacroCompletionCard
+            dateISO={dateISO}
+            totals={{
+              calories: dayTotals.calories,
+              protein: dayTotals.protein,
+              carbs: dayTotals.carbs,
+              fat: dayTotals.fat,
+              sugarTotal: (dayTotals as any).sugarTotal,
+              fiber: dayTotals.fiber,
+              sodiumMg: (dayTotals as any).sodiumMg,
+              satFat: (dayTotals as any).satFat,
+            }}
+            goals={{
+              calories: goals.calories,
+              protein: goals.protein,
+              carbs: goals.carbs,
+              fat: goals.fat,
+              fiber: goals.fiber,
+              sugarTotal: goals.sugarTotal,
+              sodiumMg: goals.sodiumMg,
+              satFat: goals.satFat,
+            }}
+            dietPreferences={dietPreferences}
+          />
+        </View> */}
 
         {/* MEALS */}
         <View style={{ paddingHorizontal: 16, marginTop: 18, gap: 12 }}>
