@@ -1,7 +1,7 @@
 // services/ai.ts
 import { getAuth } from "firebase/auth";
 
-const AI_URL = process.env.EXPO_PUBLIC_AI_PARSE_URL;
+const AI_URL = process.env.AI_PARSE_URL;
 
 export type AiMealResponse = {
   suggestedName: string | null;
@@ -19,11 +19,11 @@ export type AiMealResponse = {
 
 export async function parseMealRemote(
   text: string,
-  opts?: { qty?: number | null; unit?: string | null }
+  opts?: { qty?: number | null; unit?: string | null },
 ): Promise<AiMealResponse> {
-  console.log("AI_URL =", process.env.EXPO_PUBLIC_AI_PARSE_URL);
+  console.log("AI_URL =", process.env.AI_PARSE_URL);
 
-  if (!AI_URL) throw new Error("Missing EXPO_PUBLIC_AI_PARSE_URL");
+  if (!AI_URL) throw new Error("Missing AI_PARSE_URL");
 
   const token = await getAuth().currentUser?.getIdToken?.();
 

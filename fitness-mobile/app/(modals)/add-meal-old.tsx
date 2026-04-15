@@ -347,7 +347,7 @@ type FdcItem = {
   };
 };
 
-const FDC_API_KEY = process.env.EXPO_PUBLIC_FDC_API_KEY as string;
+const FDC_API_KEY = process.env.FDC_API_KEY as string;
 
 async function searchFDC(queryStr: string): Promise<FdcItem[]> {
   if (!FDC_API_KEY || !queryStr.trim()) return [];
@@ -1304,7 +1304,7 @@ export default function AddMealModal() {
   }
 
   const AI_URL =
-    process.env.EXPO_PUBLIC_AI_DESCRIBE_URL ||
+    process.env.AI_DESCRIBE_URL ||
     "https://us-central1-fitness-tracker-25254.cloudfunctions.net/describe";
 
   async function calculateFromDescription() {

@@ -318,10 +318,16 @@ export default function HomeScreen() {
   }, [foodsToday]);
 
   const caloriesRemaining = Math.max(0, Math.round(kcalGoal - totals.calories));
+  const caloriesOver = Math.max(0, Math.round(totals.calories - kcalGoal));
   const proteinRemaining = Math.max(
     0,
     Math.round(proteinGoal - totals.protein)
   );
+  const carbsRemaining = Math.max(0, Math.round(carbGoal - totals.carbs));
+  const fatRemaining = Math.max(0, Math.round(fatGoal - totals.fat));
+
+  const caloriesPct = kcalGoal ? totals.calories / kcalGoal : 0;
+  const fatPct = fatGoal ? totals.fat / fatGoal : 0;
 
   const stepsGoal = Number((profile as any)?.stepsGoal ?? 8000);
   const stepsToday = useMemo(() => {
@@ -329,6 +335,39 @@ export default function HomeScreen() {
       (((profile as any)?.steps ?? {}) as Record<string, number>) || {};
     return Number(map?.[todayStr] ?? 0);
   }, [profile, todayStr]);
+
+  const goalModeRaw =
+    (profile as any)?.macroEngineMode ?? profile?.goal ?? "maintain";
+  const goalMode = goalModeRaw === "lean_bulk" ? "bulk" : goalModeRaw;
+  const goalLabel =
+    goalMode === "cut"
+      ? "fat loss"
+      : goalMode === "bulk"
+      ? "muscle gain"
+      : "maintenance";
+  const weightUnit = profile?.weightUnit ?? "kg";
+  const weightKg = Number(profile?.weightKg ?? 0);
+  const targetWeightKg = Number(profile?.targetWeightKg ?? 0);
+  const hasWeightGoal =
+    weightKg > 0 &&
+    targetWeightKg > 0 &&
+    Math.abs(targetWeightKg - weightKg) >= 0.1;
+  const weightDeltaKg = targetWeightKg - weightKg;
+  const weightDeltaAbs = Math.abs(weightDeltaKg);
+  const targetDate = (profile as any)?.targetDate as string | undefined;
+  const daysToTarget = targetDate
+    ? Math.ceil(
+        (new Date(targetDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+      )
+    : null;
+  const toWeightUnit = (kg: number) =>
+    weightUnit === "lb" ? kg * 2.20462 : kg;
+  const weightUnitLabel = weightUnit === "lb" ? "lb" : "kg";
+  const formatWeight = (kg: number, digits = 1) => {
+    const factor = digits === 0 ? 1 : 10;
+    const value = Math.round(toWeightUnit(kg) * factor) / factor;
+    return `${value} ${weightUnitLabel}`;
+  };
   const [stepsSheetOpen, setStepsSheetOpen] = useState(false);
   const [stepsMode, setStepsMode] = useState<"add" | "set">("add");
   const [stepsInput, setStepsInput] = useState("");
@@ -585,78 +624,277 @@ export default function HomeScreen() {
 
   const aiSuggestions: AISuggestion[] = useMemo(() => {
     const mealCount = foodsToday.length;
-    const hasWorkout = exerciseToday.length > 0;
+    const hasWorkout = exerciseToday.length > 0 || activityEntries.length > 0;
+    const stepsPct = stepsGoal ? stepsToday / stepsGoal : 0;
+    const loggingDays = new Set(
+      foodsRange.map((f) => f.date?.slice(0, 10)).filter(Boolean) as string[]
+    ).size;
 
-    return [
-      {
-        id: "ai-1",
-        title:
-          proteinRemaining > 25
-            ? "Close your protein gap"
-            : "Protein looks solid",
-        body:
-          proteinRemaining > 25
-            ? `You’re ${proteinRemaining}g short. Aim for a lean 30–40g hit (shake, Greek yogurt, chicken wrap).`
-            : "You’re on track. Add fiber + micronutrients to round out the day.",
-        pill:
-          proteinRemaining > 0
-            ? `${proteinRemaining}g to goal`
-            : "Goal reached",
+    const pool: Array<{ score: number; suggestion: AISuggestion }> = [];
+    const addSuggestion = (score: number, suggestion: AISuggestion) => {
+      if (!suggestion?.id) return;
+      pool.push({ score, suggestion });
+    };
+
+    if (proteinRemaining >= 40) {
+      addSuggestion(95, {
+        id: "ai-protein-gap",
+        title: "Protein priority",
+        body: `You are ${proteinRemaining}g short. Anchor the next meal with 30-40g (shake, Greek yogurt, chicken wrap).`,
+        pill: `${proteinRemaining}g to goal`,
         icon: toIoniconName("flash"),
         actionLabel: "Suggest meals",
         onAction: () => router.push("/(tabs)/nutrition"),
-      },
-      {
-        id: "ai-2",
-        title:
-          caloriesRemaining > 0
-            ? "Smooth calories to target"
-            : "You’re at target",
-        body:
-          caloriesRemaining > 0
-            ? `You have ~${caloriesRemaining} kcal left. Keep it satisfying: protein + fiber beats “random snacks.”`
-            : "Want a cut-friendly swap that keeps cravings low?",
-        pill:
-          caloriesRemaining > 0
-            ? `~${caloriesRemaining} kcal left`
-            : "At target",
+      });
+    }
+    if (proteinRemaining >= 15 && proteinRemaining < 40) {
+      addSuggestion(70, {
+        id: "ai-protein-topup",
+        title: "Protein top-up",
+        body: `You are ${proteinRemaining}g away. A lean snack closes the gap without overshooting calories.`,
+        pill: `${proteinRemaining}g to goal`,
+        icon: toIoniconName("nutrition"),
+        actionLabel: "Pick a snack",
+        onAction: () => router.push("/(tabs)/nutrition"),
+      });
+    }
+    if (proteinRemaining <= 5 && totals.protein > 0) {
+      addSuggestion(35, {
+        id: "ai-protein-secure",
+        title: "Protein secured",
+        body: "Protein looks solid. Focus on fiber, veggies, and hydration to finish strong.",
+        pill: "Goal reached",
+        icon: toIoniconName("checkmark-circle"),
+        actionLabel: "Balance the day",
+        onAction: () => router.push("/(tabs)/nutrition"),
+      });
+    }
+
+    if (caloriesPct < 0.55 && caloriesRemaining > 350) {
+      addSuggestion(88, {
+        id: "ai-calories-low",
+        title: "Fuel up for your goal",
+        body: `You are under target by ~${caloriesRemaining} kcal. Add a balanced meal to stay on track for ${goalLabel}.`,
+        pill: `~${caloriesRemaining} kcal left`,
+        icon: toIoniconName("flame"),
+        actionLabel: "See ideas",
+        onAction: () => router.push("/(tabs)/nutrition"),
+      });
+    }
+    if (caloriesRemaining > 0 && caloriesRemaining <= 350) {
+      addSuggestion(65, {
+        id: "ai-calories-tight",
+        title: "Land the day",
+        body: `You have about ${caloriesRemaining} kcal left. Keep it protein-forward with high volume.`,
+        pill: `~${caloriesRemaining} kcal left`,
         icon: toIoniconName("leaf"),
         actionLabel: "Get options",
         onAction: () => router.push("/(tabs)/nutrition"),
-      },
-      {
-        id: "ai-3",
-        title: hasWorkout ? "Nice pace today" : "Add a small movement win",
-        body: hasWorkout
-          ? `Burned ~${Math.round(
-              burnToday
-            )} kcal in workouts. Keep steps moving for recovery.`
-          : "No workout logged yet. A 20–30 min walk or quick session keeps momentum.",
-        pill: hasWorkout ? "Workout logged" : "No workout yet",
-        icon: toIoniconName("walk"),
+      });
+    }
+    if (caloriesOver >= 150) {
+      addSuggestion(75, {
+        id: "ai-calories-over",
+        title: "Course-correct calories",
+        body: `You are over by ~${caloriesOver} kcal. A 15-25 min walk or lighter dinner helps reset the trend.`,
+        pill: `+${caloriesOver} kcal`,
+        icon: toIoniconName("trending-down"),
         actionLabel: "Open activity",
         onAction: () => router.push("/(tabs)/workouts"),
-      },
-      {
-        id: "ai-4",
-        title: "Consistency",
-        body: `Protein hit rate: ${weeklyProteinHits}/7 · Steps avg: ${stepsAvg.toLocaleString()}/day · Logs: ${mealCount} today.`,
-        pill: `${streakDays} day streak`,
-        icon: toIoniconName("trophy"),
+      });
+    }
+
+    if (stepsPct < 0.5) {
+      addSuggestion(80, {
+        id: "ai-steps-low",
+        title: "Steps sprint",
+        body: `You are at ${Math.round(
+          stepsPct * 100
+        )}% of your step goal. A 10-15 min walk moves the needle fast.`,
+        pill: `${Math.max(0, stepsGoal - stepsToday).toLocaleString()} to go`,
+        icon: toIoniconName("walk"),
+        actionLabel: "Add steps",
+        onAction: () => openStepsSheet("add"),
+      });
+    }
+    if (stepsGoal - stepsToday > 0 && stepsGoal - stepsToday <= 1500) {
+      addSuggestion(60, {
+        id: "ai-steps-close",
+        title: "Close the steps loop",
+        body: `Only ${Math.max(
+          0,
+          stepsGoal - stepsToday
+        ).toLocaleString()} steps left. A quick loop finishes it.`,
+        pill: "Almost there",
+        icon: toIoniconName("walk"),
+        actionLabel: "Log steps",
+        onAction: () => openStepsSheet("add"),
+      });
+    }
+
+    if (!hasWorkout) {
+      addSuggestion(70, {
+        id: "ai-workout-none",
+        title: "Add a movement win",
+        body: "No workout logged yet. A 20-30 min session or mobility block keeps momentum.",
+        pill: "No workout yet",
+        icon: toIoniconName("barbell"),
+        actionLabel: "Start workout",
+        onAction: () => router.push("/(modals)/quick-workout" as any),
+      });
+    } else {
+      addSuggestion(40, {
+        id: "ai-workout-done",
+        title: "Recovery focus",
+        body: `Logged activity today. Add protein + carbs and a short walk to support recovery.`,
+        pill: "Workout logged",
+        icon: toIoniconName("pulse"),
+        actionLabel: "View activity",
+        onAction: () => router.push("/(tabs)/workouts"),
+      });
+    }
+
+    if (goalMode === "cut" && carbsRemaining >= 60) {
+      addSuggestion(55, {
+        id: "ai-carb-cut",
+        title: "Carb timing",
+        body: `You still have about ${carbsRemaining}g carbs. Use them around activity for better energy.`,
+        pill: `${carbsRemaining}g carbs left`,
+        icon: toIoniconName("timer"),
+        actionLabel: "Plan meal",
+        onAction: () => router.push("/(tabs)/nutrition"),
+      });
+    }
+    if (goalMode === "bulk" && carbsRemaining >= 60) {
+      addSuggestion(60, {
+        id: "ai-carb-bulk",
+        title: "Carb-forward meal",
+        body: `You are ${carbsRemaining}g shy on carbs. Add rice, oats, or fruit to support training.`,
+        pill: `${carbsRemaining}g carbs left`,
+        icon: toIoniconName("fitness"),
+        actionLabel: "Build a meal",
+        onAction: () => router.push("/(tabs)/nutrition"),
+      });
+    }
+    if (fatRemaining >= 20 && fatPct < 0.6) {
+      addSuggestion(45, {
+        id: "ai-fat-balance",
+        title: "Balance fats",
+        body: `You have about ${fatRemaining}g fats left. Add avocado, olive oil, or nuts.`,
+        pill: `${fatRemaining}g fats left`,
+        icon: toIoniconName("leaf"),
+        actionLabel: "See ideas",
+        onAction: () => router.push("/(tabs)/nutrition"),
+      });
+    }
+
+    if (hasWeightGoal) {
+      const direction = weightDeltaKg < 0 ? "down" : "up";
+      addSuggestion(85, {
+        id: "ai-weight-target",
+        title: "Target runway",
+        body: `You are ${formatWeight(
+          weightDeltaAbs
+        )} ${direction} from your target. Keep your weekly habits aligned with ${goalLabel}.`,
+        pill: `${formatWeight(weightDeltaAbs, 0)} to go`,
+        icon: toIoniconName("trending-up"),
+        actionLabel: "Review goals",
+        onAction: () => router.push("/(tabs)/profile"),
+      });
+    }
+
+    if (hasWeightGoal && daysToTarget && daysToTarget > 0) {
+      const paceKg = weightDeltaAbs / (daysToTarget / 7);
+      if (Number.isFinite(paceKg) && paceKg > 0) {
+        addSuggestion(paceKg > 1.2 ? 90 : 50, {
+          id: "ai-pace-check",
+          title: "Pace check",
+          body: `To hit your date, you need about ${formatWeight(
+            paceKg
+          )} per week. Adjust calories or activity if that feels steep.`,
+          pill: `${daysToTarget} days left`,
+          icon: toIoniconName("calendar"),
+          actionLabel: "Tune plan",
+          onAction: () => router.push("/(tabs)/profile"),
+        });
+      }
+    }
+
+    if (weeklyProteinHits <= 3 && proteinGoal > 0) {
+      addSuggestion(50, {
+        id: "ai-weekly-protein",
+        title: "Weekly protein rhythm",
+        body: `You are hitting protein ${weeklyProteinHits}/7 days. Aim for 5+ to keep progress steady.`,
+        pill: `${weeklyProteinHits}/7 days`,
+        icon: toIoniconName("calendar"),
         actionLabel: "View history",
         onAction: () => router.push("/(tabs)/nutrition"),
-      },
-    ];
+      });
+    }
+
+    if (streakDays >= 5) {
+      addSuggestion(40, {
+        id: "ai-streak",
+        title: "Protect the streak",
+        body: `You are on a ${streakDays}-day logging streak. One meal entry today keeps it alive.`,
+        pill: `${streakDays} day streak`,
+        icon: toIoniconName("trophy"),
+        actionLabel: "Log meal",
+        onAction: () =>
+          router.push(`/(modals)/add-meal?date=${todayStr}` as any),
+      });
+    }
+
+    addSuggestion(20, {
+      id: "ai-consistency",
+      title: "Consistency snapshot",
+      body: `Protein hit rate: ${weeklyProteinHits}/7. Steps avg: ${stepsAvg.toLocaleString()}/day. Logs: ${mealCount} today.`,
+      pill: `${loggingDays} days logged`,
+      icon: toIoniconName("sparkles"),
+      actionLabel: "View history",
+      onAction: () => router.push("/(tabs)/nutrition"),
+    });
+
+    const ranked = pool.sort((a, b) => b.score - a.score);
+    const top = ranked.slice(0, Math.min(6, ranked.length));
+    const rotation =
+      top.length > 0 ? Number(todayStr.slice(-2)) % top.length : 0;
+    const rotated = top.slice(rotation).concat(top.slice(0, rotation));
+    return rotated.slice(0, 3).map((item) => item.suggestion);
   }, [
     proteinRemaining,
     caloriesRemaining,
+    caloriesOver,
+    carbsRemaining,
+    fatRemaining,
+    caloriesPct,
+    fatPct,
+    goalMode,
+    goalLabel,
+    weightKg,
+    targetWeightKg,
+    weightDeltaAbs,
+    targetDate,
+    daysToTarget,
+    weightUnit,
     foodsToday.length,
     exerciseToday.length,
+    activityEntries.length,
     burnToday,
     weeklyProteinHits,
     stepsAvg,
     streakDays,
+    totals.protein,
+    totals.calories,
+    totals.carbs,
+    totals.fat,
+    stepsGoal,
+    stepsToday,
+    carbGoal,
+    fatGoal,
     router,
+    todayStr,
+    foodsRange,
   ]);
 
   const softShadow = useMemo(

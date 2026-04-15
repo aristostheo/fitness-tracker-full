@@ -97,8 +97,8 @@ async function generatePlanWithOpenAI(args: {
   recent: any[];
   regenToken?: string | number;
 }) {
-  const url = process.env.EXPO_PUBLIC_AI_DESCRIBE_URL;
-  if (!url) throw new Error("Missing EXPO_PUBLIC_AI_DESCRIBE_URL");
+  const url = process.env.AI_DESCRIBE_URL;
+  if (!url) throw new Error("Missing AI_DESCRIBE_URL");
 
   const idToken = await auth.currentUser?.getIdToken(true);
   if (!idToken) throw new Error("Not signed in (no ID token)");

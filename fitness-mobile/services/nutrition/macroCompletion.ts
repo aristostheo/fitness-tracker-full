@@ -51,15 +51,14 @@ export type MacroCompletionResponse = {
 function getDescribeUrl() {
   // ✅ set one of these in your app env
   const fromEnv =
-    process.env.EXPO_PUBLIC_AI_DESCRIBE_URL ||
-    process.env.EXPO_PUBLIC_FUNCTIONS_DESCRIBE_URL;
+    process.env.AI_DESCRIBE_URL || process.env.FUNCTIONS_DESCRIBE_URL;
 
   if (fromEnv) return String(fromEnv);
 
   // If you already have your own helper, replace this function entirely.
   // This fallback forces you to define an env var so you don't accidentally call a wrong URL.
   throw new Error(
-    "Missing EXPO_PUBLIC_DESCRIBE_URL. Set it to your Cloud Function URL for describe."
+    "Missing DESCRIBE_URL. Set it to your Cloud Function URL for describe.",
   );
 }
 

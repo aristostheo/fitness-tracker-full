@@ -120,7 +120,7 @@ function round1(n: number) {
 }
 
 const AI_DESCRIBE_URL =
-  process.env.EXPO_PUBLIC_AI_DESCRIBE_URL ||
+  process.env.AI_DESCRIBE_URL ||
   "https://us-central1-fitness-tracker-25254.cloudfunctions.net/describe";
 
 function safeJsonParse(raw: string): any | null {
@@ -193,29 +193,29 @@ function normalizeDescribeMacros(gotRaw: any) {
     src.fiber != null
       ? Number(src.fiber)
       : src.fibre != null
-      ? Number(src.fibre)
-      : undefined;
+        ? Number(src.fibre)
+        : undefined;
 
   const sugar =
     src.sugar != null
       ? Number(src.sugar)
       : src.sugars != null
-      ? Number(src.sugars)
-      : undefined;
+        ? Number(src.sugars)
+        : undefined;
 
   const sodiumMg =
     src.sodiumMg != null
       ? Number(src.sodiumMg)
       : src.sodium != null
-      ? Number(src.sodium)
-      : undefined;
+        ? Number(src.sodium)
+        : undefined;
 
   const satFat =
     src.satFat != null
       ? Number(src.satFat)
       : src.saturatedFat != null
-      ? Number(src.saturatedFat)
-      : undefined;
+        ? Number(src.saturatedFat)
+        : undefined;
 
   return {
     calories,
@@ -353,7 +353,7 @@ export default function ScanMealScreen() {
 
   const lowConfidenceCount = useMemo(
     () => foods.filter((f) => f.confidence === "low").length,
-    [foods]
+    [foods],
   );
 
   const requestImagePerms = useCallback(async () => {
@@ -362,7 +362,7 @@ export default function ScanMealScreen() {
     if (camera.status !== "granted" || media.status !== "granted") {
       Alert.alert(
         "Permissions needed",
-        "Please allow camera and photo library access to scan meals."
+        "Please allow camera and photo library access to scan meals.",
       );
       return false;
     }
@@ -432,7 +432,7 @@ export default function ScanMealScreen() {
 
     if (!reservation.allowed) {
       await Haptics.notificationAsync(
-        Haptics.NotificationFeedbackType.Warning
+        Haptics.NotificationFeedbackType.Warning,
       ).catch(() => {});
 
       setQuota({
@@ -445,7 +445,7 @@ export default function ScanMealScreen() {
       Alert.alert(
         "Daily scan limit reached",
         `You’ve used ${reservation.limit} scans today.\n\nTry again tomorrow, or log manually.`,
-        [{ text: "OK" }]
+        [{ text: "OK" }],
       );
       return;
     }
@@ -522,7 +522,7 @@ export default function ScanMealScreen() {
       setState("photo_ready");
       Alert.alert(
         "Couldn’t scan that photo",
-        "Try a clearer photo with the full plate in frame, or add items manually."
+        "Try a clearer photo with the full plate in frame, or add items manually.",
       );
     }
   }, [photoUri, showToast, refreshQuota]);
@@ -538,7 +538,7 @@ export default function ScanMealScreen() {
       setFoods((prev) => prev.filter((f) => f.id !== id));
       showToast({ title: "Removed item" });
     },
-    [showToast]
+    [showToast],
   );
 
   const onUpdateFood = useCallback(
@@ -578,7 +578,7 @@ export default function ScanMealScreen() {
                 satFat: macros.satFat ?? f.macros.satFat,
               },
             };
-          })
+          }),
         );
       } catch (e) {
         console.warn("[scan-meal] reanalyze failed", e);
@@ -586,7 +586,7 @@ export default function ScanMealScreen() {
         setIsReanalyzing(false);
       }
     },
-    [editFood?.name, showToast]
+    [editFood?.name, showToast],
   );
 
   const onAddFood = useCallback(
@@ -618,7 +618,7 @@ export default function ScanMealScreen() {
                 satFat: macros.satFat ?? f.macros.satFat,
               },
             };
-          })
+          }),
         );
       } catch (e) {
         console.warn("[scan-meal] add reanalyze failed", e);
@@ -626,7 +626,7 @@ export default function ScanMealScreen() {
         setIsReanalyzing(false);
       }
     },
-    [showToast]
+    [showToast],
   );
 
   // Portion +/- scales item totals by ratio (macros here are already totals for the current portion)
@@ -665,10 +665,10 @@ export default function ScanMealScreen() {
               satFat: scale(f.macros?.satFat),
             },
           };
-        })
+        }),
       );
     },
-    []
+    [],
   );
 
   const onConfirmAndLog = useCallback(async () => {
@@ -680,7 +680,7 @@ export default function ScanMealScreen() {
     setIsLogging(true);
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
-        () => {}
+        () => {},
       );
 
       const chosenMeal = categoryToMealKey(category);
@@ -728,19 +728,19 @@ export default function ScanMealScreen() {
 
       await AsyncStorage.setItem(
         PENDING_BATCH_KEY,
-        JSON.stringify({ date: dateStr, meal: chosenMeal, items })
+        JSON.stringify({ date: dateStr, meal: chosenMeal, items }),
       );
 
       await AsyncStorage.setItem("@badges_dirty", "1").catch(() => {});
 
       await Haptics.notificationAsync(
-        Haptics.NotificationFeedbackType.Success
+        Haptics.NotificationFeedbackType.Success,
       ).catch(() => {});
 
       router.back();
     } catch (e: any) {
       await Haptics.notificationAsync(
-        Haptics.NotificationFeedbackType.Error
+        Haptics.NotificationFeedbackType.Error,
       ).catch(() => {});
       Alert.alert("Couldn’t log meal", e?.message ?? "Try again.");
       setState("review");
@@ -994,15 +994,15 @@ export default function ScanMealScreen() {
                     {state === "analyzing"
                       ? "Scanning meal"
                       : isLogging
-                      ? "Logging meal"
-                      : "Reanalyzing item"}
+                        ? "Logging meal"
+                        : "Reanalyzing item"}
                   </Text>
                   <Text style={[styles.overlaySub, { color: colors.muted }]}>
                     {state === "analyzing"
                       ? "Detecting foods and estimating macros."
                       : isLogging
-                      ? "Saving to your diary…"
-                      : "Updating calories and macros for your edits."}
+                        ? "Saving to your diary…"
+                        : "Updating calories and macros for your edits."}
                   </Text>
                 </View>
               </View>
