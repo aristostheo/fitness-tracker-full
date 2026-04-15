@@ -4,7 +4,7 @@ import type { ScanMealResult } from "@/services/scanMeal/types";
 import * as ImageManipulator from "expo-image-manipulator";
 
 const AI_URL =
-  process.env.EXPO_PUBLIC_AI_DESCRIBE_URL ||
+  process.env.AI_DESCRIBE_URL ||
   "https://us-central1-fitness-tracker-25254.cloudfunctions.net/describe";
 
 /** Backend expects portion.unit in: g | oz | cups | tbsp | piece */
@@ -25,7 +25,7 @@ async function uriToBase64(uri: string): Promise<string> {
       compress: 0.85,
       format: ImageManipulator.SaveFormat.JPEG,
       base64: true,
-    }
+    },
   );
 
   if (!out.base64) throw new Error("Failed to convert image to base64");
@@ -62,7 +62,7 @@ function normalizePortion(p: any): {
 }
 
 export async function mockScanMealFromImage(
-  uri: string
+  uri: string,
 ): Promise<ScanMealResult> {
   const user = getAuth().currentUser;
   const token = user ? await user.getIdToken(true) : "";
@@ -122,7 +122,7 @@ export async function mockScanMealFromImage(
             ? f.suggestions.map((s: any) => String(s)).slice(0, 4)
             : [],
         };
-      }
+      },
     ),
   };
 }

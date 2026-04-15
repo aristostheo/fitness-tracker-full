@@ -1,7 +1,7 @@
 // app/(tabs)/_layout.tsx
 import React, { useEffect, useState } from "react";
-import { StyleSheet, Platform, View } from "react-native";
-import { Tabs } from "expo-router";
+import { StyleSheet, Platform, View, BackHandler } from "react-native";
+import { Tabs, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/content/ThemeProvider";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -18,6 +18,7 @@ export default function TabsLayout() {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const router = useRouter();
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
@@ -28,6 +29,19 @@ export default function TabsLayout() {
     const unsub = subscribeUnreadCount(user.uid, setUnreadCount);
     return () => unsub && unsub();
   }, [user?.uid]);
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const onBackPress = () => {
+      if (router.canGoBack?.()) {
+        return false;
+      }
+      BackHandler.exitApp();
+      return true;
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+    return () => sub.remove();
+  }, [router]);
 
   const tabBarHeight = 58 + Math.max(0, insets.bottom - 8); // total visual height
   const tabBarPadBottom = Math.max(8, insets.bottom / 2);

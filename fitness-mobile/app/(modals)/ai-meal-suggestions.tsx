@@ -19,7 +19,7 @@ import { auth } from "@/lib/firebase";
 import { useEntitlements } from "@/content/useEntitlements";
 
 // 🔑 Your Cloud Run / HTTPS function URL (Expo public env)
-const DESCRIBE_URL = process.env.EXPO_PUBLIC_AI_DESCRIBE_URL;
+const DESCRIBE_URL = process.env.AI_DESCRIBE_URL;
 
 // ---- Types ----
 type MealIdea = {
@@ -40,7 +40,7 @@ type MealIdeasResponse = { meals: MealIdea[]; rationale?: string };
 // ---- Helper: call describe with Firebase ID token ----
 async function callDescribe(payload: any) {
   if (!DESCRIBE_URL) {
-    throw new Error("Missing EXPO_PUBLIC_AI_DESCRIBE_URL");
+    throw new Error("Missing AI_DESCRIBE_URL");
   }
   const user = auth.currentUser;
   const idToken = await user?.getIdToken(true); // force refresh to be safe
@@ -91,7 +91,11 @@ export default function AiMealSuggestions() {
       "Pro required",
       "AI meal ideas are part of Pro. Unlock to continue.",
       [
-        { text: "Not now", style: "cancel", onPress: () => setShowingLock(false) },
+        {
+          text: "Not now",
+          style: "cancel",
+          onPress: () => setShowingLock(false),
+        },
         {
           text: "See Pro",
           onPress: () => {
@@ -99,7 +103,7 @@ export default function AiMealSuggestions() {
             router.replace("/paywall");
           },
         },
-      ]
+      ],
     );
     return false;
   };
@@ -142,7 +146,7 @@ export default function AiMealSuggestions() {
 
   const headerGrad = useMemo<readonly [string, string]>(
     () => (isDark ? ["#3b82f6", "#60a5fa"] : ["#22c55e", "#16a34a"]),
-    [isDark]
+    [isDark],
   );
 
   async function fetchIdeas(opts: { forceNew?: boolean }) {

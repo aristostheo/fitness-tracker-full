@@ -114,7 +114,7 @@ function withAlpha(color: string, alpha = 0.2) {
   if (!m) return color;
   return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(
     m[3],
-    16
+    16,
   )}, ${alpha})`;
 }
 
@@ -202,32 +202,32 @@ function normalizeDescribeItem(gotRaw: any, fallbackName: string) {
     got.sugar != null
       ? Number(got.sugar)
       : got.sugars != null
-      ? Number(got.sugars)
-      : undefined;
+        ? Number(got.sugars)
+        : undefined;
 
   const fiber =
     got.fiber != null
       ? Number(got.fiber)
       : got.fibre != null
-      ? Number(got.fibre)
-      : undefined;
+        ? Number(got.fibre)
+        : undefined;
 
   // Optional advanced fields
   const addedSugar =
     got.addedSugar != null
       ? Number(got.addedSugar)
       : got.addedSugarG != null
-      ? Number(got.addedSugarG)
-      : undefined;
+        ? Number(got.addedSugarG)
+        : undefined;
 
   const satFat =
     got.satFat != null
       ? Number(got.satFat)
       : got.saturatedFat != null
-      ? Number(got.saturatedFat)
-      : got.satFatG != null
-      ? Number(got.satFatG)
-      : undefined;
+        ? Number(got.saturatedFat)
+        : got.satFatG != null
+          ? Number(got.satFatG)
+          : undefined;
 
   const sodium = got.sodium != null ? Number(got.sodium) : undefined;
 
@@ -295,13 +295,13 @@ type FdcItem = {
   };
 };
 
-const FDC_API_KEY = process.env.EXPO_PUBLIC_FDC_API_KEY as string | undefined;
+const FDC_API_KEY = process.env.FDC_API_KEY as string | undefined;
 
 async function searchFDC(queryStr: string): Promise<FdcItem[]> {
   if (!FDC_API_KEY || !queryStr.trim()) return [];
   try {
     const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${encodeURIComponent(
-      FDC_API_KEY
+      FDC_API_KEY,
     )}&query=${encodeURIComponent(queryStr)}&dataType=Branded&pageSize=10`;
     const r = await fetch(url);
     if (!r.ok) return [];
@@ -313,13 +313,13 @@ async function searchFDC(queryStr: string): Promise<FdcItem[]> {
 }
 
 async function lookupOpenFoodFacts(
-  barcode: string
+  barcode: string,
 ): Promise<ResolvedProduct | null> {
   try {
     const r = await fetch(
       `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(
-        barcode
-      )}.json`
+        barcode,
+      )}.json`,
     );
     if (!r.ok) return null;
     const j = await r.json();
@@ -384,7 +384,7 @@ async function lookupOpenFoodFacts(
 }
 
 async function lookupFDCByBarcode(
-  barcode: string
+  barcode: string,
 ): Promise<ResolvedProduct | null> {
   const items = await searchFDC(barcode);
   if (!items?.length) return null;
@@ -459,7 +459,7 @@ function scoreCandidate(r: ResolvedProduct): number {
 }
 
 async function resolveBarcodeCandidates(
-  barcode: string
+  barcode: string,
 ): Promise<ResolvedProduct[]> {
   const cached = await cacheLoad(barcode);
   if (cached) return [cached];
@@ -687,7 +687,7 @@ function TabPills({
             key={it.key}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
-                () => {}
+                () => {},
               );
               setTab(it.key);
               Keyboard.dismiss();
@@ -758,7 +758,7 @@ function Field({
         multiline={multiline}
         style={{
           height: multiline ? undefined : 46,
-          minHeight: multiline ? minHeight ?? 110 : undefined,
+          minHeight: multiline ? (minHeight ?? 110) : undefined,
           borderRadius: 14,
           borderWidth: 1,
           borderColor: colors.inputBorder,
@@ -802,10 +802,10 @@ function ConfirmSheetContent({
       scrollRef.current?.scrollResponderScrollNativeHandleToKeyboard(
         node,
         140,
-        true
+        true,
       );
     },
-    []
+    [],
   );
 
   const numOnly = (t: string) => t.replace(/[^0-9.]/g, "");
@@ -1160,7 +1160,7 @@ function ConfirmSheetContent({
           <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
-                () => {}
+                () => {},
               );
               onConfirm();
             }}
@@ -1208,7 +1208,7 @@ export default function AddMealModal() {
 
   const params = useLocalSearchParams<{ meal?: string; date?: string }>();
   const [meal, setMeal] = useState<MealKey>(
-    (params.meal as MealKey) || "breakfast"
+    (params.meal as MealKey) || "breakfast",
   );
   const date = (params.date as string) || new Date().toISOString().slice(0, 10);
 
@@ -1317,7 +1317,7 @@ export default function AddMealModal() {
       return () => {
         alive = false;
       };
-    }, [date, meal])
+    }, [date, meal]),
   );
 
   function done(payload: AddPayload) {
@@ -1492,35 +1492,35 @@ export default function AddMealModal() {
         item.sugar != null
           ? Number(item.sugar)
           : item?.nutrients?.sugar != null
-          ? Number(item.nutrients.sugar)
-          : undefined,
+            ? Number(item.nutrients.sugar)
+            : undefined,
       fiber:
         item.fiber != null
           ? Number(item.fiber)
           : item?.nutrients?.fiber != null
-          ? Number(item.nutrients.fiber)
-          : undefined,
+            ? Number(item.nutrients.fiber)
+            : undefined,
 
       addedSugar:
         item.addedSugar != null
           ? Number(item.addedSugar)
           : item.addedSugarG != null
-          ? Number(item.addedSugarG)
-          : undefined,
+            ? Number(item.addedSugarG)
+            : undefined,
       satFat:
         item.satFat != null
           ? Number(item.satFat)
           : item.saturatedFat != null
-          ? Number(item.saturatedFat)
-          : item.satFatG != null
-          ? Number(item.satFatG)
-          : undefined,
+            ? Number(item.saturatedFat)
+            : item.satFatG != null
+              ? Number(item.satFatG)
+              : undefined,
       sodium:
         item.sodium != null
           ? Number(item.sodium)
           : item.sodiumMg != null
-          ? Number(item.sodiumMg)
-          : undefined,
+            ? Number(item.sodiumMg)
+            : undefined,
       wholeFoodRatio:
         item.wholeFoodRatio != null ? Number(item.wholeFoodRatio) : undefined,
       veggieFruitServings:
@@ -1610,8 +1610,8 @@ export default function AddMealModal() {
       const d = new Date(
         `${year}-${slash[1].padStart(2, "0")}-${slash[2].padStart(
           2,
-          "0"
-        )}T00:00:00`
+          "0",
+        )}T00:00:00`,
       );
       if (!Number.isNaN(d.getTime())) return d;
     }
@@ -1668,12 +1668,12 @@ export default function AddMealModal() {
         unsatFatRatio: item.unsatFatRatio,
         alcoholCalories: item.alcoholCalories,
       })),
-    [topFoods]
+    [topFoods],
   );
 
   /* ───────────── Describe ───────────── */
   const AI_URL =
-    process.env.EXPO_PUBLIC_AI_DESCRIBE_URL ||
+    process.env.AI_DESCRIBE_URL ||
     "https://us-central1-fitness-tracker-25254.cloudfunctions.net/describe";
 
   async function calculateFromDescription() {
@@ -1714,7 +1714,7 @@ export default function AddMealModal() {
         setDescError(
           `Describe failed (${res.status}). ${
             snippet ? `Server says: ${snippet}` : "No response body."
-          }`
+          }`,
         );
         return;
       }
@@ -1725,7 +1725,7 @@ export default function AddMealModal() {
         setDescError(
           `Describe returned non-JSON. ${
             snippet ? `Response: ${snippet}` : "Empty response."
-          }`
+          }`,
         );
         return;
       }
@@ -1740,13 +1740,13 @@ export default function AddMealModal() {
 
       if (!hasAnyMacros) {
         setDescError(
-          "Couldn’t estimate macros. Try adding quantities (e.g. “2 eggs”, “1 cup rice”)."
+          "Couldn’t estimate macros. Try adding quantities (e.g. “2 eggs”, “1 cup rice”).",
         );
         return;
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
-        () => {}
+        () => {},
       );
       pick({ ...item }, "describe");
     } catch (e: any) {
@@ -1781,13 +1781,13 @@ export default function AddMealModal() {
       if (!list.length) {
         setScanError("No nutrition match found for this barcode.");
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(
-          () => {}
+          () => {},
         );
         return;
       }
       if (list.length === 1) {
         Haptics.notificationAsync(
-          Haptics.NotificationFeedbackType.Success
+          Haptics.NotificationFeedbackType.Success,
         ).catch(() => {});
         await startEditFromBarcodeResolved(list[0]);
         return;
@@ -1799,7 +1799,7 @@ export default function AddMealModal() {
     } catch {
       setScanError("Barcode lookup failed. Try again.");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(
-        () => {}
+        () => {},
       );
     } finally {
       setCandidatePending(false);
@@ -1838,7 +1838,7 @@ export default function AddMealModal() {
         carbs: toNum(carbs),
         fat: toNum(fat),
       },
-      "manual"
+      "manual",
     );
   }
 
@@ -1858,7 +1858,7 @@ export default function AddMealModal() {
         carbs: toNum(qaCarbs),
         fat: toNum(qaFat),
       },
-      "manual"
+      "manual",
     );
   }
 
@@ -2333,7 +2333,7 @@ export default function AddMealModal() {
                     <Pressable
                       onPress={() =>
                         setRecentVisible((v) =>
-                          Math.min(v + 15, 50, myRecents.length)
+                          Math.min(v + 15, 50, myRecents.length),
                         )
                       }
                       style={{
@@ -3183,7 +3183,7 @@ export default function AddMealModal() {
                           onPress={async () => {
                             setPickOpen(false);
                             Haptics.impactAsync(
-                              Haptics.ImpactFeedbackStyle.Light
+                              Haptics.ImpactFeedbackStyle.Light,
                             ).catch(() => {});
                             await startEditFromBarcodeResolved(c);
                           }}
