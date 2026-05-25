@@ -16,11 +16,11 @@ const config: ExpoConfig = {
     "expo-router",
     "expo-web-browser",
     [
-      "react-native-health",
+      "@kingstinct/react-native-healthkit",
       {
-        healthSharePermission:
+        NSHealthShareUsageDescription:
           "Fitness Mobile reads Apple Health data you approve, including steps, workouts, energy, weight, body fat, heart rate, and sleep, to sync your fitness dashboard.",
-        healthUpdatePermission:
+        NSHealthUpdateUsageDescription:
           "Fitness Mobile may write workouts or body metrics only when you explicitly choose to export them.",
       },
     ],
