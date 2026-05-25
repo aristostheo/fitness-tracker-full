@@ -29,6 +29,8 @@ export type IntegrationConnection = {
   lastError?: string;
 };
 
+const IMPLEMENTED_INTEGRATIONS = new Set(["apple_health"]);
+
 export type IntegrationSettings = {
   frequency: SyncFrequency;
   conflictPolicy: ConflictPolicy;
@@ -276,6 +278,19 @@ export async function setIntegrationConnected(id: string, connected: boolean, ui
     await writeSnapshot(latest);
     return result;
   }
+  if (connected && !IMPLEMENTED_INTEGRATIONS.has(id)) {
+    snapshot.connections[id] = {
+      ...previous,
+      id,
+      connected: false,
+      status: "warning",
+      lastSyncedAt: previous.lastSyncedAt,
+      failCount: previous.failCount,
+      lastError: "This integration is not live yet. Apple Health is the only working source right now.",
+    };
+    await writeSnapshot(snapshot);
+    return { ok: false, message: snapshot.connections[id].lastError };
+  }
   snapshot.connections[id] = {
     ...previous,
     id,
@@ -322,11 +337,12 @@ export async function runIntegrationSync(uid?: string) {
       next.connections.apple_health.status = result.ok ? "connected" : "warning";
       next.connections.apple_health.failCount = result.ok ? 0 : (next.connections.apple_health.failCount || 0) + 1;
       next.connections.apple_health.lastError = result.ok ? undefined : result.message || "Apple Health sync failed.";
+      next.connections.apple_health.lastSyncedAt = result.ok ? now : next.connections.apple_health.lastSyncedAt;
     }
     Object.values(next.connections).forEach((c) => {
       if (!c.connected) return;
       c.status = c.failCount && c.failCount >= 3 ? "error" : c.status === "warning" ? "warning" : "connected";
-      c.lastSyncedAt = now;
+      if (c.id !== "apple_health") c.lastSyncedAt = now;
     });
     next.settings.lastFullSyncAt = now;
     await writeSnapshot(next);

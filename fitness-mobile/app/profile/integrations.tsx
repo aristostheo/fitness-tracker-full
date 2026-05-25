@@ -244,9 +244,11 @@ function IntegrationCard({
   const status = conn?.status || "disconnected";
   const warning = status === "warning";
   const error = status === "error";
+  const implemented = item.id === "apple_health";
   const hiddenByPlatform =
     (item.platform === "ios" && Platform.OS !== "ios") ||
     (item.platform === "android" && Platform.OS !== "android");
+  const disabled = hiddenByPlatform || !implemented;
   const chipColor = error ? C.red : warning ? C.amber : connected ? C.green : C.muted;
   return (
     <Pressable
@@ -273,12 +275,16 @@ function IntegrationCard({
             {conn?.primary ? <Chip text="Primary source" color={C.purple} /> : null}
           </View>
           <Text style={{ color: C.muted, fontWeight: "800", marginTop: 4 }} numberOfLines={2}>
-            {hiddenByPlatform ? `Available on ${item.platform === "ios" ? "iOS" : "Android"}` : item.description}
+            {hiddenByPlatform
+              ? `Available on ${item.platform === "ios" ? "iOS" : "Android"}`
+              : !implemented
+              ? "Coming soon. Apple Health is the first live integration."
+              : item.description}
           </Text>
         </View>
         <Switch
           value={connected}
-          disabled={hiddenByPlatform}
+          disabled={disabled}
           onValueChange={(next) => {
             setIntegrationConnected(item.id, next, uid).catch(() => {});
           }}
@@ -294,15 +300,19 @@ function IntegrationCard({
             {error || warning ? <Text style={{ color: C.amber, fontWeight: "900" }}>Fix →</Text> : null}
           </>
         ) : (
-          <Pressable
-            onPress={() => {
-              setIntegrationConnected(item.id, true, uid).catch(() => {});
-            }}
-            disabled={hiddenByPlatform}
-            style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, backgroundColor: alpha(C.purple, 0.18), borderWidth: 1, borderColor: alpha(C.purple, 0.34) }}
-          >
-            <Text style={{ color: C.text, fontWeight: "900" }}>Connect →</Text>
-          </Pressable>
+          implemented ? (
+            <Pressable
+              onPress={() => {
+                setIntegrationConnected(item.id, true, uid).catch(() => {});
+              }}
+              disabled={hiddenByPlatform}
+              style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, backgroundColor: alpha(C.purple, 0.18), borderWidth: 1, borderColor: alpha(C.purple, 0.34) }}
+            >
+              <Text style={{ color: C.text, fontWeight: "900" }}>Connect →</Text>
+            </Pressable>
+          ) : (
+            <Chip text="Coming soon" color={C.muted} />
+          )
         )}
         {!connected && (warning || error) ? (
           <>
@@ -404,10 +414,8 @@ function SyncSettings({ snapshot, uid }: { snapshot: IntegrationSnapshot; uid?: 
         </View>
         <View style={{ borderTopWidth: 1, borderTopColor: C.hairline, paddingTop: 12, gap: 8 }}>
           <Text style={{ color: C.text, fontWeight: "900" }}>Data history import</Text>
-          <Text style={{ color: C.muted, fontWeight: "800" }}>Import past data from connected apps.</Text>
-          <Pressable style={primaryButton()}>
-            <Text style={{ color: C.text, fontWeight: "900" }}>Import up to 90 days</Text>
-          </Pressable>
+          <Text style={{ color: C.muted, fontWeight: "800" }}>Past-data import is not live yet.</Text>
+          <Chip text="Coming soon" color={C.muted} />
         </View>
       </View>
     </Section>

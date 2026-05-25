@@ -9,35 +9,47 @@ import {
 } from "@/services/profile/bodyMetrics";
 
 type HealthKitModule = {
-  isHealthDataAvailable?: () => Promise<boolean>;
-  requestAuthorization?: (options: { toRead?: string[]; toShare?: string[] }) => Promise<unknown>;
-  queryQuantitySamples?: (identifier: string, options?: Record<string, unknown>) => Promise<unknown>;
-  getMostRecentQuantitySample?: (identifier: string) => Promise<unknown>;
-  queryWorkouts?: (options?: Record<string, unknown>) => Promise<unknown>;
+  initHealthKit: (
+    permissions: {
+      permissions: {
+        read: string[];
+        write: string[];
+      };
+    },
+    callback: (error?: string) => void
+  ) => void;
+  getDailyStepCountSamples: (
+    options: { startDate: string; endDate: string },
+    callback: (error: string | null, results: Array<{ value?: number }>) => void
+  ) => void;
+  getActiveEnergyBurned: (
+    options: { startDate: string; endDate: string },
+    callback: (error: string | null, results: Array<{ value?: number }>) => void
+  ) => void;
+  getLatestWeight: (
+    options: { unit: string },
+    callback: (error: string | null, result?: { value?: number }) => void
+  ) => void;
+  getLatestBodyFatPercentage: (
+    options: { unit: string },
+    callback: (error: string | null, result?: { value?: number }) => void
+  ) => void;
+  getAnchoredWorkouts: (
+    options: { startDate: string; endDate: string; type: string },
+    callback: (error: string | null, result?: { data?: any[] } | any[]) => void
+  ) => void;
 };
 
-type QuantitySample = {
-  quantity?: number;
-  value?: number;
-  startDate?: string;
-  endDate?: string;
-  sourceName?: string;
-  metadata?: Record<string, unknown>;
-};
-
-type WorkoutSample = {
-  platformId?: string;
-  workoutActivityType?: string;
-  workoutType?: string;
-  activityName?: string;
-  totalEnergyBurned?: number;
-  calories?: number;
-  duration?: number;
-  startDate?: string;
-  endDate?: string;
-  start?: string;
-  end?: string;
-};
+const READ_PERMISSIONS = [
+  "StepCount",
+  "ActiveEnergyBurned",
+  "BasalEnergyBurned",
+  "Workout",
+  "HeartRate",
+  "SleepAnalysis",
+  "Weight",
+  "BodyFatPercentage",
+];
 
 export type AppleHealthSyncResult = {
   ok: boolean;
@@ -49,18 +61,18 @@ export type AppleHealthSyncResult = {
   bodyFatPct?: number;
 };
 
-function healthkit(): HealthKitModule | null {
+function getNativeHealthKit(): HealthKitModule | null {
   if (Platform.OS !== "ios") return null;
   try {
-    const mod = require("@kingstinct/react-native-healthkit");
-    return mod?.default || mod;
+    const { NativeModules } = require("react-native");
+    return (NativeModules?.AppleHealthKit as HealthKitModule | undefined) ?? null;
   } catch {
     return null;
   }
 }
 
 function missingNativeModuleMessage() {
-  return "Apple Health is not available in this build. Rebuild the iOS app after installing @kingstinct/react-native-healthkit; Expo Go cannot load this native module.";
+  return "Apple Health native module is unavailable in this build.";
 }
 
 function iso(d: Date) {
@@ -81,28 +93,133 @@ function addDays(date: Date, delta: number) {
   return d;
 }
 
-function quantityFromSample(sample: QuantitySample | null | undefined) {
-  if (!sample) return 0;
-  return Number(sample.quantity ?? sample.value ?? 0);
+function ensureModule() {
+  const HK = getNativeHealthKit();
+  if (!HK || typeof HK.initHealthKit !== "function") {
+    return {
+      ok: false as const,
+      message:
+        Platform.OS === "ios"
+          ? missingNativeModuleMessage()
+          : "Apple Health is available on iOS only.",
+      HK: null,
+    };
+  }
+  return { ok: true as const, HK };
 }
 
-function normalizeQuantitySamples(result: unknown): QuantitySample[] {
-  if (Array.isArray(result)) return result as QuantitySample[];
-  if (result && typeof result === "object" && Array.isArray((result as any).samples)) {
-    return (result as any).samples as QuantitySample[];
+export async function requestAppleHealthPermissions() {
+  const ready = ensureModule();
+  if (!ready.ok) {
+    return { ok: false, message: ready.message };
   }
-  return [];
+
+  return new Promise<{ ok: boolean; message?: string }>((resolve) => {
+    ready.HK.initHealthKit(
+      {
+        permissions: {
+          read: READ_PERMISSIONS,
+          write: [],
+        },
+      },
+      (error?: string) => {
+        if (error) resolve({ ok: false, message: error });
+        else resolve({ ok: true });
+      }
+    );
+  });
 }
 
-function normalizeWorkouts(result: unknown): WorkoutSample[] {
-  if (Array.isArray(result)) return result as WorkoutSample[];
-  if (result && typeof result === "object" && Array.isArray((result as any).workouts)) {
-    return (result as any).workouts as WorkoutSample[];
-  }
-  if (result && typeof result === "object" && Array.isArray((result as any).samples)) {
-    return (result as any).samples as WorkoutSample[];
-  }
-  return [];
+function getDailySteps(HK: HealthKitModule, date: Date) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(date);
+  end.setHours(23, 59, 59, 999);
+
+  return new Promise<number>((resolve) => {
+    HK.getDailyStepCountSamples(
+      { startDate: iso(start), endDate: iso(end) },
+      (error, results) => {
+        if (error || !Array.isArray(results)) {
+          resolve(0);
+          return;
+        }
+        resolve(
+          Math.round(results.reduce((sum, sample) => sum + Number(sample?.value || 0), 0))
+        );
+      }
+    );
+  });
+}
+
+function getActiveEnergy(HK: HealthKitModule, date: Date) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(date);
+  end.setHours(23, 59, 59, 999);
+
+  return new Promise<number>((resolve) => {
+    HK.getActiveEnergyBurned(
+      { startDate: iso(start), endDate: iso(end) },
+      (error, results) => {
+        if (error || !Array.isArray(results)) {
+          resolve(0);
+          return;
+        }
+        resolve(
+          Math.round(results.reduce((sum, sample) => sum + Number(sample?.value || 0), 0))
+        );
+      }
+    );
+  });
+}
+
+function getLatestWeightKg(HK: HealthKitModule) {
+  return new Promise<number | null>((resolve) => {
+    HK.getLatestWeight({ unit: "kg" }, (error, result) => {
+      if (error || !result?.value) {
+        resolve(null);
+        return;
+      }
+      resolve(Number(result.value));
+    });
+  });
+}
+
+function getLatestBodyFatPct(HK: HealthKitModule) {
+  return new Promise<number | null>((resolve) => {
+    HK.getLatestBodyFatPercentage({ unit: "percent" }, (error, result) => {
+      if (error || result?.value == null) {
+        resolve(null);
+        return;
+      }
+      const raw = Number(result.value);
+      resolve(raw <= 1 ? raw * 100 : raw);
+    });
+  });
+}
+
+function getWorkouts(HK: HealthKitModule, startDate: Date, endDate: Date) {
+  return new Promise<any[]>((resolve) => {
+    HK.getAnchoredWorkouts(
+      {
+        startDate: iso(startDate),
+        endDate: iso(endDate),
+        type: "Workout",
+      },
+      (error, result) => {
+        if (error) {
+          resolve([]);
+          return;
+        }
+        if (Array.isArray(result)) {
+          resolve(result);
+          return;
+        }
+        resolve(Array.isArray(result?.data) ? result.data : []);
+      }
+    );
+  });
 }
 
 function mapWorkoutType(name: string): ActivityType {
@@ -113,89 +230,6 @@ function mapWorkoutType(name: string): ActivityType {
   if (s.includes("swim")) return "swim";
   if (s.includes("yoga")) return "yoga";
   return "other";
-}
-
-async function ensureModuleReady(HK: HealthKitModule | null) {
-  if (!HK) {
-    return {
-      ok: false,
-      message: Platform.OS === "ios" ? missingNativeModuleMessage() : "Apple Health is available on iOS only.",
-    };
-  }
-  if (
-    typeof HK.isHealthDataAvailable !== "function" ||
-    typeof HK.requestAuthorization !== "function" ||
-    typeof HK.queryQuantitySamples !== "function" ||
-    typeof HK.getMostRecentQuantitySample !== "function"
-  ) {
-    return { ok: false, message: missingNativeModuleMessage() };
-  }
-  const available = await HK.isHealthDataAvailable();
-  if (!available) {
-    return { ok: false, message: "Health data is not available on this device." };
-  }
-  return { ok: true };
-}
-
-export async function requestAppleHealthPermissions() {
-  const HK = healthkit();
-  const ready = await ensureModuleReady(HK);
-  if (!ready.ok) return ready;
-
-  try {
-    await HK!.requestAuthorization!({
-      toRead: [
-        "HKQuantityTypeIdentifierStepCount",
-        "HKQuantityTypeIdentifierActiveEnergyBurned",
-        "HKQuantityTypeIdentifierBasalEnergyBurned",
-        "HKWorkoutTypeIdentifier",
-        "HKQuantityTypeIdentifierHeartRate",
-        "HKCategoryTypeIdentifierSleepAnalysis",
-        "HKQuantityTypeIdentifierBodyMass",
-        "HKQuantityTypeIdentifierBodyFatPercentage",
-      ],
-    });
-    return { ok: true };
-  } catch (error) {
-    return {
-      ok: false,
-      message: error instanceof Error ? error.message : "Apple Health permission request failed.",
-    };
-  }
-}
-
-async function getQuantityTotal(HK: HealthKitModule, identifier: string, startDate: Date, endDate: Date) {
-  const result = await HK.queryQuantitySamples!(identifier, {
-    startDate: iso(startDate),
-    endDate: iso(endDate),
-    ascending: true,
-    limit: 0,
-  });
-  return normalizeQuantitySamples(result).reduce((sum, sample) => sum + quantityFromSample(sample), 0);
-}
-
-async function getLatestQuantity(HK: HealthKitModule, identifier: string) {
-  try {
-    const sample = (await HK.getMostRecentQuantitySample!(identifier)) as QuantitySample | null;
-    return quantityFromSample(sample);
-  } catch {
-    return 0;
-  }
-}
-
-async function getWorkouts(HK: HealthKitModule, startDate: Date, endDate: Date) {
-  if (typeof HK.queryWorkouts !== "function") return [];
-  try {
-    const result = await HK.queryWorkouts({
-      startDate: iso(startDate),
-      endDate: iso(endDate),
-      ascending: true,
-      limit: 0,
-    });
-    return normalizeWorkouts(result);
-  } catch {
-    return [];
-  }
 }
 
 export async function syncAppleHealthToApp(uid: string, days = 14): Promise<AppleHealthSyncResult> {
@@ -210,18 +244,18 @@ export async function syncAppleHealthToApp(uid: string, days = 14): Promise<Appl
     };
   }
 
-  const HK = healthkit();
-  const ready = await ensureModuleReady(HK);
-  if (!ready.ok || !HK) {
+  const ready = ensureModule();
+  if (!ready.ok) {
     return {
       ok: false,
-      message: ready.message || missingNativeModuleMessage(),
+      message: ready.message,
       stepsUpdated: 0,
       activeCalories: 0,
       workoutsImported: 0,
     };
   }
 
+  const HK = ready.HK;
   const today = new Date();
   const start = addDays(today, -days + 1);
   let stepsUpdated = 0;
@@ -229,30 +263,21 @@ export async function syncAppleHealthToApp(uid: string, days = 14): Promise<Appl
 
   for (let i = days - 1; i >= 0; i -= 1) {
     const date = addDays(today, -i);
-    const dayStart = new Date(date);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(date);
-    dayEnd.setHours(23, 59, 59, 999);
-
-    const [steps, active] = await Promise.all([
-      getQuantityTotal(HK, "HKQuantityTypeIdentifierStepCount", dayStart, dayEnd),
-      getQuantityTotal(HK, "HKQuantityTypeIdentifierActiveEnergyBurned", dayStart, dayEnd),
-    ]);
+    const [steps, active] = await Promise.all([getDailySteps(HK, date), getActiveEnergy(HK, date)]);
 
     if (steps > 0) {
-      await setStepsForDate(uid, ymd(date), Math.round(steps));
+      await setStepsForDate(uid, ymd(date), steps);
       stepsUpdated += 1;
     }
 
-    const roundedActive = Math.round(active);
-    activeCalories += roundedActive;
-    if (roundedActive > 0) {
+    activeCalories += active;
+    if (active > 0) {
       await addActivity(uid, {
         id: `apple-health-active-${ymd(date)}`,
         type: "other",
         minutes: 0,
         intensity: "moderate",
-        calories: roundedActive,
+        calories: active,
         note: "Synced active calories from Apple Health",
         timestamp: new Date(`${ymd(date)}T12:00:00`).getTime(),
       });
@@ -262,42 +287,36 @@ export async function syncAppleHealthToApp(uid: string, days = 14): Promise<Appl
   const workouts = await getWorkouts(HK, start, today);
   let workoutsImported = 0;
   for (const workout of workouts) {
-    const started = new Date(workout.startDate || workout.start || Date.now());
-    const ended = new Date(workout.endDate || workout.end || started);
-    const seconds = Number(workout.duration || 0);
-    const minutes =
-      seconds > 0
-        ? Math.max(1, Math.round(seconds / 60))
-        : Math.max(1, Math.round((ended.getTime() - started.getTime()) / 60000));
-
+    const started = new Date(workout.start || workout.startDate || Date.now());
+    const ended = new Date(workout.end || workout.endDate || started);
+    const minutes = Math.max(1, Math.round((ended.getTime() - started.getTime()) / 60000));
     await addActivity(uid, {
-      id: `apple-health-workout-${workout.platformId || started.getTime()}`,
-      type: mapWorkoutType(String(workout.workoutActivityType || workout.workoutType || workout.activityName || "")),
+      id: `apple-health-workout-${workout.id || started.getTime()}`,
+      type: mapWorkoutType(workout.activityName || workout.type),
       minutes,
       intensity: "moderate",
-      calories: Math.round(Number(workout.totalEnergyBurned || workout.calories || 0)),
-      note: "Synced workout from Apple Health",
+      // Workout calories are already included in Apple Health active energy totals above.
+      calories: 0,
+      note: `Synced ${workout.activityName || "workout"} from Apple Health. Calories included in daily Apple burn.`,
       timestamp: started.getTime(),
     });
     workoutsImported += 1;
   }
 
-  const [weightKgRaw, bodyFatRaw] = await Promise.all([
-    getLatestQuantity(HK, "HKQuantityTypeIdentifierBodyMass"),
-    getLatestQuantity(HK, "HKQuantityTypeIdentifierBodyFatPercentage"),
+  const [weightKg, bodyFatPct] = await Promise.all([
+    getLatestWeightKg(HK),
+    getLatestBodyFatPct(HK),
   ]);
 
   const current = (await loadBodyMetrics()) || {};
   const patch: Record<string, number> = {};
   let weightLb: number | undefined;
-  const weightKg = weightKgRaw > 0 ? weightKgRaw : 0;
-  const bodyFatPct = bodyFatRaw > 0 ? (bodyFatRaw <= 1 ? bodyFatRaw * 100 : bodyFatRaw) : 0;
 
-  if (weightKg > 0) {
+  if (weightKg && weightKg > 0) {
     weightLb = weightKg * 2.20462;
     patch.weightLb = weightLb;
   }
-  if (bodyFatPct > 0) {
+  if (bodyFatPct && bodyFatPct > 0) {
     patch.bodyFatPct = bodyFatPct;
   }
 
@@ -311,8 +330,8 @@ export async function syncAppleHealthToApp(uid: string, days = 14): Promise<Appl
     await updateProfile(
       uid,
       {
-        ...(weightKg > 0 ? { weightKg } : {}),
-        ...(bodyFatPct > 0 ? { bodyFatPct } : {}),
+        ...(weightKg ? { weightKg } : {}),
+        ...(bodyFatPct ? { bodyFatPct } : {}),
         healthLastUpdatedVia: "Apple Health",
         healthLastUpdatedAt: Date.now(),
       } as any
