@@ -12,9 +12,11 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Animated, {
+  Easing,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  withTiming,
 } from "react-native-reanimated";
 
 import { GlassCard } from "./GlassCard";
@@ -32,6 +34,8 @@ type Props = {
   onClear: () => void;
   style?: ViewStyle | any;
   unit?: "ml" | "oz"; // optional display only
+  streakDays?: number;
+  showReminder?: boolean;
 };
 
 function mlToOz(ml: number) {
@@ -51,6 +55,8 @@ export function HydrationCardPremium({
   onClear,
   style,
   unit = "ml",
+  streakDays = 0,
+  showReminder = false,
 }: Props) {
   const [showCustom, setShowCustom] = useState(false);
   const [customValue, setCustomValue] = useState<string>("");
@@ -94,9 +100,20 @@ export function HydrationCardPremium({
   }, [safeGoal, over, pct, displayRemaining, displayOver, unit]);
 
   const cardPress = useSharedValue(1);
+  const progress = useSharedValue(0);
   const cardAnim = useAnimatedStyle(() => ({
     transform: [{ scale: cardPress.value }],
   }));
+  const progressAnim = useAnimatedStyle(() => ({
+    width: `${progress.value}%`,
+  }));
+
+  React.useEffect(() => {
+    progress.value = withTiming(
+      safeGoal ? Math.min(100, (safeNow / safeGoal) * 100) : 0,
+      { duration: 900, easing: Easing.out(Easing.cubic) }
+    );
+  }, [progress, safeGoal, safeNow]);
 
   function bump() {
     cardPress.value = withSpring(0.99, { damping: 18, stiffness: 280 });
@@ -168,20 +185,43 @@ export function HydrationCardPremium({
             >
               Hydration
             </Text>
-            <Text
-              style={[
-                styles.sub,
-                {
-                  color: withAlpha(
-                    colors.muted ?? colors.text,
-                    isDark ? 0.72 : 0.78
-                  ),
-                },
-              ]}
-              numberOfLines={1}
-            >
-              {headline} • {pct}%
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text
+                style={[
+                  styles.sub,
+                  {
+                    color: withAlpha(
+                      colors.text,
+                      isDark ? 0.82 : 0.68
+                    ),
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                {headline} • {pct}%
+              </Text>
+              <View
+                style={[
+                  styles.streakPill,
+                  {
+                    borderColor: withAlpha(colors.primary ?? "#7dd3fc", 0.28),
+                    backgroundColor: withAlpha(
+                      colors.primary ?? "#7dd3fc",
+                      isDark ? 0.14 : 0.1
+                    ),
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="flame-outline"
+                  size={12}
+                  color={withAlpha(colors.text, 0.9)}
+                />
+                <Text style={[styles.streakText, { color: colors.text }]}>
+                  {streakDays}d
+                </Text>
+              </View>
+            </View>
           </View>
 
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -225,6 +265,33 @@ export function HydrationCardPremium({
             </Pressable>
           </View>
         </View>
+
+        {showReminder ? (
+          <View
+            style={[
+              styles.reminder,
+              {
+                borderColor: withAlpha(colors.primary ?? "#7dd3fc", 0.26),
+                backgroundColor: withAlpha("#6D5DF6", isDark ? 0.16 : 0.08),
+              },
+            ]}
+          >
+            <Ionicons
+              name="notifications-outline"
+              size={16}
+              color={withAlpha(colors.text, 0.92)}
+            />
+            <Text
+              style={[
+                styles.reminderText,
+                { color: withAlpha(colors.text, isDark ? 0.88 : 0.76) },
+              ]}
+              numberOfLines={1}
+            >
+              No water logged yet — tap +250ml to start
+            </Text>
+          </View>
+        ) : null}
 
         {/* Middle */}
         <View style={styles.middleRow}>
@@ -281,13 +348,11 @@ export function HydrationCardPremium({
                 },
               ]}
             >
-              <View
+              <Animated.View
                 style={[
                   styles.progressFill,
+                  progressAnim,
                   {
-                    width: `${
-                      safeGoal ? Math.min(1, safeNow / safeGoal) * 100 : 0
-                    }%`,
                     backgroundColor: withAlpha(
                       colors.primary ?? "#7dd3fc",
                       isDark ? 0.92 : 0.85
@@ -500,6 +565,35 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.2,
+  },
+  streakPill: {
+    minHeight: 24,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  streakText: {
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  reminder: {
+    alignSelf: "flex-start",
+    marginBottom: 10,
+    minHeight: 34,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  reminderText: {
+    fontSize: 11.5,
+    fontWeight: "900",
   },
   clearBtn: {
     width: 36,

@@ -158,6 +158,7 @@ export default function MacroGoalsEngineCard({
 
   const [mode, setMode] = useState<GoalMode>(initialMode ?? "maintain");
   const [simple, setSimple] = useState(initialSimple ?? true);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   // simple inputs
   const [stepsPerDay, setStepsPerDay] = useState(
@@ -480,22 +481,21 @@ export default function MacroGoalsEngineCard({
                 maxWidth: 180, // ✅ prevents overflow on narrow screens
               }}
             >
-              <Ionicons
-                name="sparkles-outline"
-                size={18}
-                color={colors.primary}
-              />
-              <PillToggle
-                left="Simple"
-                right="Tune"
-                valueLeft={simple}
-                onChange={(v) => {
-                  markTouched();
-                  setSimplePremium(v);
+              <Ionicons name="sparkles-outline" size={18} color={colors.primary} />
+              <View
+                style={{
+                  paddingHorizontal: 10,
+                  paddingVertical: 7,
+                  borderRadius: 999,
+                  backgroundColor: withAlpha(colors.primary, 0.14),
+                  borderWidth: 1,
+                  borderColor: withAlpha(colors.primary, 0.28),
                 }}
-                colors={colors}
-                isDark={isDark}
-              />
+              >
+                <Text style={{ color: colors.text, fontWeight: "900", fontSize: 12 }}>
+                  Essential
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -629,80 +629,143 @@ export default function MacroGoalsEngineCard({
               colors={colors}
             />
 
+            <FieldRow
+              label="Protein target"
+              right={
+                <View
+                  style={{
+                    borderWidth: 1,
+                    borderColor: isDark
+                      ? withAlpha("#FFFFFF", 0.1)
+                      : withAlpha("#0B1220", 0.08),
+                    backgroundColor: isDark
+                      ? withAlpha("#000000", 0.22)
+                      : withAlpha("#FFFFFF", 0.55),
+                    paddingHorizontal: 12,
+                    paddingVertical: 11,
+                    borderRadius: 14,
+                    minWidth: 160,
+                    alignItems: "flex-end",
+                  }}
+                >
+                  <Text style={{ color: colors.text, fontSize: 16, fontWeight: "900" }}>
+                    {currentWeightKg ? (targets.proteinGoal / currentWeightKg).toFixed(1) : "—"} g/kg
+                  </Text>
+                  <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "800" }}>
+                    {targets.proteinGoal}g daily
+                  </Text>
+                </View>
+              }
+              colors={colors}
+            />
+
+            <Pressable
+              onPress={() => {
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                setAdvancedOpen((v) => !v);
+                onHaptic("selection");
+              }}
+              style={({ pressed }) => ({
+                minHeight: 44,
+                borderRadius: 16,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                borderWidth: 1,
+                borderColor: isDark
+                  ? withAlpha("#FFFFFF", 0.1)
+                  : withAlpha("#0B1220", 0.08),
+                backgroundColor: isDark
+                  ? withAlpha("#FFFFFF", pressed ? 0.08 : 0.05)
+                  : withAlpha("#0B1220", pressed ? 0.08 : 0.04),
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              })}
+              accessibilityRole="button"
+              accessibilityLabel="Toggle fine tune macro goals"
+            >
+              <Text style={{ color: colors.text, fontWeight: "900" }}>
+                Fine-tune {advancedOpen ? "↓" : "→"}
+              </Text>
+              <Text style={{ color: colors.muted, fontWeight: "800", fontSize: 12 }}>
+                Steps, training, sliders
+              </Text>
+            </Pressable>
+
             {/* Movement + training */}
-            <TwoColRow
-              left={
-                <LabeledInput
-                  label="Steps/day"
-                  value={stepsPerDay}
-                  onChangeText={(t) => {
-                    markTouched();
-                    const next = onlyNum(t);
-                    setStepsPerDay(next);
-                    onChangeStepsPerDay?.(next);
-                  }}
-                  placeholder="7000"
-                  colors={colors}
-                  isDark={isDark}
+            {advancedOpen ? (
+              <View style={{ gap: 12 }}>
+                <TwoColRow
+                  left={
+                    <LabeledInput
+                      label="Steps/day"
+                      value={stepsPerDay}
+                      onChangeText={(t) => {
+                        markTouched();
+                        const next = onlyNum(t);
+                        setStepsPerDay(next);
+                        onChangeStepsPerDay?.(next);
+                      }}
+                      placeholder="7000"
+                      colors={colors}
+                      isDark={isDark}
+                    />
+                  }
+                  right={
+                    <LabeledInput
+                      label="Train/wk"
+                      value={gymSessions}
+                      onChangeText={(t) => {
+                        markTouched();
+                        const next = onlyNum(t);
+                        setGymSessions(next);
+                        onChangeGymSessionsPerWeek?.(next);
+                      }}
+                      placeholder="4"
+                      colors={colors}
+                      isDark={isDark}
+                    />
+                  }
                 />
-              }
-              right={
-                <LabeledInput
-                  label="Train/wk"
-                  value={gymSessions}
-                  onChangeText={(t) => {
-                    markTouched();
-                    const next = onlyNum(t);
-                    setGymSessions(next);
-                    onChangeGymSessionsPerWeek?.(next);
-                  }}
-                  placeholder="4"
-                  colors={colors}
-                  isDark={isDark}
-                />
-              }
-            />
 
-            <TwoColRow
-              left={
-                <LabeledInput
-                  label="Sport/wk"
-                  value={sportSessions}
-                  onChangeText={(t) => {
-                    markTouched();
-                    const next = onlyNum(t);
-                    setSportSessions(next);
-                    onChangeSportSessionsPerWeek?.(next);
-                  }}
-                  placeholder="0"
-                  colors={colors}
-                  isDark={isDark}
+                <TwoColRow
+                  left={
+                    <LabeledInput
+                      label="Sport/wk"
+                      value={sportSessions}
+                      onChangeText={(t) => {
+                        markTouched();
+                        const next = onlyNum(t);
+                        setSportSessions(next);
+                        onChangeSportSessionsPerWeek?.(next);
+                      }}
+                      placeholder="0"
+                      colors={colors}
+                      isDark={isDark}
+                    />
+                  }
+                  right={
+                    <JobActivityPicker
+                      value={jobActivity}
+                      onChange={(v) => {
+                        markTouched();
+                        setJobActivity(v);
+                        onChangeJobActivity?.(v);
+                        onHaptic("selection");
+                      }}
+                      colors={colors}
+                      isDark={isDark}
+                    />
+                  }
                 />
-              }
-              right={
-                <JobActivityPicker
-                  value={jobActivity}
-                  onChange={(v) => {
-                    markTouched();
-                    setJobActivity(v);
-                    onChangeJobActivity?.(v);
-                    onHaptic("selection");
-                  }}
-                  colors={colors}
-                  isDark={isDark}
-                />
-              }
-            />
 
-            {/* Advanced: friendly “Tune” section */}
-            {!simple && (
-              <View style={{ gap: 12, marginTop: 2 }}>
                 <SoftSectionTitle colors={colors} text="Optional fine-tuning" />
 
                 <PremiumSlider
                   label="Goal intensity"
                   hint="Gentle is easier to sustain. Assertive moves faster."
                   value={goalIntensity}
+                  defaultValue={0.35}
                   onChange={(v) => {
                     markTouched();
                     setGoalIntensity(v);
@@ -716,6 +779,7 @@ export default function MacroGoalsEngineCard({
                   label="Performance focus"
                   hint="Higher supports training days (more carbs)."
                   value={performanceFocus}
+                  defaultValue={0.55}
                   onChange={(v) => {
                     markTouched();
                     setPerformanceFocus(v);
@@ -729,6 +793,7 @@ export default function MacroGoalsEngineCard({
                   label="Protein focus"
                   hint="Higher helps preserve lean mass (especially during cuts)."
                   value={proteinFocus}
+                  defaultValue={0.6}
                   onChange={(v) => {
                     markTouched();
                     setProteinFocus(v);
@@ -775,7 +840,7 @@ export default function MacroGoalsEngineCard({
                   />
                 </View>
               </View>
-            )}
+            ) : null}
           </Animated.View>
 
           {/* Recommendation */}
@@ -1377,7 +1442,7 @@ function JobActivityPicker({
   const bg = isDark ? withAlpha("#000000", 0.22) : withAlpha("#FFFFFF", 0.55);
 
   const opts: Array<{ k: any; label: string }> = [
-    { k: "sedentary", label: "Sedentary" },
+    { k: "sedentary", label: "Sedent." },
     { k: "light", label: "Light" },
     { k: "active", label: "Active" },
   ];
@@ -1390,7 +1455,7 @@ function JobActivityPicker({
       <View
         style={{
           flexDirection: "row",
-          gap: 6,
+          gap: 4,
           borderWidth: 1,
           borderColor: border,
           backgroundColor: bg,
@@ -1407,6 +1472,7 @@ function JobActivityPicker({
               style={{
                 flex: 1,
                 paddingVertical: 10,
+                paddingHorizontal: 4,
                 borderRadius: 12,
                 alignItems: "center",
                 backgroundColor: active
@@ -1418,8 +1484,9 @@ function JobActivityPicker({
                 style={{
                   color: active ? "#fff" : colors.text,
                   fontWeight: "900",
-                  fontSize: 11,
+                  fontSize: 10.5,
                 }}
+                numberOfLines={1}
               >
                 {o.label}
               </Text>
@@ -1459,6 +1526,7 @@ function PremiumSlider({
   label,
   hint,
   value,
+  defaultValue,
   onChange,
   colors,
   isDark,
@@ -1466,6 +1534,7 @@ function PremiumSlider({
   label: string;
   hint: string;
   value: number;
+  defaultValue: number;
   onChange: (v: number) => void;
   colors: any;
   isDark: boolean;
@@ -1477,11 +1546,22 @@ function PremiumSlider({
 
   return (
     <View style={{ gap: 6 }}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
         <Text style={{ color: colors.text, fontWeight: "900" }}>{label}</Text>
-        <Text style={{ color: colors.muted, fontWeight: "900" }}>
-          {Math.round(value * 100)}%
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Text style={{ color: colors.muted, fontWeight: "900" }}>
+            {Math.round(value * 100)}%
+          </Text>
+          <Pressable
+            onPress={() => onChange(defaultValue)}
+            onLongPress={() => onChange(defaultValue)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Reset ${label}`}
+          >
+            <Ionicons name="refresh-outline" size={15} color={colors.muted} />
+          </Pressable>
+        </View>
       </View>
       <View
         style={{

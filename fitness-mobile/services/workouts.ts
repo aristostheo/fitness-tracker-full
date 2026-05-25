@@ -142,14 +142,8 @@ export async function addWorkout(uid: string, entry: Omit<Workout, "id">) {
     dateMs, // ✅ numeric for future range queries
     sessionId: entry.sessionId ?? null,
     sessionTitle: entry.sessionTitle ?? null,
-    sessionStartedAt:
-      typeof entry.sessionStartedAt === "number"
-        ? entry.sessionStartedAt
-        : entry.sessionStartedAt?.toMillis?.() ?? null,
-    setCreatedAt:
-      typeof entry.setCreatedAt === "number"
-        ? entry.setCreatedAt
-        : entry.setCreatedAt?.toMillis?.() ?? null,
+    sessionStartedAt: entry.sessionStartedAt ?? null,
+    setCreatedAt: entry.setCreatedAt ?? null,
     createdAt: serverTimestamp(),
   });
   return ref;

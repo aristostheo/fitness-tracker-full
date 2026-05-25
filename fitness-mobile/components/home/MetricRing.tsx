@@ -4,7 +4,9 @@ import { View, Text, Pressable, ViewStyle } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import Animated, {
   useAnimatedProps,
+  useAnimatedStyle,
   useSharedValue,
+  withRepeat,
   withTiming,
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
@@ -57,6 +59,8 @@ export function MetricRing({
     ringA: string;
     ringB: string;
     good: string;
+    warn?: string;
+    bad?: string;
   };
   style?: ViewStyle;
   onPress?: () => void;
@@ -67,21 +71,34 @@ export function MetricRing({
   );
 
   const toneColor = useMemo(() => {
-    if (tone === "violet") return tokens.ringB;
-    if (tone === "mint") return tokens.good;
-    return tokens.ringA;
-  }, [tone, tokens]);
+    if (pct < 0.4) return tokens.bad ?? "#FF7C7C";
+    if (pct < 0.8) return tokens.warn ?? "#FFD37C";
+    return tokens.good;
+  }, [pct, tokens]);
 
-  const size = 84;
-  const stroke = 9;
+  const size = 94;
+  const stroke = 10;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
 
   const progress = useSharedValue(reduceMotion ? pct : 0);
+  const pulse = useSharedValue(1);
 
   React.useEffect(() => {
     progress.value = withTiming(pct, { duration: reduceMotion ? 1 : 700 });
   }, [pct, reduceMotion, progress]);
+
+  React.useEffect(() => {
+    if (reduceMotion || pct >= 0.3) {
+      pulse.value = withTiming(1, { duration: 180 });
+      return;
+    }
+    pulse.value = withRepeat(withTiming(1.035, { duration: 900 }), -1, true);
+  }, [pct, reduceMotion, pulse]);
+
+  const pulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulse.value }],
+  }));
 
   const animatedProps = useAnimatedProps(() => {
     const dashoffset = c * (1 - progress.value);
@@ -104,6 +121,7 @@ export function MetricRing({
         transform: [{ scale: pressed ? 0.99 : 1 }],
       })}
     >
+      <Animated.View style={pulseStyle}>
       <LinearGradient
         colors={[withAlpha(tokens.card, 1), withAlpha(tokens.card2, 1)]}
         start={{ x: 0, y: 0 }}
@@ -114,7 +132,7 @@ export function MetricRing({
           borderWidth: 1,
           borderColor: tokens.hairline,
           padding: 12,
-          minHeight: 150,
+	          minHeight: 166,
           ...(style as any),
         }}
       >
@@ -202,7 +220,9 @@ export function MetricRing({
                     marginTop: 2,
                   }}
                 >
-                  {Math.round(pct * 100)}%
+	                  {label === "Steps" && value <= 0
+	                    ? "Start moving"
+	                    : `${Math.round(pct * 100)}%`}
                 </Text>
               </View>
             </View>
@@ -216,6 +236,7 @@ export function MetricRing({
           </View>
         </BlurView>
       </LinearGradient>
+      </Animated.View>
     </Pressable>
   );
 }

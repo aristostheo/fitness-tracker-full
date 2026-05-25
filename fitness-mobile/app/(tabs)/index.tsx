@@ -16,6 +16,7 @@ import {
   Platform,
   StatusBar,
   AccessibilityInfo,
+  Modal,
   useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -66,6 +67,14 @@ import { TextInput, KeyboardAvoidingView } from "react-native";
 import * as Haptics from "expo-haptics"; // optional
 import { setStepsForDate, addStepsForDate } from "@/services/profile";
 import ActivityLogSheet from "@/components/activity/ActivityLogSheet";
+import {
+  connectedCount,
+  formatLastSync,
+  INTEGRATIONS,
+  subscribeIntegrations,
+  syncHealth,
+  type IntegrationSnapshot,
+} from "@/services/integrations";
 
 import { useFocusEffect } from "expo-router";
 import BadgeMedallion from "@/components/badges/new/BadgeMedalion";
@@ -196,6 +205,11 @@ export default function HomeScreen() {
 
   // Date key is exactly like old page (string YYYY-MM-DD)
   const [todayStr] = useState(ymd(new Date()));
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
   const today = useMemo(() => {
     // keep “today” consistent with todayStr
     const [y, m, d] = todayStr.split("-").map(Number);
@@ -212,6 +226,8 @@ export default function HomeScreen() {
   const [editingActivity, setEditingActivity] = useState<CardioEntry | null>(
     null
   );
+  const [integrations, setIntegrations] = useState<IntegrationSnapshot | null>(null);
+  const [syncSheetOpen, setSyncSheetOpen] = useState(false);
   const { badgeUnlocks, featuredBadges, refreshBadgesLocal } =
     useBadgesLocal(true);
 
@@ -291,6 +307,8 @@ export default function HomeScreen() {
       } catch {}
     };
   }, [user?.uid, user?.email, todayStr]);
+
+  useEffect(() => subscribeIntegrations(setIntegrations), []);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -519,6 +537,45 @@ export default function HomeScreen() {
     return Math.round(sum / days.length);
   }, [profile]);
 
+  const topMacroDeficit = useMemo(() => {
+    const gaps = [
+      { key: "protein", label: "protein", value: proteinRemaining, color: t.ringB },
+      { key: "carbs", label: "carbs", value: carbsRemaining, color: t.tint },
+      { key: "fat", label: "fat", value: fatRemaining, color: t.warn },
+    ]
+      .filter((x) => x.value > 0)
+      .sort((a, b) => b.value - a.value);
+    return gaps[0] ?? { key: "done", label: "macros", value: 0, color: t.good };
+  }, [proteinRemaining, carbsRemaining, fatRemaining, t.ringB, t.tint, t.warn, t.good]);
+
+  const weekBars = useMemo(() => {
+    const start = addDays(today, -6);
+    const caloriesByDate: Record<string, number> = {};
+    const proteinByDate: Record<string, number> = {};
+    foodsRange.forEach((f) => {
+      const d = f.date?.slice(0, 10);
+      if (!d) return;
+      caloriesByDate[d] = (caloriesByDate[d] || 0) + Number(f.calories || 0);
+      proteinByDate[d] = (proteinByDate[d] || 0) + Number(f.protein || 0);
+    });
+    return Array.from({ length: 7 }, (_, i) => {
+      const date = ymd(addDays(start, i));
+      const calories = caloriesByDate[date] || 0;
+      const protein = proteinByDate[date] || 0;
+      const hit =
+        calories >= kcalGoal * 0.8 ||
+        protein >= proteinGoal * 0.8 ||
+        (date === todayStr && foodsToday.length > 0);
+      return {
+        date,
+        calories,
+        protein,
+        hit,
+        pct: clamp01(kcalGoal ? calories / kcalGoal : 0),
+      };
+    });
+  }, [foodsRange, today, kcalGoal, proteinGoal, todayStr, foodsToday.length]);
+
   /* ───────────────── UI data mapping ───────────────── */
   const ringData = useMemo(
     () => [
@@ -596,19 +653,19 @@ export default function HomeScreen() {
       },
       {
         key: "water",
-        label: "Water",
+        label: "Log Water",
         icon: toIoniconName("water"),
         hint: "Log hydration",
-        onPress: () => router.push("/(tabs)/nutrition"),
+        onPress: () => router.push("/(modals)/quick-hydration" as any),
         color: "#4FD1FF",
       },
       {
         key: "workout",
-        label: "Workout",
+        label: "Log Workout",
         icon: toIoniconName("barbell"),
         hint: "Log a workout",
         onPress: () => router.push("/(modals)/quick-workout" as any),
-        color: t.good,
+        color: "#A78BFA",
       },
       {
         key: "ai",
@@ -897,6 +954,19 @@ export default function HomeScreen() {
     foodsRange,
   ]);
 
+  const todayFocus = useMemo(() => {
+    if (proteinRemaining >= 15) {
+      return `Priority today: hit protein goal (${proteinRemaining}g left)`;
+    }
+    if (stepsToday <= 0) return "Priority today: start moving with a 10 min walk";
+    if (caloriesRemaining > 350) {
+      return `Priority today: fuel the day (${caloriesRemaining} kcal left)`;
+    }
+    return aiSuggestions[0]?.title
+      ? `Priority today: ${aiSuggestions[0].title.toLowerCase()}`
+      : "Priority today: keep the streak alive";
+  }, [aiSuggestions, proteinRemaining, stepsToday, caloriesRemaining]);
+
   const softShadow = useMemo(
     () =>
       Platform.select({
@@ -988,10 +1058,16 @@ export default function HomeScreen() {
                       }}
                       accessibilityRole="header"
                     >
-                      {getGreeting(today)}
+                      {getGreeting(now)}
                     </Text>
                   </View>
 
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <SyncIndicator
+                      snapshot={integrations}
+                      tokens={t}
+                      onPress={() => setSyncSheetOpen(true)}
+                    />
                   <Pressable
                     onPress={() => router.push("/(tabs)/profile")}
                     accessibilityRole="button"
@@ -1021,6 +1097,7 @@ export default function HomeScreen() {
                       <Ionicons name="person-circle" size={26} color={t.text} />
                     </View>
                   </Pressable>
+                  </View>
                 </View>
 
                 {/* Streak */}
@@ -1046,7 +1123,30 @@ export default function HomeScreen() {
                     accessibilityRole="text"
                     accessibilityLabel={`Streak ${streakDays} days`}
                   >
-                    <Ionicons name="flame" size={14} color={t.tint} />
+                    <MotiView
+                      from={
+                        reduceMotion || ![7, 14, 30].includes(streakDays)
+                          ? undefined
+                          : { scale: 1, opacity: 0.75 }
+                      }
+                      animate={
+                        reduceMotion || ![7, 14, 30].includes(streakDays)
+                          ? undefined
+                          : { scale: 1.18, opacity: 1 }
+                      }
+                      transition={
+                        reduceMotion || ![7, 14, 30].includes(streakDays)
+                          ? undefined
+                          : {
+                              type: "timing",
+                              duration: 700,
+                              loop: true,
+                              repeatReverse: true,
+                            }
+                      }
+                    >
+                      <Ionicons name="flame" size={14} color={t.tint} />
+                    </MotiView>
                     <Text
                       style={{ color: t.text, fontWeight: "900", fontSize: 12 }}
                     >
@@ -1121,15 +1221,24 @@ export default function HomeScreen() {
                           Badges
                         </Text>
 
-                        {/* tiny “new” dot */}
                         {unseenBadgeCount > 0 ? (
-                          <View
+                          <MotiView
+                            from={reduceMotion ? undefined : { opacity: 0.45, scale: 0.92 }}
+                            animate={reduceMotion ? undefined : { opacity: 1, scale: 1.08 }}
+                            transition={
+                              reduceMotion
+                                ? undefined
+                                : { type: "timing", duration: 850, loop: true, repeatReverse: true }
+                            }
                             style={{
-                              width: 7,
-                              height: 7,
+                              width: 9,
+                              height: 9,
                               borderRadius: 99,
                               backgroundColor: t.tint,
-                              opacity: 0.95,
+                              shadowColor: t.tint,
+                              shadowOpacity: 0.9,
+                              shadowRadius: 8,
+                              shadowOffset: { width: 0, height: 0 },
                             }}
                           />
                         ) : null}
@@ -1144,10 +1253,9 @@ export default function HomeScreen() {
                         }}
                         numberOfLines={1}
                       >
-                        {unlockedBadgeCount} unlocked
                         {unseenBadgeCount > 0
-                          ? ` • ${unseenBadgeCount} new`
-                          : ""}
+                          ? `${unseenBadgeCount} ready • Tap to claim`
+                          : `${unlockedBadgeCount} unlocked`}
                       </Text>
                     </View>
 
@@ -1185,6 +1293,36 @@ export default function HomeScreen() {
               </View>
             </BlurView>
           </LinearGradient>
+        </View>
+
+        {/* Today's focus */}
+        <View style={{ paddingHorizontal: 16, marginTop: 14 }}>
+          <View
+            style={{
+              minHeight: 42,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: withAlpha(t.ringB, isDark ? 0.32 : 0.22),
+              backgroundColor: withAlpha(t.ringB, isDark ? 0.14 : 0.09),
+              paddingHorizontal: 14,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 9,
+            }}
+          >
+            <Ionicons name="sparkles" size={16} color={t.ringB} />
+            <Text
+              style={{
+                color: t.text,
+                fontWeight: "900",
+                fontSize: 13,
+                flex: 1,
+              }}
+              numberOfLines={1}
+            >
+              {todayFocus}
+            </Text>
+          </View>
         </View>
 
         {/* Rings */}
@@ -1363,84 +1501,72 @@ export default function HomeScreen() {
                   </Pressable>
                 </View>
 
-                <View style={{ flexDirection: "row", gap: 10 }}>
-                  {[
-                    {
-                      k: "Protein",
-                      v: `${Math.round(totals.protein)}g`,
-                      c: t.good,
-                      sub: `Goal ${Math.round(proteinGoal)}g`,
-                    },
-                    {
-                      k: "Carbs",
-                      v: `${Math.round(totals.carbs)}g`,
-                      c: t.tint,
-                      sub: `Goal ${Math.round(carbGoal)}g`,
-                    },
-                    {
-                      k: "Fat",
-                      v: `${Math.round(totals.fat)}g`,
-                      c: t.warn,
-                      sub: `Goal ${Math.round(fatGoal)}g`,
-                    },
-                  ].map((m) => (
+                <Pressable
+                  onPress={() => router.push("/(tabs)/nutrition")}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open nutrition fuel bar"
+                  style={({ pressed }) => ({
+                    opacity: pressed ? 0.9 : 1,
+                    transform: [{ scale: pressed ? 0.995 : 1 }],
+                  })}
+                >
+                  <View
+                    style={{
+                      borderRadius: 18,
+                      padding: 12,
+                      borderWidth: 1,
+                      borderColor: withAlpha(t.ringB, isDark ? 0.28 : 0.2),
+                      backgroundColor: withAlpha(t.ringB, isDark ? 0.1 : 0.07),
+                      gap: 10,
+                    }}
+                  >
                     <View
-                      key={m.k}
                       style={{
-                        flex: 1,
-                        borderRadius: 16,
-                        paddingVertical: 10,
-                        paddingHorizontal: 12,
-                        borderWidth: 1,
-                        borderColor: withAlpha(m.c, isDark ? 0.28 : 0.2),
-                        backgroundColor: withAlpha(m.c, isDark ? 0.12 : 0.1),
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "baseline",
+                        gap: 10,
                       }}
-                      accessibilityRole="text"
-                      accessibilityLabel={`${m.k} ${m.v}`}
                     >
                       <Text
-                        style={{
-                          color: t.muted,
-                          fontWeight: "900",
-                          fontSize: 11,
-                          letterSpacing: 0.4,
-                        }}
+                        style={{ color: t.text, fontWeight: "900", fontSize: 18 }}
                       >
-                        {m.k.toUpperCase()}
+                        {Math.round(totals.calories).toLocaleString()} /{" "}
+                        {Math.round(kcalGoal).toLocaleString()} kcal
                       </Text>
                       <Text
                         style={{
-                          color: t.text,
+                          color: topMacroDeficit.color,
                           fontWeight: "900",
-                          fontSize: 16,
-                          marginTop: 4,
+                          fontSize: 12,
                         }}
                       >
-                        {m.v}
-                      </Text>
-                      <Text
-                        style={{
-                          color: t.muted,
-                          fontWeight: "800",
-                          fontSize: 11,
-                          marginTop: 2,
-                        }}
-                      >
-                        {m.sub}
+                        {topMacroDeficit.value > 0
+                          ? `${topMacroDeficit.value}g ${topMacroDeficit.label} gap`
+                          : "Macros on track"}
                       </Text>
                     </View>
-                  ))}
-                </View>
 
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 12,
-                  }}
-                >
-                  <View style={{ flex: 1 }}>
+                    <View
+                      style={{
+                        height: 12,
+                        borderRadius: 999,
+                        backgroundColor: withAlpha(t.muted, 0.14),
+                        overflow: "hidden",
+                        borderWidth: 1,
+                        borderColor: withAlpha(t.muted, 0.12),
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: `${Math.round(clamp01(caloriesPct) * 100)}%`,
+                          height: "100%",
+                          borderRadius: 999,
+                          backgroundColor: withAlpha(t.ringB, 0.9),
+                        }}
+                      />
+                    </View>
+
                     <Text
                       style={{
                         color: t.muted,
@@ -1448,31 +1574,14 @@ export default function HomeScreen() {
                         fontSize: 12,
                       }}
                     >
-                      Calories
-                    </Text>
-                    <Text
-                      style={{
-                        color: t.text,
-                        fontWeight: "900",
-                        fontSize: 16,
-                        marginTop: 2,
-                      }}
-                    >
-                      {Math.round(totals.calories).toLocaleString()} /{" "}
-                      {Math.round(kcalGoal).toLocaleString()} kcal
-                    </Text>
-                    <Text
-                      style={{
-                        color: t.muted,
-                        fontWeight: "800",
-                        fontSize: 12,
-                        marginTop: 2,
-                      }}
-                    >
-                      {caloriesRemaining.toLocaleString()} left
+                      {caloriesOver > 0
+                        ? `${caloriesOver.toLocaleString()} kcal over target`
+                        : `${caloriesRemaining.toLocaleString()} kcal left today`}
                     </Text>
                   </View>
+                </Pressable>
 
+                <View style={{ alignItems: "flex-end" }}>
                   <Pressable
                     onPress={() =>
                       router.push(`/(modals)/add-meal?date=${todayStr}` as any)
@@ -1719,12 +1828,13 @@ export default function HomeScreen() {
                   delay: 70 + i * 60,
                 }}
               >
-                <AISuggestionCard
-                  tokens={t as any}
-                  reduceMotion={reduceMotion}
-                  suggestion={s}
-                  style={softShadow as any}
-                />
+	                <AISuggestionCard
+	                  tokens={t as any}
+	                  reduceMotion={reduceMotion}
+	                  suggestion={s}
+	                  priority={i === 0 ? "urgent" : "secondary"}
+	                  style={softShadow as any}
+	                />
               </MotiView>
             ))}
           </View>
@@ -1776,55 +1886,89 @@ export default function HomeScreen() {
                   <Ionicons name="stats-chart" size={18} color={t.muted} />
                 </View>
 
-                <View style={{ flexDirection: "row", gap: 10 }}>
-                  {[
-                    {
-                      k: "Protein hits",
-                      v: `${weeklyProteinHits}/7`,
-                      c: t.ringB,
-                    },
-                    {
-                      k: "Steps avg",
-                      v: `${stepsAvg.toLocaleString()}/day`,
-                      c: t.tint,
-                    },
-                    { k: "Streak", v: `${streakDays} days`, c: t.good },
-                  ].map((m) => (
-                    <View
-                      key={m.k}
-                      style={{
-                        flex: 1,
-                        borderRadius: 16,
-                        paddingVertical: 10,
-                        paddingHorizontal: 12,
-                        borderWidth: 1,
-                        borderColor: withAlpha(m.c, isDark ? 0.28 : 0.2),
-                        backgroundColor: withAlpha(m.c, isDark ? 0.12 : 0.1),
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: t.muted,
-                          fontWeight: "900",
-                          fontSize: 11,
-                          letterSpacing: 0.4,
-                        }}
-                      >
-                        {m.k.toUpperCase()}
-                      </Text>
-                      <Text
-                        style={{
-                          color: t.text,
-                          fontWeight: "900",
-                          fontSize: 16,
-                          marginTop: 4,
-                        }}
-                      >
-                        {m.v}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
+	                <View
+	                  style={{
+	                    borderRadius: 18,
+	                    borderWidth: 1,
+	                    borderColor: t.hairline,
+	                    backgroundColor: withAlpha(isDark ? "#FFFFFF" : "#0B1020", isDark ? 0.05 : 0.035),
+	                    padding: 12,
+	                    gap: 10,
+	                  }}
+	                >
+	                  <View
+	                    style={{
+	                      height: 74,
+	                      flexDirection: "row",
+	                      alignItems: "flex-end",
+	                      justifyContent: "space-between",
+	                      gap: 8,
+	                    }}
+	                  >
+	                    {weekBars.map((d) => {
+	                      const day = new Date(d.date + "T12:00:00");
+	                      const todayHit = d.date === todayStr;
+	                      return (
+	                        <View
+	                          key={d.date}
+	                          style={{
+	                            flex: 1,
+	                            alignItems: "center",
+	                            gap: 6,
+	                          }}
+	                        >
+	                          <View
+	                            style={{
+	                              width: "100%",
+	                              height: 48,
+	                              borderRadius: 10,
+	                              justifyContent: "flex-end",
+	                              backgroundColor: withAlpha(t.muted, 0.1),
+	                              overflow: "hidden",
+	                              borderWidth: todayHit ? 1 : 0,
+	                              borderColor: withAlpha(t.ringB, 0.55),
+	                            }}
+	                          >
+	                            <View
+	                              style={{
+	                                height: `${Math.max(10, Math.round(d.pct * 100))}%`,
+	                                borderRadius: 9,
+	                                backgroundColor: todayHit
+	                                  ? withAlpha(t.ringB, 0.95)
+	                                  : d.hit
+	                                  ? withAlpha(t.good, 0.9)
+	                                  : withAlpha(t.bad, 0.82),
+	                              }}
+	                            />
+	                          </View>
+	                          <Text
+	                            style={{
+	                              color: todayHit ? t.text : t.muted,
+	                              fontWeight: "900",
+	                              fontSize: 10,
+	                            }}
+	                          >
+	                            {day.toLocaleDateString(undefined, { weekday: "narrow" })}
+	                          </Text>
+	                        </View>
+	                      );
+	                    })}
+	                  </View>
+	                  <View
+	                    style={{
+	                      flexDirection: "row",
+	                      justifyContent: "space-between",
+	                      gap: 10,
+	                    }}
+	                  >
+	                    <Text style={{ color: t.muted, fontWeight: "800", fontSize: 12 }}>
+	                      Green = goals hit • Red = missed
+	                    </Text>
+	                    <Text style={{ color: t.text, fontWeight: "900", fontSize: 12 }}>
+	                      {weeklyProteinHits}/7 protein
+	                    </Text>
+	                  </View>
+	                </View>
               </View>
             </BlurView>
           </LinearGradient>
@@ -1861,6 +2005,13 @@ export default function HomeScreen() {
             label: "Stretch 10",
           },
         ]}
+      />
+
+      <SyncStatusSheet
+        visible={syncSheetOpen}
+        snapshot={integrations}
+        tokens={t}
+        onClose={() => setSyncSheetOpen(false)}
       />
 
       {/* Steps bottom sheet */}
@@ -2154,5 +2305,120 @@ export default function HomeScreen() {
         </View>
       ) : null}
     </View>
+  );
+}
+
+function SyncIndicator({
+  snapshot,
+  tokens,
+  onPress,
+}: {
+  snapshot: IntegrationSnapshot | null;
+  tokens: HomeTokens;
+  onPress: () => void;
+}) {
+  const health = snapshot ? syncHealth(snapshot) : "none";
+  const count = snapshot ? connectedCount(snapshot) : 0;
+  const dot =
+    health === "error" ? tokens.bad : health === "syncing" ? tokens.good : count > 0 ? "rgba(244,246,255,0.62)" : "rgba(244,246,255,0.34)";
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Open sync status"
+      style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+    >
+      <View
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 14,
+          backgroundColor: withAlpha("#FFFFFF", 0.08),
+          borderWidth: 1,
+          borderColor: tokens.hairline,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Ionicons name="sync-outline" size={20} color={tokens.text} />
+        <MotiView
+          animate={{ opacity: health === "syncing" ? [0.45, 1, 0.45] : 1 }}
+          transition={{ loop: health === "syncing", type: "timing", duration: 900 }}
+          style={{
+            position: "absolute",
+            right: 8,
+            top: 8,
+            width: 8,
+            height: 8,
+            borderRadius: 999,
+            backgroundColor: dot,
+          }}
+        />
+      </View>
+    </Pressable>
+  );
+}
+
+function SyncStatusSheet({
+  visible,
+  snapshot,
+  tokens,
+  onClose,
+}: {
+  visible: boolean;
+  snapshot: IntegrationSnapshot | null;
+  tokens: HomeTokens;
+  onClose: () => void;
+}) {
+  const connected = snapshot
+    ? Object.values(snapshot.connections).filter((c) => c.connected)
+    : [];
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" }}>
+        <Pressable onPress={onClose} style={{ flex: 1 }} />
+        <View
+          style={{
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            backgroundColor: withAlpha("#10131F", 0.98),
+            borderWidth: 1,
+            borderColor: tokens.hairline,
+            padding: 18,
+            gap: 12,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Text style={{ color: tokens.text, fontWeight: "900", fontSize: 20, flex: 1 }}>
+              Sync status
+            </Text>
+            <Pressable onPress={onClose} hitSlop={10}>
+              <Ionicons name="close" size={22} color={tokens.text} />
+            </Pressable>
+          </View>
+          {connected.length ? (
+            connected.map((c) => {
+              const def = INTEGRATIONS.find((x) => x.id === c.id);
+              const color = c.status === "error" ? tokens.bad : c.status === "syncing" ? tokens.good : tokens.muted;
+              return (
+                <View key={c.id} style={{ flexDirection: "row", alignItems: "center", gap: 10, minHeight: 36 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: color }} />
+                  <Text style={{ color: tokens.text, fontWeight: "900", flex: 1 }}>
+                    {def?.name || c.id}
+                  </Text>
+                  <Text style={{ color: tokens.muted, fontWeight: "800" }}>
+                    {formatLastSync(c.lastSyncedAt)}
+                  </Text>
+                </View>
+              );
+            })
+          ) : (
+            <Text style={{ color: tokens.muted, fontWeight: "800", lineHeight: 18 }}>
+              No integrations connected. Open Profile → Integrations to connect a health app.
+            </Text>
+          )}
+        </View>
+      </View>
+    </Modal>
   );
 }

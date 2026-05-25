@@ -121,6 +121,14 @@ export function BadgesPreviewCard(props: {
           {unlocked}
         </Text>
       </Text>
+      {hasPreview ? (
+        <Text style={{ color: colors.text, fontSize: 12, fontWeight: "800", marginTop: 6 }} numberOfLines={1}>
+          Latest: {previewBadges[0]!.title}
+        </Text>
+      ) : null}
+      <Text style={{ color: colors.muted, fontSize: 12, marginTop: 4 }}>
+        {Math.max(1, 3 - (unlocked % 3))} away from next badge
+      </Text>
     </GlassCard>
   );
 }

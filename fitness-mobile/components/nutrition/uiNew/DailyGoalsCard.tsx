@@ -217,10 +217,9 @@ export function DailyGoalsCard({
     onPressLog();
   }, [onPressLog]);
 
-  const forecastLine = useMemo(() => {
+  const forecastInsight = useMemo(() => {
     if (!forecast?.enabled) return null;
 
-    // Simple, calm pace estimate using time-of-day if no explicit start is provided.
     const now = new Date();
     const hour = now.getHours();
     const bedtime = clampNum(forecast.expectedBedtimeHour ?? 23, 18, 24);
@@ -230,16 +229,28 @@ export function DailyGoalsCard({
     const totalWindow = Math.max(1, bedtime - dayStartHour);
     const pace = clamp01(elapsed / totalWindow);
 
-    // Expected calories consumed at this time if perfectly paced:
-    const expectedNow = kcalGoal * pace;
-    const drift = Math.round(kcalNow - expectedNow);
+    const projected = Math.round(kcalNow / Math.max(0.08, pace));
+    const delta = projected - kcalGoal;
 
-    if (Math.abs(drift) < 120) return "On pace for today.";
-    if (drift > 0)
-      return `At this pace: ~${Math.round(drift)} kcal ahead (still okay).`;
-    return `At this pace: ~${Math.round(
-      -drift
-    )} kcal behind (easy to catch up).`;
+    if (Math.abs(delta) < 120) {
+      return {
+        projected,
+        delta: 0,
+        direction: "on goal" as const,
+      };
+    }
+    if (delta > 0) {
+      return {
+        projected,
+        delta: Math.round(delta),
+        direction: "over goal" as const,
+      };
+    }
+    return {
+      projected,
+      delta: Math.round(-delta),
+      direction: "under goal" as const,
+    };
   }, [forecast, kcalGoal, kcalNow]);
 
   const glassShadow = isDark
@@ -411,37 +422,54 @@ export function DailyGoalsCard({
               )}
             </View>
 
-            {forecastLine ? (
-              <View
-                style={[
-                  styles.forecastPill,
-                  {
-                    borderColor: hairline,
-                    backgroundColor: withAlpha(
-                      colors.text,
-                      isDark ? 0.06 : 0.045
-                    ),
-                  },
-                ]}
-              >
-                <Ionicons
-                  name="sparkles"
-                  size={14}
-                  color={withAlpha(colors.text, 0.75)}
-                />
-                <Text
-                  style={[
-                    styles.forecastText,
-                    { color: withAlpha(colors.text, 0.72) },
-                  ]}
-                  maxFontSizeMultiplier={1.2}
-                >
-                  {forecastLine}
-                </Text>
-              </View>
-            ) : null}
           </View>
         </View>
+
+        {forecastInsight ? (
+          <View
+            style={[
+              styles.forecastCard,
+              {
+                borderColor: hairline,
+                backgroundColor: withAlpha(
+                  isDark ? "#6D5DF6" : colors.primary,
+                  isDark ? 0.14 : 0.07
+                ),
+              },
+            ]}
+          >
+            <Text
+              style={[styles.forecastTitle, { color: colors.text }]}
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.1}
+            >
+              Projected: {Math.round(forecastInsight.projected).toLocaleString()}{" "}
+              kcal {"  "}•{"  "}
+              {forecastInsight.delta > 0
+                ? `~${forecastInsight.delta.toLocaleString()} ${
+                    forecastInsight.direction === "over goal" ? "over" : "under"
+                  } goal`
+                : "on goal"}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Get meal suggestions"
+              onPress={onLog}
+              hitSlop={10}
+              style={({ pressed }) => [
+                styles.eatCta,
+                {
+                  borderColor: withAlpha(accent, 0.36),
+                  backgroundColor: withAlpha(accent, pressed ? 0.3 : 0.2),
+                },
+              ]}
+            >
+              <Text style={[styles.eatCtaText, { color: colors.text }]}>
+                What should I eat?
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {/* Macros row */}
         <View style={styles.macroRow}>
@@ -451,7 +479,7 @@ export function DailyGoalsCard({
             unit="g"
             value={totals.protein}
             goal={goals.protein}
-            accent={accent}
+            accent={isDark ? "#8B5CF6" : "#6D5DF6"}
             colors={colors}
             isDark={isDark}
           />
@@ -461,7 +489,7 @@ export function DailyGoalsCard({
             unit="g"
             value={totals.carbs}
             goal={goals.carbs}
-            accent={accent}
+            accent={isDark ? "#22D3EE" : "#0891B2"}
             colors={colors}
             isDark={isDark}
           />
@@ -471,7 +499,7 @@ export function DailyGoalsCard({
             unit="g"
             value={totals.fat}
             goal={goals.fat}
-            accent={accent}
+            accent={isDark ? "#F59E0B" : "#D97706"}
             colors={colors}
             isDark={isDark}
           />
@@ -645,18 +673,22 @@ function MacroTile({
 }) {
   const v = clampNum(value, 0);
   const g = clampNum(goal, 1);
-  const pct = clamp01(v / g);
+  const rawPct = v / g;
+  const pct = clamp01(rawPct);
 
   const remaining = Math.round(g - v);
   const over = Math.max(0, -remaining);
+  const tone = getMacroTone(rawPct);
+  const toneColor = tone === "over" ? getMacroToneColor(tone, isDark) : accent;
+  const percentLabel = `${Math.round(rawPct * 100)}%`;
 
   return (
     <View
       style={[
         styles.macroTile,
         {
-          borderColor: withAlpha(colors.text, isDark ? 0.1 : 0.08),
-          backgroundColor: withAlpha(colors.text, isDark ? 0.06 : 0.045),
+          borderColor: withAlpha(toneColor, isDark ? 0.35 : 0.28),
+          backgroundColor: withAlpha(toneColor, isDark ? 0.12 : 0.08),
         },
       ]}
       accessibilityLabel={`${label}. ${Math.round(v)} of ${g} ${unit}. ${
@@ -670,38 +702,54 @@ function MacroTile({
           justifyContent: "space-between",
         }}
       >
-        <Text
-          style={[styles.macroShort, { color: withAlpha(colors.text, 0.85) }]}
-        >
-          {short}
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View
+            style={[
+              styles.macroDot,
+              { backgroundColor: withAlpha(toneColor, 0.92) },
+            ]}
+          />
+          <Text style={[styles.macroShort, { color: colors.text }]}>
+            {short}
+          </Text>
+        </View>
         <Text
           style={[
             styles.macroTopRight,
-            { color: withAlpha(colors.text, 0.65) },
+            { color: toneColor },
           ]}
           maxFontSizeMultiplier={1.2}
         >
-          {Math.round(v)}/{g}
+          {percentLabel}
         </Text>
       </View>
 
       <Text
-        style={[styles.macroLabel, { color: withAlpha(colors.text, 0.75) }]}
+        style={[styles.macroLabel, { color: withAlpha(colors.text, 0.86) }]}
         maxFontSizeMultiplier={1.15}
       >
         {label}
       </Text>
+      <Text
+        style={[styles.macroFraction, { color: colors.text }]}
+        maxFontSizeMultiplier={1.15}
+      >
+        {Math.round(v)} / {Math.round(g)}
+        {unit}
+      </Text>
 
       <PillMeter
         pct={pct}
-        accent={accent}
-        track={withAlpha(colors.text, 0.1)}
+        accent={toneColor}
+        track={withAlpha(colors.text, isDark ? 0.16 : 0.12)}
         over={v > g}
       />
 
       <Text
-        style={[styles.macroBottom, { color: withAlpha(colors.text, 0.65) }]}
+        style={[
+          styles.macroBottom,
+          { color: withAlpha(colors.text, isDark ? 0.82 : 0.68) },
+        ]}
         maxFontSizeMultiplier={1.15}
       >
         {over > 0
@@ -843,7 +891,7 @@ function PillMeter({
           styles.pillFill,
           fillStyle,
           {
-            backgroundColor: withAlpha(accent, over ? 0.55 : 0.85),
+            backgroundColor: withAlpha(accent, over ? 0.9 : 0.88),
           },
         ]}
       />
@@ -950,6 +998,20 @@ function clamp01(n: number) {
   return Math.max(0, Math.min(1, Number.isFinite(n) ? n : 0));
 }
 
+function getMacroTone(pct: number) {
+  if (pct > 1) return "over";
+  if (pct < 0.5) return "low";
+  if (pct < 0.8) return "mid";
+  return "hit";
+}
+
+function getMacroToneColor(tone: string, isDark: boolean) {
+  if (tone === "low") return isDark ? "#F87171" : "#DC2626";
+  if (tone === "mid") return isDark ? "#FACC15" : "#D97706";
+  if (tone === "over") return isDark ? "#A78BFA" : "#7C3AED";
+  return isDark ? "#4ADE80" : "#16A34A";
+}
+
 function withAlpha(color: string, alpha = 0.2) {
   if (!color) return `rgba(0,0,0,${alpha})`;
   if (color.startsWith("rgb")) {
@@ -1039,15 +1101,31 @@ const styles = StyleSheet.create({
     letterSpacing: -0.15,
   },
 
-  forecastPill: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  forecastCard: {
+    alignSelf: "stretch",
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 9,
+  },
+  forecastTitle: {
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  eatCta: {
+    minHeight: 44,
+    paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: 1,
-    flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    justifyContent: "center",
+    alignSelf: "stretch",
+  },
+  eatCtaText: {
+    fontSize: 13,
+    fontWeight: "900",
   },
   forecastText: {
     fontSize: 12,
@@ -1064,11 +1142,17 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderRadius: 18,
-    padding: 10,
-    gap: 6,
+    padding: 12,
+    minHeight: 128,
+    gap: 7,
+  },
+  macroDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 99,
   },
   macroShort: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: "900",
     letterSpacing: -0.2,
   },
@@ -1078,10 +1162,14 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
   macroLabel: {
-    fontSize: 12,
-    fontWeight: "800",
+    fontSize: 12.5,
+    fontWeight: "900",
     letterSpacing: -0.1,
     marginTop: -2,
+  },
+  macroFraction: {
+    fontSize: 17,
+    fontWeight: "900",
   },
   macroBottom: {
     fontSize: 12,

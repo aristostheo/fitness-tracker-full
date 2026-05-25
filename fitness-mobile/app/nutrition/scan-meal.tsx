@@ -29,6 +29,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { PENDING_MEAL_BUILDER_ADDITIONS_KEY } from "@/services/mealBuilder";
 import { BlurView } from "expo-blur";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { getAuth } from "firebase/auth";
@@ -273,12 +274,17 @@ async function reanalyzeFoodMacros(food: DetectedFood) {
 
 export default function ScanMealScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ meal?: string; date?: string }>();
+  const params = useLocalSearchParams<{
+    meal?: string;
+    date?: string;
+    returnTo?: string;
+  }>();
   const { colors, isDark } = useTheme();
 
   const dateStr =
     (params.date as string) || new Date().toISOString().slice(0, 10);
   const initialMealKey = safeMealKey(params.meal);
+  const returnTo = String(params.returnTo || "");
 
   const [state, setState] = useState<ScanState>("idle");
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -726,8 +732,13 @@ export default function ScanMealScreen() {
         };
       });
 
+      const targetKey =
+        returnTo === "meal-builder"
+          ? PENDING_MEAL_BUILDER_ADDITIONS_KEY
+          : PENDING_BATCH_KEY;
+
       await AsyncStorage.setItem(
-        PENDING_BATCH_KEY,
+        targetKey,
         JSON.stringify({ date: dateStr, meal: chosenMeal, items }),
       );
 

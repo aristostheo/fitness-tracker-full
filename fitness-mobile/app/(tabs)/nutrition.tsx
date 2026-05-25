@@ -24,6 +24,7 @@ import {
 } from "@/services/nutrition";
 import { bumpUse, upsertFoodToCatalog } from "@/services/foodCatalog";
 import { useNutritionHistory, isoAddDays } from "@/hooks/useNutritionHistory";
+import { PENDING_MEAL_BUILDER_LOG_KEY } from "@/services/mealBuilder";
 
 import { DayStrip } from "@/components/nutrition/uiNew/DayStrip";
 import { SectionHeader } from "@/components/nutrition/uiNew/SectionHeader";
@@ -66,7 +67,7 @@ function withAlpha(color: string, alpha = 0.2) {
   if (!m) return color;
   return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(
     m[3],
-    16
+    16,
   )}, ${alpha})`;
 }
 
@@ -92,7 +93,15 @@ function sumMacros(items: FoodEntry[]) {
       acc.fiber += Number((x as any).fiber || 0);
       return acc;
     },
-    { calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fiber: 0 }
+    { calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, fiber: 0 },
+  );
+}
+
+function isMealBundle(item: FoodEntry) {
+  return (
+    item.entryKind === "meal" &&
+    Array.isArray(item.items) &&
+    item.items.length > 0
   );
 }
 function CalendarLaunchButton({
@@ -158,6 +167,69 @@ function toNum(v: any, fallback: number) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function topMacroDeficit(
+  totals: { protein: number; carbs: number; fat: number },
+  goals: { protein: number; carbs: number; fat: number },
+) {
+  const deficits = [
+    { key: "protein", label: "protein", value: Math.round((goals.protein || 0) - (totals.protein || 0)), unit: "g" },
+    { key: "carbs", label: "carbs", value: Math.round((goals.carbs || 0) - (totals.carbs || 0)), unit: "g" },
+    { key: "fat", label: "fat", value: Math.round((goals.fat || 0) - (totals.fat || 0)), unit: "g" },
+  ]
+    .filter((x) => x.value > 0)
+    .sort((a, b) => b.value - a.value);
+
+  return deficits[0] ?? { key: "balanced", label: "macros", value: 0, unit: "" };
+}
+
+function mealSuggestionsFor(
+  meal: MealKey,
+  totals: { protein: number; carbs: number; fat: number },
+  goals: { protein: number; carbs: number; fat: number },
+) {
+  const proteinLeft = Math.max(0, Math.round((goals.protein || 0) - (totals.protein || 0)));
+  const carbsLeft = Math.max(0, Math.round((goals.carbs || 0) - (totals.carbs || 0)));
+  const fatLeft = Math.max(0, Math.round((goals.fat || 0) - (totals.fat || 0)));
+  const list: string[] = [];
+
+  if (proteinLeft >= 35) {
+    list.push(`You need ${proteinLeft}g protein — try Greek yogurt, cottage cheese, chicken, tuna, tofu, or eggs.`);
+  } else if (proteinLeft >= 15) {
+    list.push(`${proteinLeft}g protein left — add a protein shake, skyr, turkey slices, edamame, or lentils.`);
+  }
+
+  if (carbsLeft >= 50) {
+    list.push(`${carbsLeft}g carbs left — oats, rice, potatoes, whole-grain toast, fruit, or quinoa fit well.`);
+  } else if (carbsLeft >= 20) {
+    list.push(`${carbsLeft}g carbs left — try berries, a banana, rice cakes, or a small wrap.`);
+  }
+
+  if (fatLeft >= 20) {
+    list.push(`${fatLeft}g fat left — avocado, olive oil, nuts, salmon, hummus, or chia pudding can help.`);
+  }
+
+  const defaults: Record<MealKey, string[]> = {
+    breakfast: [
+      "High-protein breakfast: eggs with toast, Greek yogurt with berries, or tofu scramble.",
+      "Balanced option: oats with protein powder, fruit, and nut butter.",
+    ],
+    lunch: [
+      "Lunch idea: chicken or tofu bowl with rice, vegetables, and avocado.",
+      "Fast option: tuna wrap, lentil soup, or cottage cheese plate with fruit.",
+    ],
+    dinner: [
+      "Dinner idea: salmon, chicken, tempeh, or lean beef with potatoes and vegetables.",
+      "Macro-friendly plate: protein source, whole-grain carb, and a colorful vegetable side.",
+    ],
+    snacks: [
+      "Snack idea: Greek yogurt, cottage cheese, protein smoothie, edamame, or jerky.",
+      "Small add-on: fruit with nut butter, hummus with pita, or a boiled egg.",
+    ],
+  };
+
+  return [...list, ...defaults[meal]].slice(0, 3);
+}
+
 export default function NutritionScreen() {
   const { colors, isDark } = useTheme() as any;
   const { user } = useAuth();
@@ -172,7 +244,7 @@ export default function NutritionScreen() {
   useFocusEffect(
     React.useCallback(() => {
       refreshBadgesLocal();
-    }, [refreshBadgesLocal])
+    }, [refreshBadgesLocal]),
   );
 
   const [goals, setGoals] = useState(() => ({
@@ -194,6 +266,7 @@ export default function NutritionScreen() {
   }));
   // ---------- Hydration (per-day, stored locally) ----------
   const [waterMl, setWaterMl] = useState(0);
+  const [hydrationStreak, setHydrationStreak] = useState(0);
   const waterGoalMl = goals.waterMl ?? 2400;
   const waterKey = useMemo(() => `@water:${dateISO}`, [dateISO]);
 
@@ -222,10 +295,33 @@ export default function NutritionScreen() {
   const addWater = (ml: number) => setWaterAndStore(waterMl + ml);
   const clearWater = () => setWaterAndStore(0);
 
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        let count = 0;
+        for (let i = 0; i < 30; i += 1) {
+          const iso = isoAddDays(dateISO, -i);
+          const raw =
+            iso === dateISO ? String(waterMl) : await AsyncStorage.getItem(`@water:${iso}`);
+          const value = Math.max(0, Number(raw || 0) || 0);
+          if (value >= waterGoalMl) count += 1;
+          else break;
+        }
+        if (mounted) setHydrationStreak(count);
+      } catch {
+        if (mounted) setHydrationStreak(waterMl >= waterGoalMl ? 1 : 0);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [dateISO, waterGoalMl, waterMl]);
+
   // ---------- Streams ----------
   const { foods, setFoods, mealsMap, totals } = useNutritionStreams(
     user,
-    dateISO
+    dateISO,
   );
 
   // ---------- History ----------
@@ -233,7 +329,7 @@ export default function NutritionScreen() {
   const { days: historyDays } = useNutritionHistory(
     user?.uid,
     dateISO,
-    historyDaysCount
+    historyDaysCount,
   );
 
   React.useEffect(() => {
@@ -269,36 +365,36 @@ export default function NutritionScreen() {
           fiber: toNum(p.fiberGoal ?? p.dailyFiberTarget ?? p.fiber_target, 30),
           sugarTotal: toNum(
             p.sugarTotalGoal ?? p.dailySugarTarget ?? p.sugarGoal,
-            60
+            60,
           ),
           sugarAdded: toNum(
             p.sugarAddedGoal ?? p.addedSugarGoal ?? p.addedSugar_target,
-            30
+            30,
           ),
           satFat: toNum(
             p.satFatGoal ?? p.saturatedFatGoal ?? p.sat_fat_goal,
-            20
+            20,
           ),
           sodiumMg: toNum(
             p.sodiumGoalMg ?? p.sodiumMgGoal ?? p.dailySodiumMgTarget,
-            2300
+            2300,
           ),
           cholesterolMg: toNum(
             p.cholesterolGoalMg ??
               p.cholesterolMgGoal ??
               p.dailyCholesterolMgTarget,
-            300
+            300,
           ),
 
           waterMl: toNum(
             p.waterGoalMl ?? p.dailyWaterTargetMl ?? p.hydrationGoalMl,
-            2400
+            2400,
           ),
         });
       },
       () => {
         // if snapshot errors, keep last known goals (no UI break)
-      }
+      },
     );
 
     return () => unsub();
@@ -316,13 +412,13 @@ export default function NutritionScreen() {
 
         // If you only track one sugar value today, treat it as total sugar for now.
         sugarTotal: Number(
-          (totals as any).sugarTotal ?? (totals as any).sugar ?? 0
+          (totals as any).sugarTotal ?? (totals as any).sugar ?? 0,
         ),
         sugarAdded: Number((totals as any).sugarAdded ?? 0),
 
         satFat: Number((totals as any).satFat ?? 0),
         sodiumMg: Number(
-          (totals as any).sodiumMg ?? (totals as any).sodium ?? 0
+          (totals as any).sodiumMg ?? (totals as any).sodium ?? 0,
         ),
         cholesterolMg: Number((totals as any).cholesterolMg ?? 0),
 
@@ -459,7 +555,7 @@ export default function NutritionScreen() {
           try {
             const ref = await addFood(user.uid, { ...base });
             setFoods((prev: FoodEntry[]) =>
-              prev.map((f) => (f.id === tempId ? { ...f, id: ref.id } : f))
+              prev.map((f) => (f.id === tempId ? { ...f, id: ref.id } : f)),
             );
             try {
               const catalogRef = await upsertFoodToCatalog({
@@ -470,7 +566,7 @@ export default function NutritionScreen() {
             } catch {}
           } catch {
             setFoods((prev: FoodEntry[]) =>
-              prev.filter((f) => f.id !== tempId)
+              prev.filter((f) => f.id !== tempId),
             );
           }
         } catch {}
@@ -479,7 +575,7 @@ export default function NutritionScreen() {
       return () => {
         cancelled = true;
       };
-    }, [user?.uid, dateISO, setFoods])
+    }, [user?.uid, dateISO, setFoods]),
   );
 
   // ---------- Scan-meal batch handoff (@pending_add_meal_batch_v1) ----------
@@ -568,7 +664,7 @@ export default function NutritionScreen() {
             try {
               const ref = await addFood(user.uid, { ...base });
               setFoods((prev: FoodEntry[]) =>
-                prev.map((f) => (f.id === tempId ? { ...f, id: ref.id } : f))
+                prev.map((f) => (f.id === tempId ? { ...f, id: ref.id } : f)),
               );
               try {
                 const catalogRef = await upsertFoodToCatalog({
@@ -580,7 +676,7 @@ export default function NutritionScreen() {
             } catch {
               // rollback optimistic insert
               setFoods((prev: FoodEntry[]) =>
-                prev.filter((f) => f.id !== tempId)
+                prev.filter((f) => f.id !== tempId),
               );
             }
           }
@@ -592,12 +688,155 @@ export default function NutritionScreen() {
       return () => {
         cancelled = true;
       };
-    }, [user?.uid, dateISO, setFoods, setDateISO])
+    }, [user?.uid, dateISO, setFoods, setDateISO]),
   );
 
+  useFocusEffect(
+    React.useCallback(() => {
+      let cancelled = false;
+
+      (async () => {
+        if (!user?.uid) return;
+
+        const raw = await AsyncStorage.getItem(PENDING_MEAL_BUILDER_LOG_KEY);
+        if (!raw) return;
+
+        await AsyncStorage.removeItem(PENDING_MEAL_BUILDER_LOG_KEY);
+        if (cancelled) return;
+
+        try {
+          const data = JSON.parse(raw) as {
+            date?: string;
+            meal?: MealKey;
+            name?: string;
+            items?: any[];
+            presetId?: string;
+            source?: string;
+          };
+
+          const mealItems = Array.isArray(data.items) ? data.items : [];
+          if (!mealItems.length) return;
+
+          const mealDate = String(data.date || dateISO);
+          if (mealDate !== dateISO) setDateISO(mealDate);
+
+          const totals = sumMacros(mealItems as FoodEntry[]);
+
+          const base: Omit<FoodEntry, "id"> = {
+            date: mealDate,
+            meal: (data.meal || "lunch") as FoodEntry["meal"],
+            name: String(data.name || "Saved meal").trim(),
+            qty: 1,
+            unit: "meal",
+            calories: Number(totals.calories || 0),
+            protein: Number(totals.protein || 0),
+            carbs: Number(totals.carbs || 0),
+            fat: Number(totals.fat || 0),
+            sugar: mealItems.reduce(
+              (sum, item) => sum + Number(item?.sugar || 0),
+              0,
+            ),
+            fiber: mealItems.reduce(
+              (sum, item) => sum + Number(item?.fiber || 0),
+              0,
+            ),
+            addedSugar: mealItems.reduce(
+              (sum, item) => sum + Number(item?.addedSugar || 0),
+              0,
+            ),
+            satFat: mealItems.reduce(
+              (sum, item) => sum + Number(item?.satFat || 0),
+              0,
+            ),
+            sodium: mealItems.reduce(
+              (sum, item) => sum + Number(item?.sodium || 0),
+              0,
+            ),
+            veggieFruitServings: mealItems.reduce(
+              (sum, item) => sum + Number(item?.veggieFruitServings || 0),
+              0,
+            ),
+            alcoholCalories: mealItems.reduce(
+              (sum, item) => sum + Number(item?.alcoholCalories || 0),
+              0,
+            ),
+            entryKind: "meal",
+            items: mealItems.map((item) => ({
+              id: item?.id,
+              name: String(item?.name || "").trim(),
+              qty: Number(item?.qty || 0),
+              unit: String(item?.unit || "serving"),
+              calories: Number(item?.calories || 0),
+              protein: Number(item?.protein || 0),
+              carbs: Number(item?.carbs || 0),
+              fat: Number(item?.fat || 0),
+              ...(item?.sugar != null ? { sugar: Number(item.sugar) } : {}),
+              ...(item?.fiber != null ? { fiber: Number(item.fiber) } : {}),
+              ...(item?.addedSugar != null
+                ? { addedSugar: Number(item.addedSugar) }
+                : {}),
+              ...(item?.satFat != null ? { satFat: Number(item.satFat) } : {}),
+              ...(item?.sodium != null ? { sodium: Number(item.sodium) } : {}),
+              ...(item?.wholeFoodRatio != null
+                ? { wholeFoodRatio: Number(item.wholeFoodRatio) }
+                : {}),
+              ...(item?.veggieFruitServings != null
+                ? { veggieFruitServings: Number(item.veggieFruitServings) }
+                : {}),
+              ...(item?.unsatFatRatio != null
+                ? { unsatFatRatio: Number(item.unsatFatRatio) }
+                : {}),
+              ...(item?.alcoholCalories != null
+                ? { alcoholCalories: Number(item.alcoholCalories) }
+                : {}),
+              ...(item?.foodRefId != null
+                ? { foodRefId: String(item.foodRefId) }
+                : {}),
+              ...(item?.source != null ? { source: String(item.source) } : {}),
+            })),
+            ...(data.presetId ? { presetId: String(data.presetId) } : {}),
+            source: (data.source || "meal-builder") as any,
+          };
+
+          const tempId = `temp-meal-${Date.now()}`;
+          const tempItem: FoodEntry = { ...(base as any), id: tempId };
+          setFoods((prev: FoodEntry[]) => [tempItem, ...prev]);
+
+          try {
+            const ref = await addFood(user.uid, { ...base });
+            setFoods((prev: FoodEntry[]) =>
+              prev.map((f) => (f.id === tempId ? { ...f, id: ref.id } : f)),
+            );
+          } catch {
+            setFoods((prev: FoodEntry[]) =>
+              prev.filter((f) => f.id !== tempId),
+            );
+          }
+        } catch {}
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [dateISO, setDateISO, setFoods, user?.uid]),
+  );
+
+  function openQuickAdd(meal: MealKey) {
+    router.push({
+      pathname: "/(modals)/quick-add",
+      params: { meal, date: dateISO },
+    });
+  }
   function openAdd(meal: MealKey) {
     router.push({
       pathname: "/(modals)/add-meal",
+      params: { meal, date: dateISO },
+    });
+  }
+
+  function openMealBuilder(meal: MealKey) {
+    router.push({
+      pathname: "/(modals)/meal-builder",
       params: { meal, date: dateISO },
     });
   }
@@ -620,7 +859,7 @@ export default function NutritionScreen() {
 
     const prev = foods;
     setFoods((curr: FoodEntry[]) =>
-      curr.map((f) => (f.id === editItem.id ? ({ ...f, ...patch } as any) : f))
+      curr.map((f) => (f.id === editItem.id ? ({ ...f, ...patch } as any) : f)),
     );
 
     try {
@@ -677,6 +916,25 @@ export default function NutritionScreen() {
     });
   }, [mealsMap]);
 
+  const macroDeficit = useMemo(
+    () => topMacroDeficit(dayTotals, goals),
+    [dayTotals, goals],
+  );
+  const caloriesRemaining = Math.max(
+    0,
+    Math.round((goals.calories || 0) - (dayTotals.calories || 0)),
+  );
+  const caloriesOver = Math.max(
+    0,
+    Math.round((dayTotals.calories || 0) - (goals.calories || 0)),
+  );
+  const calorieGoalPct = Math.max(
+    0,
+    Math.min(1, goals.calories ? (dayTotals.calories || 0) / goals.calories : 0),
+  );
+  const showHydrationReminder =
+    dateISO === isoToday() && waterMl <= 0 && new Date().getHours() >= 11;
+
   const a11yDateLabel = `Selected day: ${fmtNice(dateISO)}`;
 
   return (
@@ -711,21 +969,58 @@ export default function NutritionScreen() {
           <View
             style={{
               flexDirection: "row",
-              alignItems: "center",
+              alignItems: "flex-start",
               justifyContent: "space-between",
+              gap: 14,
             }}
           >
-            <View style={{ gap: 2 }}>
+            <View style={{ gap: 2, flex: 1 }}>
               <Text
-                style={{ color: colors.muted, fontWeight: "900", fontSize: 12 }}
-              >
-                Nutrition
-              </Text>
-              <Text
-                style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}
+                style={{
+                  color: withAlpha(colors.text, isDark ? 0.82 : 0.68),
+                  fontWeight: "900",
+                  fontSize: 12,
+                }}
               >
                 {fmtNice(dateISO)}
               </Text>
+              <Text
+                style={{ color: colors.text, fontWeight: "900", fontSize: 20 }}
+              >
+                {caloriesOver > 0
+                  ? `${caloriesOver} kcal over`
+                  : `${caloriesRemaining} kcal left`}
+              </Text>
+              <Text
+                style={{
+                  color: withAlpha(colors.text, isDark ? 0.78 : 0.62),
+                  fontWeight: "800",
+                  fontSize: 12,
+                }}
+              >
+                {macroDeficit.value > 0
+                  ? `Top gap: ${macroDeficit.value}${macroDeficit.unit} ${macroDeficit.label}`
+                  : "Macros on track"}
+              </Text>
+              <View
+                style={{
+                  height: 3,
+                  borderRadius: 99,
+                  overflow: "hidden",
+                  backgroundColor: withAlpha(colors.text, isDark ? 0.14 : 0.1),
+                  marginTop: 7,
+                }}
+                accessibilityLabel={`Calories ${Math.round(calorieGoalPct * 100)} percent of goal`}
+              >
+                <View
+                  style={{
+                    height: "100%",
+                    width: `${calorieGoalPct * 100}%`,
+                    borderRadius: 99,
+                    backgroundColor: withAlpha(colors.primary, 0.95),
+                  }}
+                />
+              </View>
             </View>
 
             <View style={{ flexDirection: "row", gap: 10 }}>
@@ -805,7 +1100,7 @@ export default function NutritionScreen() {
       <Animated.ScrollView
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
+          { useNativeDriver: true },
         )}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
@@ -820,7 +1115,7 @@ export default function NutritionScreen() {
             <View style={{ paddingHorizontal: 16 }}>
               <Text
                 style={{
-                  color: colors.muted,
+                  color: withAlpha(colors.text, isDark ? 0.82 : 0.68),
                   fontWeight: "900",
                   fontSize: 12,
                 }}
@@ -840,7 +1135,7 @@ export default function NutritionScreen() {
               </Text>
               <Text
                 style={{
-                  color: colors.muted,
+                  color: withAlpha(colors.text, isDark ? 0.8 : 0.68),
                   fontWeight: "800",
                   marginTop: 6,
                   lineHeight: 18,
@@ -917,6 +1212,8 @@ export default function NutritionScreen() {
               onClear={clearWater}
               style={{ marginTop: 10, ...softShadow }}
               unit="ml" // or "oz" if you want display-only
+              streakDays={hydrationStreak}
+              showReminder={showHydrationReminder}
             />
           </View>
         </Animated.View>
@@ -952,37 +1249,110 @@ export default function NutritionScreen() {
         <View style={{ paddingHorizontal: 16, marginTop: 18, gap: 12 }}>
           <SectionHeader
             title="Meals"
-            subtitle="Tap an item to edit. Add is always one tap."
+            subtitle="How do you want to log?"
             colors={colors}
             right={
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Log food"
-                onPress={() => openAdd("snacks")}
-                hitSlop={10}
-                style={{
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: withAlpha(colors.primary, 0.35),
-                  backgroundColor: withAlpha(colors.primary, 0.14),
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                <Ionicons name="add" size={16} color={colors.text} />
-                <Text
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {/* regular add  meal feature */}
+                {/* <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Open quick add meal"
+                  onPress={() => openAdd("snacks")}
+                  hitSlop={10}
                   style={{
-                    color: colors.text,
-                    fontWeight: "900",
-                    fontSize: 12,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: withAlpha(colors.border, 0.8),
+                    backgroundColor: withAlpha(colors.card, 0.22),
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
                   }}
                 >
-                  Log
-                </Text>
-              </Pressable>
+                  <Ionicons
+                    name="flash-outline"
+                    size={16}
+                    color={colors.text}
+                  />
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontWeight: "900",
+                      fontSize: 12,
+                    }}
+                  >
+                    LOG
+                  </Text>
+                </Pressable> */}
+                {/*  quick add FEATURE */}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Open meal builder"
+                  onPress={() => openQuickAdd("snacks")}
+                  hitSlop={10}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: withAlpha(colors.primary, 0.35),
+                    backgroundColor: withAlpha(colors.primary, 0.14),
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Ionicons
+                    name="layers-outline"
+                    size={16}
+                    color={colors.text}
+                  />
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontWeight: "900",
+                      fontSize: 12,
+                    }}
+                  >
+                    Quick Add
+                  </Text>
+                </Pressable>
+                {/*  MEAL BUILDER FEATURE */}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Open meal builder"
+                  onPress={() => openMealBuilder("snacks")}
+                  hitSlop={10}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: withAlpha(colors.primary, 0.35),
+                    backgroundColor: withAlpha(colors.primary, 0.14),
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Ionicons
+                    name="layers-outline"
+                    size={16}
+                    color={colors.text}
+                  />
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontWeight: "900",
+                      fontSize: 12,
+                    }}
+                  >
+                    Builder
+                  </Text>
+                </Pressable>
+              </View>
             }
           />
 
@@ -994,15 +1364,18 @@ export default function NutritionScreen() {
               totals={g.totals}
               colors={colors}
               isDark={isDark}
+              suggestions={mealSuggestionsFor(g.meal, dayTotals, goals)}
               onPressAdd={() => openAdd(g.meal)}
-              onPressItem={(it) => startEdit(it)}
+              onPressItem={(it) => {
+                if (!isMealBundle(it)) startEdit(it);
+              }}
               onDeleteItem={(it) => removeItem(it)}
             />
           ))}
         </View>
       </Animated.ScrollView>
 
-      {/* Floating “Log food” */}
+      {/* Floating action */}
       <View
         pointerEvents="box-none"
         style={{
@@ -1016,8 +1389,8 @@ export default function NutritionScreen() {
       >
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Log food"
-          onPress={() => openAdd("snacks")}
+          accessibilityLabel="Open meal builder"
+          onPress={() => openMealBuilder("snacks")}
           style={{
             flexDirection: "row",
             alignItems: "center",
@@ -1049,10 +1422,10 @@ export default function NutritionScreen() {
             <Ionicons name="add" size={18} color={colors.text} />
           </View>
           <Text style={{ color: colors.text, fontWeight: "900" }}>
-            Log food
+            Meal Builder
           </Text>
           <Text style={{ color: colors.muted, fontWeight: "800" }}>
-            • recents + search
+            • grouped logging
           </Text>
         </Pressable>
       </View>

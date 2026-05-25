@@ -19,6 +19,7 @@ export function FriendsPreviewCard(props: {
   const friends = props.friendsCount ?? 0;
   const pings = props.streakPings ?? 0;
   const previewFriends = props.previewFriends ?? [];
+  const hues = ["#6C63FF", "#22D3EE", "#FFC107", "#4CAF50", "#F44336"];
 
   const subtitle = useMemo(() => {
     if (friends <= 0) return "Add supportive friends";
@@ -72,7 +73,7 @@ export function FriendsPreviewCard(props: {
         ]}
       >
         {friends > 0 ? (
-          <View style={{ flexDirection: "row", gap: 10 }}>
+          <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
             {(previewFriends.length
               ? previewFriends
               : Array.from({ length: Math.min(3, friends) }).map(() => null)
@@ -94,10 +95,10 @@ export function FriendsPreviewCard(props: {
                   styles.dot,
                   {
                     backgroundColor: withAlpha(
-                      colors.text,
-                      isDark ? 0.08 : 0.06
+                      hues[idx % hues.length],
+                      isDark ? 0.24 : 0.16
                     ),
-                    borderColor: withAlpha(colors.border, 0.7),
+                    borderColor: withAlpha(hues[idx % hues.length], 0.42),
                   },
                 ]}
               >
@@ -115,6 +116,28 @@ export function FriendsPreviewCard(props: {
               </View>
                 );
               })}
+            <Pressable
+              onPress={() => {
+                Haptics.selectionAsync();
+                props.onPressAll();
+              }}
+              style={({ pressed }) => ({
+                minHeight: 34,
+                paddingHorizontal: 10,
+                borderRadius: 999,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: withAlpha(colors.primary, pressed ? 0.2 : 0.14),
+                borderWidth: 1,
+                borderColor: withAlpha(colors.primary, 0.3),
+              })}
+              accessibilityRole="button"
+              accessibilityLabel="Invite a friend"
+            >
+              <Text style={{ color: colors.text, fontWeight: "900", fontSize: 12 }}>
+                + Invite
+              </Text>
+            </Pressable>
           </View>
         ) : (
           <View

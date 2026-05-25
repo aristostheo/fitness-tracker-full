@@ -47,7 +47,7 @@ export function AnimatedStepPill({
     () => clamp01(goal <= 0 ? 0 : steps / goal),
     [steps, goal]
   );
-  const pctLabel = `${Math.round(pct * 100)}%`;
+  const pctLabel = steps <= 0 ? "Start moving" : `${Math.round(pct * 100)}%`;
 
   return (
     <Pressable
@@ -89,7 +89,7 @@ export function AnimatedStepPill({
                 justifyContent: "space-between",
               }}
             >
-              <Text
+	                <Text
                 style={{ color: tokens.text, fontWeight: "900", fontSize: 14 }}
               >
                 Steps
@@ -105,8 +105,8 @@ export function AnimatedStepPill({
                     fontSize: 12,
                   }}
                 >
-                  {pctLabel}
-                </Text>
+	                  {pctLabel}
+	                </Text>
               </View>
             </View>
 
@@ -119,7 +119,7 @@ export function AnimatedStepPill({
               }}
             >
               <View style={{ flex: 1 }}>
-                <Text
+	                <Text
                   style={{
                     color: tokens.text,
                     fontWeight: "900",
@@ -137,9 +137,23 @@ export function AnimatedStepPill({
                     marginTop: 2,
                   }}
                 >
-                  of {goal.toLocaleString()}
-                </Text>
-              </View>
+	                  of {goal.toLocaleString()}
+	                </Text>
+	                {steps <= 0 ? (
+	                  <Text
+	                    style={{
+	                      color: tokens.text,
+	                      fontWeight: "900",
+	                      fontSize: 12,
+	                      marginTop: 8,
+	                      lineHeight: 16,
+	                    }}
+	                    numberOfLines={2}
+	                  >
+	                    No steps yet — a 10 min walk ≈ 1,000 steps
+	                  </Text>
+	                ) : null}
+	              </View>
 
               {/* Gentle animated dot “breathing” */}
               <MotiView

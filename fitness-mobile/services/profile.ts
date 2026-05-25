@@ -13,6 +13,7 @@ import { db } from "@/lib/firebase";
 export type Profile = {
   email?: string;
   displayName?: string | null;
+  photoURL?: string | null;
 
   weightUnit?: "kg" | "lb";
   calorieGoal?: number;
@@ -92,6 +93,8 @@ export type Profile = {
   trackingAccurate?: boolean;
   bodyFatPct?: number;
   waistCm?: number;
+  healthLastUpdatedVia?: string;
+  healthLastUpdatedAt?: number;
   macroEngineMode?: "cut" | "maintain" | "lean_bulk" | "bulk";
   macroEngineSimple?: boolean;
 

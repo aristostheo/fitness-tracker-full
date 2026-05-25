@@ -32,6 +32,7 @@ export function AISuggestionCard({
   suggestion,
   reduceMotion,
   style,
+  priority = "normal",
 }: {
   tokens: {
     card: string;
@@ -45,9 +46,13 @@ export function AISuggestionCard({
   suggestion: AISuggestion;
   reduceMotion: boolean;
   style?: ViewStyle;
+  priority?: "urgent" | "normal" | "secondary";
 }) {
   const icon = suggestion.icon || "sparkles";
-  const accent = useMemo(() => tokens.tint, [tokens.tint]);
+  const accent = useMemo(
+    () => (priority === "urgent" ? tokens.ringB : tokens.tint),
+    [priority, tokens.ringB, tokens.tint]
+  );
 
   return (
     <LinearGradient
@@ -58,12 +63,20 @@ export function AISuggestionCard({
         borderRadius: 22,
         overflow: "hidden",
         borderWidth: 1,
-        borderColor: tokens.hairline,
+        borderColor:
+          priority === "urgent" ? withAlpha(accent, 0.38) : tokens.hairline,
         ...(style as any),
       }}
     >
       <BlurView intensity={18} tint="default">
-        <View style={{ padding: 14, gap: 10 }}>
+        <View
+          style={{
+            padding: priority === "urgent" ? 16 : 13,
+            gap: priority === "urgent" ? 11 : 8,
+            borderLeftWidth: priority === "urgent" ? 4 : 0,
+            borderLeftColor: withAlpha(accent, 0.95),
+          }}
+        >
           <View
             style={{
               flexDirection: "row",
@@ -100,7 +113,7 @@ export function AISuggestionCard({
                   style={{
                     color: tokens.text,
                     fontWeight: "900",
-                    fontSize: 15,
+	                    fontSize: priority === "urgent" ? 16 : 14,
                   }}
                 >
                   {suggestion.title}
@@ -180,8 +193,8 @@ export function AISuggestionCard({
             style={{
               color: tokens.muted,
               fontWeight: "700",
-              fontSize: 13,
-              lineHeight: 18,
+	            fontSize: priority === "urgent" ? 13 : 12,
+	            lineHeight: priority === "urgent" ? 18 : 17,
             }}
           >
             {suggestion.body}

@@ -102,8 +102,20 @@ export function DayStrip({
         >
           {items.map((d) => {
             const active = d.date === activeISO;
-            const hit = d.calories >= goals.calories * 0.9;
-            const dayObj = new Date(d.date + "T12:00:00");
+	            const pctGoal = goals.calories ? (d.calories || 0) / goals.calories : 0;
+	            const hit = pctGoal >= 0.9;
+	            const barColor = active
+	              ? withAlpha(colors.primary, 0.95)
+	              : pctGoal >= 0.9
+	              ? withAlpha("#22c55e", 0.9)
+	              : pctGoal >= 0.6
+	              ? withAlpha("#facc15", 0.9)
+	              : withAlpha("#ef4444", 0.86);
+	            const barH = Math.max(
+	              6,
+	              Math.round(Math.min(1, pctGoal) * 34)
+	            );
+	            const dayObj = new Date(d.date + "T12:00:00");
 
             return (
               <Pressable
@@ -114,8 +126,8 @@ export function DayStrip({
                 )} calories`}
                 onPress={() => onPressDay(d.date)}
                 style={{
-                  width: mode === "week" ? 56 : 50,
-                  paddingVertical: 10,
+	                  width: mode === "week" ? 58 : 52,
+	                  paddingVertical: 10,
                   borderRadius: 16,
                   borderWidth: 1,
                   borderColor: active
@@ -147,17 +159,27 @@ export function DayStrip({
                 >
                   {Number(d.date.slice(-2))}
                 </Text>
-                <Text
-                  style={{
-                    color: colors.muted,
-                    fontWeight: "900",
-                    fontSize: 10,
-                    marginTop: 2,
-                  }}
-                >
-                  {Math.round(d.calories)}
-                </Text>
-              </Pressable>
+	                <View
+	                  style={{
+	                    height: 40,
+	                    width: 24,
+	                    borderRadius: 8,
+	                    marginTop: 8,
+	                    justifyContent: "flex-end",
+	                    backgroundColor: withAlpha(colors.text, isDark ? 0.1 : 0.08),
+	                    overflow: "hidden",
+	                  }}
+	                  accessibilityLabel={`${Math.round(d.calories)} calories`}
+	                >
+	                  <View
+	                    style={{
+	                      height: barH,
+	                      borderRadius: 7,
+	                      backgroundColor: barColor,
+	                    }}
+	                  />
+	                </View>
+	              </Pressable>
             );
           })}
         </ScrollView>

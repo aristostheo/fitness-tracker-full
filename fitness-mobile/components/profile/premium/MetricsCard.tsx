@@ -14,6 +14,8 @@ export function MetricsCard(props: {
   heightCm: number;
   bodyFatPct?: number;
   waistCm?: number;
+  lastUpdatedVia?: string;
+  lastUpdatedAt?: number;
   onPressAdd: () => void;
 }) {
   const { colors, isDark } = useTheme();
@@ -73,6 +75,11 @@ export function MetricsCard(props: {
 
       <View style={{ gap: 10 }}>
         <Row label="Weight" value={weightLabel} />
+        {props.lastUpdatedVia && props.lastUpdatedAt ? (
+          <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "800", marginTop: -5 }}>
+            Last updated via {props.lastUpdatedVia}: {new Date(props.lastUpdatedAt).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" })}
+          </Text>
+        ) : null}
         <Row label="Target" value={targetLabel} />
         <Row label="Height" value={`${fmt.num0(props.heightCm)} cm`} />
         <Row
@@ -83,7 +90,14 @@ export function MetricsCard(props: {
         <Row
           label="Body fat"
           value={
-            props.bodyFatPct != null ? `${fmt.num1(props.bodyFatPct)}%` : "—"
+            props.bodyFatPct != null && Number(props.bodyFatPct) > 0
+              ? `${fmt.num1(props.bodyFatPct)}%`
+              : "—"
+          }
+          subtleNote={
+            props.bodyFatPct != null && Number(props.bodyFatPct) > 0
+              ? undefined
+              : "Not set"
           }
         />
         <Row
@@ -95,13 +109,26 @@ export function MetricsCard(props: {
       <Text
         style={{
           color: colors.muted,
-          fontSize: 12,
+          fontSize: 11,
           marginTop: 12,
           lineHeight: 16,
         }}
       >
-        Measurements are optional. This app doesn’t punish you for missing data.
+        Measurements are optional.
       </Text>
+      <Pressable
+        onPress={() => {
+          Haptics.selectionAsync();
+          props.onPressAdd();
+        }}
+        style={{ marginTop: 10, alignSelf: "flex-start", paddingVertical: 4 }}
+        accessibilityRole="button"
+        accessibilityLabel="Add measurement"
+      >
+        <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "900" }}>
+          + Add measurement
+        </Text>
+      </Pressable>
     </GlassCard>
   );
 }

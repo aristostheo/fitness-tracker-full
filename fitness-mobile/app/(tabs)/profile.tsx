@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useNavigation, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 
 import { useTheme } from "@/content/ThemeProvider";
 import { useAuth } from "@/content/AuthContext";
@@ -61,6 +62,12 @@ import {
   type FriendEdge,
 } from "@/services/friends/friends";
 import { DietPreferencesCard } from "@/components/profile/cards/DietPreferencesCard";
+import {
+  connectedCount,
+  subscribeIntegrations,
+  syncHealth,
+  type IntegrationSnapshot,
+} from "@/services/integrations";
 
 export type GoalUILabel = "maintain" | "cut" | "lean_bulk" | "bulk";
 export type ActivityLevel =
@@ -177,6 +184,8 @@ export default function ProfileScreen() {
   >([]);
   const [friendsCount, setFriendsCount] = useState(0);
   const [friendsPings, setFriendsPings] = useState(0);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [integrations, setIntegrations] = useState<IntegrationSnapshot | null>(null);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -208,6 +217,8 @@ export default function ProfileScreen() {
       refreshBadgesPreview().catch(() => {});
     }, [refreshBadgesPreview])
   );
+
+  useEffect(() => subscribeIntegrations(setIntegrations), []);
 
   useEffect(() => {
     if (!user?.uid) {
@@ -479,6 +490,28 @@ export default function ProfileScreen() {
     } catch {}
   }, [user?.uid, weightInput, targetWeightInput, weightUnit]);
 
+  const onChangeProfilePhoto = useCallback(async () => {
+    if (!user?.uid) return;
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Photos access needed", "Allow photo access to choose a profile picture.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.82,
+      });
+      if (result.canceled || !result.assets?.[0]?.uri) return;
+      await updateProfile(user.uid, { photoURL: result.assets[0].uri });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      Alert.alert("Photo update failed", "Couldn’t update your profile photo right now.");
+    }
+  }, [user?.uid]);
+
   // ✅ Save now includes the “old features” fields too
   const onSave = useCallback(async () => {
     if (!user?.uid) return;
@@ -647,18 +680,24 @@ export default function ProfileScreen() {
         borderRadius: 999,
         backgroundColor: dirty
           ? withAlpha(colors.primary, pressed ? 0.22 : 0.18)
-          : withAlpha(colors.border, 0.22),
+          : withAlpha("#4CAF50", 0.16),
         borderWidth: 1,
         borderColor: dirty
           ? withAlpha(colors.primary, 0.35)
-          : withAlpha(colors.border, 0.55),
+          : withAlpha("#4CAF50", 0.38),
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
       })}
       accessibilityRole="button"
       accessibilityLabel={dirty ? "Save profile changes" : "No changes to save"}
     >
+      {!dirty && saveStatus !== "err" ? (
+        <Ionicons name="checkmark-circle" size={14} color="#4CAF50" />
+      ) : null}
       <Text
         style={{
-          color: dirty ? colors.text : colors.muted,
+          color: dirty ? colors.text : saveStatus === "err" ? "#F44336" : "#4CAF50",
           fontWeight: "900",
           fontSize: 12,
         }}
@@ -715,9 +754,46 @@ export default function ProfileScreen() {
           activityLevel={activityLevel}
           onToggleUnit={onToggleUnit}
           onPressSettings={() => router.push("(modals)/control-center")}
+          onPressAvatar={onChangeProfilePhoto}
           onPressGoPro={() => router.push("/paywall")}
+          photoURL={(profile as any)?.photoURL || user?.photoURL || null}
           rightSlot={savePill}
         />
+
+        <QuickStatsRow
+          colors={colors}
+          isDark={isDark}
+          goalType={goalType}
+          targetWeightKg={Number(targetWeightKg || 0)}
+          weightKg={Number(weightKg || 0)}
+          unit={weightUnit}
+          proteinGoal={(targetsPreview ?? savedTargets).proteinGoal}
+          onPressStreak={() => router.push("/profile/insights-progress")}
+          onPressGoal={() => setMacroGoalsOpen(true)}
+          onPressProtein={() => setMacroMethodOpen(true)}
+        />
+
+        <InsightsEntryCard
+          colors={colors}
+          isDark={isDark}
+          values={trendSeries.slice(-7)}
+          onPress={() => {
+            Haptics.selectionAsync();
+            router.push("/profile/insights-progress");
+          }}
+        />
+
+        <IntegrationsEntryCard
+          colors={colors}
+          isDark={isDark}
+          snapshot={integrations}
+          onPress={() => {
+            Haptics.selectionAsync();
+            router.push("/profile/integrations");
+          }}
+        />
+
+        <SectionLabel title="Your Stats" colors={colors} />
 
         {/* <QuickActionsRow
           onScanMeal={() => router.push("/scan-meal")}
@@ -734,12 +810,118 @@ export default function ProfileScreen() {
           onFriends={() => router.push("/friends")}
         /> */}
 
-        {/* ✅ NEW: Appearance (old feature, premium skin) */}
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          <View style={{ flex: 1 }}>
+            <MetricsCard
+              unit={weightUnit}
+              weightKg={Number(weightKg || 0)}
+              targetWeightKg={Number(targetWeightKg || 0)}
+              heightCm={Number(heightCm || 0)}
+              bodyFatPct={(profile as any)?.bodyFatPct}
+              waistCm={(profile as any)?.waistCm}
+              lastUpdatedVia={(profile as any)?.healthLastUpdatedVia}
+              lastUpdatedAt={(profile as any)?.healthLastUpdatedAt}
+              onPressAdd={() => {
+                Haptics.selectionAsync();
+
+                router.push({
+                  pathname: "/(modals)/body-metrics",
+                  params: {
+                    unit: weightUnit, // "lb" | "kg"
+                    weightKg: String(weightKg ?? ""),
+                    targetWeightKg: String(targetWeightKg ?? ""),
+                    heightCm: String(heightCm ?? ""),
+                    bodyFatPct: String((profile as any)?.bodyFatPct ?? ""),
+                    waistCm: String((profile as any)?.waistCm ?? ""),
+                  },
+                });
+              }}
+            />
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <BodyTwinEvolveCard
+              isDark={isDark}
+              weightKg={Number(weightKg || 0)}
+              targetWeightKg={Number(targetWeightKg || 0)}
+              unit={weightUnit}
+              heightCm={Number(heightCm || 0)}
+              goalType={goalType}
+              trendHint={
+                trendSeries.length
+                  ? trendSeries[trendSeries.length - 1] - trendSeries[0]
+                  : 0
+              }
+              onPressCustomize={() => {
+                Haptics.selectionAsync();
+                router.push({
+                  pathname: "/(modals)/bodyTwin",
+                  params: {
+                    weightKg: String(weightKg ?? ""),
+                    heightCm: String(heightCm ?? ""),
+                    // optional extras if you have them:
+                    bodyFatPct: String((profile as any)?.bodyFatPct ?? ""),
+                    waistCm: String((profile as any)?.waistCm ?? ""),
+                  },
+                });
+              }}
+            />
+          </View>
+        </View>
+
+        <LongTermProgressCard
+          unit={weightUnit} // "lb" | "kg"
+          initialRange="6m"
+          showConfidence
+          onPressAddCheckIn={() => {
+            // push your body metrics editor/modal
+            router.push("/(modals)/long-term-progress");
+          }}
+        />
+
+        {/* ✅ Meal schedule (old feature, premium skin) */}
+        {/* <MealSchedulePremiumCard
+          mealsPerDay={mealsPerDay}
+          setMealsPerDay={(v) => {
+            setMealsPerDay(v);
+            setDirty(true);
+          }}
+          breakfastTime={breakfastTime}
+          setBreakfastTime={(v) => {
+            setBreakfastTime(v);
+            setDirty(true);
+          }}
+          lastMealTime={lastMealTime}
+          setLastMealTime={(v) => {
+            setLastMealTime(v);
+            setDirty(true);
+          }}
+        /> */}
+
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          <View style={{ flex: 1 }}>
+            <BadgesPreviewCard
+              onPressAll={() => router.push("/badges")}
+              unlockedCount={badgeUnlockedCount}
+              previewIds={badgePreviewIds}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <FriendsPreviewCard
+              onPressAll={() => router.push("/friends")}
+              friendsCount={friendsCount}
+              streakPings={friendsPings}
+              previewFriends={friendsPreview}
+            />
+          </View>
+        </View>
+
+        <SectionLabel title="Settings" colors={colors} />
+
         <AppearanceCard>
           <ThemeToggle />
         </AppearanceCard>
 
-        {/* ✅ NEW: Macro method (old feature, premium skin) */}
         <View>
           <Pressable
             onPress={() => setMacroMethodOpen((v) => !v)}
@@ -760,9 +942,7 @@ export default function ProfileScreen() {
             accessibilityLabel="Toggle macro method"
           >
             <View style={{ flex: 1, gap: 2 }}>
-              <Text
-                style={{ color: colors.text, fontWeight: "900", fontSize: 14 }}
-              >
+              <Text style={{ color: colors.text, fontWeight: "900", fontSize: 14 }}>
                 Macro method
               </Text>
               {!macroMethodOpen ? (
@@ -830,6 +1010,7 @@ export default function ProfileScreen() {
             </View>
           ) : null}
         </View>
+
         <View>
           <Pressable
             onPress={() => setMacroGoalsOpen((v) => !v)}
@@ -850,9 +1031,7 @@ export default function ProfileScreen() {
             accessibilityLabel="Toggle macro goals"
           >
             <View style={{ flex: 1, gap: 2 }}>
-              <Text
-                style={{ color: colors.text, fontWeight: "900", fontSize: 14 }}
-              >
+              <Text style={{ color: colors.text, fontWeight: "900", fontSize: 14 }}>
                 Macro goals
               </Text>
               {!macroGoalsOpen ? (
@@ -947,15 +1126,6 @@ export default function ProfileScreen() {
           ) : null}
         </View>
 
-        {/* ✅ Old “explanatory cards” feature — premium condensed version */}
-        {/* <GoalInsightsCard
-          isDark={isDark}
-          macroMethod={macroMethod}
-          maintenance={maintenanceTargets}
-          activeTargets={targetsPreview ?? savedTargets}
-          goalType={goalType}
-          weeklyPace={Number(weeklyPace || 0.5)}
-        /> */}
         <DietPreferencesCard
           value={(profile as any)?.dietPreferences}
           onPress={() => {
@@ -964,135 +1134,52 @@ export default function ProfileScreen() {
           }}
         />
 
-        <View style={{ flexDirection: "row", gap: 12 }}>
-          <View style={{ flex: 1 }}>
-            <MetricsCard
-              unit={weightUnit}
-              weightKg={Number(weightKg || 0)}
-              targetWeightKg={Number(targetWeightKg || 0)}
-              heightCm={Number(heightCm || 0)}
-              bodyFatPct={(profile as any)?.bodyFatPct}
-              waistCm={(profile as any)?.waistCm}
-              onPressAdd={() => {
-                Haptics.selectionAsync();
-
-                router.push({
-                  pathname: "/(modals)/body-metrics",
-                  params: {
-                    unit: weightUnit, // "lb" | "kg"
-                    weightKg: String(weightKg ?? ""),
-                    targetWeightKg: String(targetWeightKg ?? ""),
-                    heightCm: String(heightCm ?? ""),
-                    bodyFatPct: String((profile as any)?.bodyFatPct ?? ""),
-                    waistCm: String((profile as any)?.waistCm ?? ""),
-                  },
-                });
-              }}
-            />
-          </View>
-
-          <View style={{ flex: 1 }}>
-            <BodyTwinEvolveCard
-              isDark={isDark}
-              weightKg={Number(weightKg || 0)}
-              heightCm={Number(heightCm || 0)}
-              goalType={goalType}
-              trendHint={
-                trendSeries.length
-                  ? trendSeries[trendSeries.length - 1] - trendSeries[0]
-                  : 0
-              }
-              onPressCustomize={() => {
-                Haptics.selectionAsync();
-                router.push({
-                  pathname: "/(modals)/bodyTwin",
-                  params: {
-                    weightKg: String(weightKg ?? ""),
-                    heightCm: String(heightCm ?? ""),
-                    // optional extras if you have them:
-                    bodyFatPct: String((profile as any)?.bodyFatPct ?? ""),
-                    waistCm: String((profile as any)?.waistCm ?? ""),
-                  },
-                });
-              }}
-            />
-          </View>
-        </View>
-
-        <LongTermProgressCard
-          unit={weightUnit} // "lb" | "kg"
-          initialRange="6m"
-          showConfidence
-          onPressAddCheckIn={() => {
-            // push your body metrics editor/modal
-            router.push("/(modals)/long-term-progress");
-          }}
-        />
-
-        {/* ✅ Meal schedule (old feature, premium skin) */}
-        {/* <MealSchedulePremiumCard
-          mealsPerDay={mealsPerDay}
-          setMealsPerDay={(v) => {
-            setMealsPerDay(v);
-            setDirty(true);
-          }}
-          breakfastTime={breakfastTime}
-          setBreakfastTime={(v) => {
-            setBreakfastTime(v);
-            setDirty(true);
-          }}
-          lastMealTime={lastMealTime}
-          setLastMealTime={(v) => {
-            setLastMealTime(v);
-            setDirty(true);
-          }}
-        /> */}
-
-        <View style={{ flexDirection: "row", gap: 12 }}>
-          <View style={{ flex: 1 }}>
-            <BadgesPreviewCard
-              onPressAll={() => router.push("/badges")}
-              unlockedCount={badgeUnlockedCount}
-              previewIds={badgePreviewIds}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <FriendsPreviewCard
-              onPressAll={() => router.push("/friends")}
-              friendsCount={friendsCount}
-              streakPings={friendsPings}
-              previewFriends={friendsPreview}
-            />
-          </View>
-        </View>
-
         <GlassCard>
-          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 14 }}>
-            Privacy & safety
-          </Text>
-          <Text style={{ color: colors.muted, marginTop: 6, lineHeight: 18 }}>
-            Your progress is yours. This page avoids shame language, hides
-            sensitive signals by default, and uses neutral, supportive copy.
-          </Text>
+          <Pressable
+            onPress={() => {
+              Haptics.selectionAsync();
+              setPrivacyOpen((v) => !v);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Toggle Privacy and Safety"
+            style={{ flexDirection: "row", alignItems: "center", gap: 10, minHeight: 44 }}
+          >
+            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 14, flex: 1 }}>
+              🔒 Privacy & Safety
+            </Text>
+            <Ionicons
+              name={privacyOpen ? "chevron-up" : "chevron-forward"}
+              size={18}
+              color={colors.muted}
+            />
+          </Pressable>
+          {privacyOpen ? (
+            <>
+              <Text style={{ color: colors.muted, marginTop: 6, lineHeight: 18 }}>
+                Your progress is yours. This page avoids shame language, hides
+                sensitive signals by default, and uses neutral, supportive copy.
+              </Text>
 
-          <View style={{ height: 10 }} />
-          <View style={{ gap: 10 }}>
-            <EmptyState
-              title="Private by default"
-              message="Friends see what you choose to share — never raw weight or calories unless you opt in."
-              icon="lock-closed-outline"
-            />
-            <EmptyState
-              title="Accessibility aware"
-              message="Large touch targets, readable contrast, reduced motion friendly interactions."
-              icon="eye-outline"
-            />
-            <EmptyState
-              title="Emotionally safe"
-              message="Trends are framed as information — not judgment. You’re in control."
-              icon="heart-outline"
-            />
-          </View>
+              <View style={{ height: 10 }} />
+              <View style={{ gap: 10 }}>
+                <EmptyState
+                  title="Private by default"
+                  message="Friends see what you choose to share — never raw weight or calories unless you opt in."
+                  icon="lock-closed-outline"
+                />
+                <EmptyState
+                  title="Accessibility aware"
+                  message="Large touch targets, readable contrast, reduced motion friendly interactions."
+                  icon="eye-outline"
+                />
+                <EmptyState
+                  title="Emotionally safe"
+                  message="Trends are framed as information — not judgment. You’re in control."
+                  icon="heart-outline"
+                />
+              </View>
+            </>
+          ) : null}
         </GlassCard>
 
         <View style={{ height: 8 }} />
@@ -1136,5 +1223,263 @@ export default function ProfileScreen() {
         </View>
       ) : null}
     </KeyboardAvoidingView>
+  );
+}
+
+function SectionLabel({ title, colors }: { title: string; colors: any }) {
+  return (
+    <View style={{ paddingTop: 6, paddingHorizontal: 2 }}>
+      <Text
+        style={{
+          color: colors.muted,
+          fontSize: 12,
+          fontWeight: "900",
+          letterSpacing: 0.8,
+          textTransform: "uppercase",
+        }}
+      >
+        {title}
+      </Text>
+    </View>
+  );
+}
+
+function QuickStatsRow({
+  colors,
+  isDark,
+  goalType,
+  targetWeightKg,
+  weightKg,
+  unit,
+  proteinGoal,
+  onPressStreak,
+  onPressGoal,
+  onPressProtein,
+}: {
+  colors: any;
+  isDark: boolean;
+  goalType: GoalUILabel;
+  targetWeightKg: number;
+  weightKg: number;
+  unit: "kg" | "lb";
+  proteinGoal: number;
+  onPressStreak: () => void;
+  onPressGoal: () => void;
+  onPressProtein: () => void;
+}) {
+  const remainingKg = Math.abs((weightKg || 0) - (targetWeightKg || 0));
+  const remaining =
+    unit === "kg" ? `${Math.round(remainingKg)} kg` : `${Math.round(kgToLb(remainingKg))} lb`;
+  const goalLabel =
+    goalType === "cut"
+      ? "Cut"
+      : goalType === "lean_bulk"
+      ? "Lean bulk"
+      : goalType === "bulk"
+      ? "Bulk"
+      : "Maintain";
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 6 }}>
+      <StatChip colors={colors} isDark={isDark} label="🔥 7 day streak" onPress={onPressStreak} />
+      <StatChip
+        colors={colors}
+        isDark={isDark}
+        label={`🎯 ${goalLabel} · ${targetWeightKg && weightKg ? `${remaining} to go` : "set target"}`}
+        onPress={onPressGoal}
+      />
+      <StatChip
+        colors={colors}
+        isDark={isDark}
+        label={`⚡ ${Math.round(proteinGoal || 185)}g protein goal`}
+        onPress={onPressProtein}
+      />
+    </ScrollView>
+  );
+}
+
+function StatChip({
+  colors,
+  isDark,
+  label,
+  onPress,
+}: {
+  colors: any;
+  isDark: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={() => {
+        Haptics.selectionAsync();
+        onPress();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => ({
+        minHeight: 44,
+        paddingHorizontal: 14,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: withAlpha(colors.primary, pressed ? 0.44 : 0.28),
+        backgroundColor: withAlpha(colors.primary, isDark ? 0.12 : 0.08),
+        alignItems: "center",
+        justifyContent: "center",
+      })}
+    >
+      <Text style={{ color: colors.text, fontWeight: "900", fontSize: 13 }}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function InsightsEntryCard({
+  colors,
+  isDark,
+  values,
+  onPress,
+}: {
+  colors: any;
+  isDark: boolean;
+  values: number[];
+  onPress: () => void;
+}) {
+  const safeValues = values.length ? values : [3, 5, 4, 6, 5, 7, 6];
+  const max = Math.max(...safeValues, 1);
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Open Insights and Progress"
+      style={({ pressed }) => ({
+        opacity: pressed ? 0.92 : 1,
+        transform: [{ scale: pressed ? 0.995 : 1 }],
+      })}
+    >
+      <LinearGradient
+        colors={[
+          withAlpha(colors.primary, isDark ? 0.28 : 0.16),
+          withAlpha("#6C63FF", isDark ? 0.18 : 0.1),
+          withAlpha("#22D3EE", isDark ? 0.08 : 0.06),
+        ]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{
+          borderRadius: 22,
+          borderWidth: 1,
+          borderColor: withAlpha(colors.primary, 0.38),
+          padding: 16,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 14,
+          shadowColor: colors.primary,
+          shadowOpacity: isDark ? 0.22 : 0.1,
+          shadowRadius: 18,
+          shadowOffset: { width: 0, height: 10 },
+          elevation: 3,
+        }}
+      >
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}>
+            Insights & Progress
+          </Text>
+          <Text style={{ color: colors.muted, fontWeight: "800", fontSize: 12.5 }}>
+            Weekly trends, streaks, and nutrition patterns
+          </Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 4, height: 42 }}>
+          {safeValues.map((v, idx) => (
+            <View
+              key={`${v}-${idx}`}
+              style={{
+                width: 6,
+                height: 10 + Math.round((v / max) * 28),
+                borderRadius: 999,
+                backgroundColor: idx === safeValues.length - 1 ? colors.primary : withAlpha(colors.text, 0.26),
+              }}
+            />
+          ))}
+        </View>
+        <Text style={{ color: colors.text, fontWeight: "900" }}>View →</Text>
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
+function IntegrationsEntryCard({
+  colors,
+  isDark,
+  snapshot,
+  onPress,
+}: {
+  colors: any;
+  isDark: boolean;
+  snapshot: IntegrationSnapshot | null;
+  onPress: () => void;
+}) {
+  const count = snapshot ? connectedCount(snapshot) : 0;
+  const health = snapshot ? syncHealth(snapshot) : "none";
+  const chipColor =
+    health === "error" ? "#F44336" : count > 0 ? "#4CAF50" : colors.muted;
+  const chipText = health === "error" ? "Sync error" : count > 0 ? `${count} connected` : "Not set up";
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Open Integrations"
+      style={({ pressed }) => ({
+        opacity: pressed ? 0.92 : 1,
+        transform: [{ scale: pressed ? 0.995 : 1 }],
+      })}
+    >
+      <View
+        style={{
+          borderRadius: 22,
+          borderWidth: 1,
+          borderColor: withAlpha(colors.primary, isDark ? 0.28 : 0.18),
+          backgroundColor: isDark ? "rgba(26,26,36,0.92)" : colors.surface,
+          padding: 15,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+        }}
+      >
+        <View
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 16,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: withAlpha(colors.primary, 0.18),
+            borderWidth: 1,
+            borderColor: withAlpha(colors.primary, 0.28),
+          }}
+        >
+          <Ionicons name="link-outline" size={22} color={colors.primary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 17 }}>
+            Integrations
+          </Text>
+          <Text style={{ color: colors.muted, fontWeight: "800", marginTop: 3 }}>
+            Connect health apps to auto-sync your data
+          </Text>
+        </View>
+        <View
+          style={{
+            borderRadius: 999,
+            paddingHorizontal: 10,
+            paddingVertical: 6,
+            borderWidth: 1,
+            borderColor: withAlpha(chipColor, 0.32),
+            backgroundColor: withAlpha(chipColor, count > 0 || health === "error" ? 0.13 : 0.08),
+          }}
+        >
+          <Text style={{ color: chipColor, fontWeight: "900", fontSize: 11 }}>
+            {chipText}
+          </Text>
+        </View>
+      </View>
+    </Pressable>
   );
 }

@@ -37,8 +37,9 @@ export function QuickActionRow({
   return (
     <ScrollView
       horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ gap: 10, paddingRight: 6 }}
+      showsHorizontalScrollIndicator
+      indicatorStyle="white"
+      contentContainerStyle={{ gap: 10, paddingRight: 16 }}
     >
       {actions.map((a) => (
         <Pressable
@@ -59,9 +60,9 @@ export function QuickActionRow({
               borderRadius: 20,
               padding: 12,
               borderWidth: 1,
-              borderColor: tokens.hairline,
-              backgroundColor: withAlpha(tokens.card, 0.98),
-              gap: 10,
+	              borderColor: withAlpha(a.color, 0.28),
+	              backgroundColor: withAlpha(a.color, 0.11),
+	              gap: 10,
             }}
           >
             <View
@@ -71,9 +72,9 @@ export function QuickActionRow({
                 borderRadius: 14,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: withAlpha(a.color, 0.14),
-                borderWidth: 1,
-                borderColor: withAlpha(a.color, 0.22),
+	                backgroundColor: withAlpha(a.color, 0.18),
+	                borderWidth: 1,
+	                borderColor: withAlpha(a.color, 0.32),
               }}
             >
               <Ionicons name={a.icon} size={18} color={a.color} />

@@ -8,7 +8,23 @@ const config: ExpoConfig = {
   version: "1.0.0",
   orientation: "portrait",
   platforms: ["ios", "android"],
-  plugins: ["expo-dev-client"],
+
+  plugins: [
+    "expo-dev-client",
+    "expo-build-properties",
+    "expo-font",
+    "expo-router",
+    "expo-web-browser",
+    [
+      "react-native-health",
+      {
+        healthSharePermission:
+          "Fitness Mobile reads Apple Health data you approve, including steps, workouts, energy, weight, body fat, heart rate, and sleep, to sync your fitness dashboard.",
+        healthUpdatePermission:
+          "Fitness Mobile may write workouts or body metrics only when you explicitly choose to export them.",
+      },
+    ],
+  ],
 
   ios: {
     bundleIdentifier: "com.aristos.fitnessmobile",
@@ -21,6 +37,14 @@ const config: ExpoConfig = {
       NSCameraUsageDescription:
         "We use the camera to scan food barcodes to auto-fill nutrition.",
     },
+  },
+
+  updates: {
+    url: "https://u.expo.dev/32f5a4f2-1672-4b2b-87d0-c97dc293f81d",
+  },
+
+  runtimeVersion: {
+    policy: "appVersion",
   },
 
   extra: {
