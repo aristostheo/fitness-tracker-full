@@ -11,9 +11,11 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
 import Animated, {
   FadeIn,
   FadeOut,
@@ -21,6 +23,7 @@ import Animated, {
   FadeOutDown,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import QRCode from "react-native-qrcode-svg";
 import { useTheme } from "@/content/ThemeProvider";
 import { withAlpha } from "@/lib/color";
 
@@ -31,6 +34,7 @@ export function FriendsAddSheet({
   sending,
   disabled,
   privacyNote,
+  myUid,
 }: {
   open: boolean;
   onClose: () => void;
@@ -38,10 +42,12 @@ export function FriendsAddSheet({
   sending: boolean;
   disabled?: boolean;
   privacyNote?: string;
+  myUid?: string;
 }) {
   const { colors, isDark } = useTheme();
   const [target, setTarget] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [showQr, setShowQr] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -53,7 +59,9 @@ export function FriendsAddSheet({
     const t = target.trim();
     if (!t) return false;
     if (disabled) return false;
-    return true;
+    const looksLikeEmail = /\S+@\S+\.\S+/.test(t);
+    const looksLikeUid = t.length >= 6 && !t.includes(" ");
+    return looksLikeEmail || looksLikeUid;
   }, [target, disabled]);
 
   if (!open) return null;
@@ -128,6 +136,62 @@ export function FriendsAddSheet({
 
             <View style={{ height: 12 }} />
 
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <Pressable
+                onPress={() => {
+                  if (!myUid) return;
+                  Clipboard.setStringAsync(myUid)
+                    .then(() => {
+                      Haptics.notificationAsync(
+                        Haptics.NotificationFeedbackType.Success
+                      );
+                      Alert.alert("Copied", "Your UID is ready to share.");
+                    })
+                    .catch(() => {
+                      Alert.alert("Couldn't copy", "Try again in a moment.");
+                    });
+                }}
+                style={({ pressed }) => [
+                  styles.utilityBtn,
+                  {
+                    opacity: myUid ? 1 : 0.5,
+                    backgroundColor: withAlpha(colors.text, pressed ? 0.12 : 0.08),
+                    borderColor: colors.glassBorder,
+                  },
+                ]}
+              >
+                <Ionicons name="copy-outline" size={16} color={colors.text} />
+                <Text style={[styles.utilityText, { color: colors.text }]}>Copy my UID</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setShowQr((v) => !v)}
+                style={({ pressed }) => [
+                  styles.utilityBtn,
+                  {
+                    opacity: myUid ? 1 : 0.5,
+                    backgroundColor: withAlpha(colors.text, pressed ? 0.12 : 0.08),
+                    borderColor: colors.glassBorder,
+                  },
+                ]}
+              >
+                <Ionicons name="qr-code-outline" size={16} color={colors.text} />
+                <Text style={[styles.utilityText, { color: colors.text }]}>Show my QR</Text>
+              </Pressable>
+            </View>
+
+            {showQr && myUid ? (
+              <View style={[styles.qrWrap, { borderColor: colors.glassBorder, backgroundColor: colors.inputBg }]}>
+                <View style={styles.qrPanel}>
+                  <QRCode value={myUid} size={180} backgroundColor="#FFFFFF" color="#111111" />
+                </View>
+                <Text style={[styles.qrUid, { color: colors.muted }]} numberOfLines={1}>
+                  {myUid}
+                </Text>
+              </View>
+            ) : null}
+
+            <View style={{ height: 12 }} />
+
             <Text style={[styles.label, { color: colors.muted }]}>
               Email or UID
             </Text>
@@ -148,7 +212,6 @@ export function FriendsAddSheet({
                 placeholderTextColor={withAlpha(colors.muted, 0.7)}
                 autoCapitalize="none"
                 autoCorrect={false}
-                keyboardType="email-address"
                 style={[styles.input, { color: colors.text }]}
               />
             </View>
@@ -171,7 +234,7 @@ export function FriendsAddSheet({
               <TextInput
                 value={displayName}
                 onChangeText={setDisplayName}
-                placeholder="How you want them to see you"
+                placeholder="Your nickname for them (only you see this)"
                 placeholderTextColor={withAlpha(colors.muted, 0.7)}
                 style={[styles.input, { color: colors.text }]}
               />
@@ -269,6 +332,31 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   input: { flex: 1, fontSize: 14, fontWeight: "700" },
+  utilityBtn: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  utilityText: { fontSize: 12.5, fontWeight: "900" },
+  qrWrap: {
+    marginTop: 12,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 12,
+    alignItems: "center",
+    gap: 10,
+  },
+  qrPanel: {
+    padding: 12,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+  },
+  qrUid: { fontSize: 11.5, fontWeight: "700" },
   sendBtn: {
     flexDirection: "row",
     alignItems: "center",

@@ -1,147 +1,177 @@
-// components/friends/premium/FriendRowPremium.tsx
-// Drop-in ✅ premium friend row with quick Ping micro-action
-
-import React, { useMemo } from "react";
+import React from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
-import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import * as Haptics from "expo-haptics";
 import { useTheme } from "@/content/ThemeProvider";
 import { withAlpha } from "@/lib/color";
 
-// FriendRowPremium.tsx
-
-type GradientTuple = readonly [string, string, ...string[]];
-
-function pickAccent(seed: string): GradientTuple {
-  const palettes: readonly GradientTuple[] = [
-    ["rgba(110,231,255,0.45)", "rgba(167,139,250,0.18)"] as const,
-    ["rgba(52,211,153,0.45)", "rgba(96,165,250,0.18)"] as const,
-    ["rgba(251,191,36,0.45)", "rgba(244,114,182,0.18)"] as const,
-    ["rgba(248,113,113,0.45)", "rgba(251,146,60,0.18)"] as const,
-    ["rgba(148,163,184,0.40)", "rgba(99,102,241,0.16)"] as const,
-  ];
-
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++)
-    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-  return palettes[hash % palettes.length];
-}
+export type FriendCardChip = {
+  key: string;
+  label: string;
+  tone?: "amber" | "green" | "purple" | "gray";
+};
 
 export function FriendRowPremium({
-  name,
-  handle,
-  subtitle,
-  accentSeed,
+  displayName,
+  uidLabel,
+  activitySummary,
+  accentColor,
+  streakRingTone,
+  nicknameMissing = false,
+  onAddNickname,
+  chips,
+  canPing,
+  pingCooldownLabel,
   onPress,
   onPing,
 }: {
-  name: string;
-  handle?: string;
-  subtitle?: string;
-  accentSeed: string;
+  displayName: string;
+  uidLabel: string;
+  activitySummary: string;
+  accentColor: string;
+  streakRingTone: "gray" | "green" | "gold";
+  nicknameMissing?: boolean;
+  onAddNickname?: () => void;
+  chips: FriendCardChip[];
+  canPing: boolean;
+  pingCooldownLabel?: string;
   onPress: () => void;
   onPing: () => void;
 }) {
-  const { colors, isDark } = useTheme();
-  const accent = useMemo(() => pickAccent(accentSeed), [accentSeed]);
+  const { colors } = useTheme();
+
+  const ringColor =
+    streakRingTone === "gold"
+      ? "#FFC107"
+      : streakRingTone === "green"
+      ? "#4CAF50"
+      : withAlpha(colors.text, 0.14);
 
   return (
-    <Pressable
-      onPress={onPress}
-      onLongPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-    >
+    <Pressable onPress={onPress}>
       {({ pressed }) => (
         <View
           style={[
             styles.card,
             {
-              borderColor: colors.glassBorder,
-              backgroundColor: pressed ? colors.surface2 : colors.glass,
+              backgroundColor: pressed ? withAlpha(colors.text, 0.04) : "#1A1A24",
+              borderColor: withAlpha(colors.text, 0.08),
             },
           ]}
         >
-          <BlurView
-            intensity={20}
-            tint={isDark ? "dark" : "light"}
-            style={StyleSheet.absoluteFillObject}
-          />
-
-          <LinearGradient
-            colors={accent}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.accentGlow}
-          />
-
-          <View style={styles.row}>
-            <View style={styles.avatar}>
-              <LinearGradient
-                colors={
-                  [
-                    withAlpha(accent[0], 0.9),
-                    withAlpha(accent[1], 0.9),
-                  ] as const
-                }
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFillObject}
-              />
-
-              <Text style={[styles.avatarText, { color: colors.text }]}>
-                {(name?.trim()?.[0] || "F").toUpperCase()}
-              </Text>
-            </View>
-
-            <View style={{ flex: 1 }}>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-              >
-                <Text
-                  style={[styles.name, { color: colors.text }]}
-                  numberOfLines={1}
-                >
-                  {name}
-                </Text>
-                {handle ? (
-                  <Text
-                    style={[styles.handle, { color: colors.muted }]}
-                    numberOfLines={1}
-                  >
-                    {handle}
-                  </Text>
-                ) : null}
-              </View>
-              <Text
-                style={[styles.subtitle, { color: colors.muted }]}
-                numberOfLines={1}
-              >
-                {subtitle || "Connected"}
-              </Text>
-            </View>
-
-            <Pressable
-              onPress={() => {
-                Haptics.selectionAsync();
-                onPing();
-              }}
-              style={({ pressed: p }) => [
-                styles.ping,
+          <View style={[styles.avatarRing, { borderColor: ringColor }]}>
+            <View
+              style={[
+                styles.avatar,
                 {
-                  backgroundColor: withAlpha(colors.text, p ? 0.12 : 0.08),
-                  borderColor: colors.glassBorder,
+                  backgroundColor: withAlpha(accentColor, 0.2),
+                  borderColor: withAlpha(accentColor, 0.32),
                 },
               ]}
-              hitSlop={10}
             >
-              <Ionicons
-                name="notifications-outline"
-                size={18}
-                color={colors.text}
-              />
-            </Pressable>
+              <Text style={[styles.avatarText, { color: colors.text }]}>
+                {(displayName || "F")[0]?.toUpperCase() || "F"}
+              </Text>
+            </View>
           </View>
+
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={styles.nameRow}>
+              <Text
+                style={[styles.name, { color: colors.text }]}
+                numberOfLines={1}
+              >
+                {displayName}
+              </Text>
+              {nicknameMissing ? (
+                <Pressable onPress={onAddNickname}>
+                  <Text style={styles.nicknamePrompt}>Add nickname →</Text>
+                </Pressable>
+              ) : null}
+            </View>
+
+            <Text style={[styles.uid, { color: colors.muted }]} numberOfLines={1}>
+              {uidLabel}
+            </Text>
+
+            <Text
+              style={[styles.summary, { color: colors.muted }]}
+              numberOfLines={1}
+            >
+              {activitySummary}
+            </Text>
+
+            <View
+              style={{
+                marginTop: 12,
+                height: 1,
+                backgroundColor: withAlpha(colors.text, 0.06),
+              }}
+            />
+
+            <View style={styles.chipsRow}>
+              {chips.slice(0, 3).map((chip) => {
+                const tone =
+                  chip.tone === "amber"
+                    ? "#FFC107"
+                    : chip.tone === "green"
+                    ? "#4CAF50"
+                    : chip.tone === "purple"
+                    ? "#6C63FF"
+                    : "#7A7A86";
+                return (
+                  <View
+                    key={chip.key}
+                    style={[
+                      styles.chip,
+                      {
+                        backgroundColor: withAlpha(tone, chip.tone === "gray" ? 0.08 : 0.14),
+                        borderColor: withAlpha(tone, chip.tone === "gray" ? 0.14 : 0.24),
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.chipText,
+                        { color: chip.tone === "gray" ? colors.muted : colors.text },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {chip.label}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+
+          <Pressable
+            onPress={onPing}
+            hitSlop={10}
+            style={({ pressed: pingPressed }) => [
+              styles.pingWrap,
+              {
+                backgroundColor: canPing
+                  ? withAlpha("#6C63FF", pingPressed ? 0.28 : 0.18)
+                  : pingPressed
+                  ? withAlpha(colors.text, 0.1)
+                  : withAlpha(colors.text, 0.04),
+                borderColor: canPing
+                  ? withAlpha("#6C63FF", 0.34)
+                  : withAlpha(colors.text, 0.12),
+              },
+            ]}
+          >
+            <Ionicons
+              name="notifications-outline"
+              size={18}
+              color={canPing ? "#C9C5FF" : colors.muted}
+            />
+            {pingCooldownLabel ? (
+              <Text style={[styles.cooldown, { color: colors.muted }]}>
+                {pingCooldownLabel}
+              </Text>
+            ) : null}
+          </Pressable>
         </View>
       )}
     </Pressable>
@@ -150,60 +180,91 @@ export function FriendRowPremium({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 18,
+    borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
-    overflow: "hidden",
-  },
-  accentGlow: {
-    position: "absolute",
-    right: -80,
-    top: -60,
-    width: 200,
-    height: 200,
-    borderRadius: 999,
-    opacity: 0.7,
-  },
-  row: {
+    padding: 14,
     flexDirection: "row",
-    alignItems: "center",
     gap: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    alignItems: "flex-start",
+  },
+  avatarRing: {
+    width: 56,
+    height: 56,
+    borderRadius: 999,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    overflow: "hidden",
+    width: 48,
+    height: 48,
+    borderRadius: 999,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
   avatarText: {
-    color: "rgba(0,0,0,0.80)",
+    fontSize: 18,
     fontWeight: "900",
-    fontSize: 16,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   name: {
-    fontSize: 14.5,
+    fontSize: 16,
     fontWeight: "900",
     letterSpacing: -0.25,
-    maxWidth: 170,
+    flexShrink: 1,
   },
-  handle: {
-    fontSize: 12.5,
+  nicknamePrompt: {
+    color: "#9C95FF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  uid: {
+    marginTop: 4,
+    fontSize: 11.5,
     fontWeight: "700",
   },
-  subtitle: {
-    marginTop: 2,
-    fontSize: 12.5,
-    fontWeight: "600",
+  summary: {
+    marginTop: 8,
+    fontSize: 13,
+    fontWeight: "700",
   },
-  ping: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
+  chipsRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  chip: {
+    minHeight: 28,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  chipText: {
+    fontSize: 11.5,
+    fontWeight: "900",
+  },
+  pingWrap: {
+    width: 76,
+    minHeight: 52,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    gap: 4,
+  },
+  cooldown: {
+    fontSize: 10,
+    fontWeight: "800",
+    textAlign: "center",
   },
 });

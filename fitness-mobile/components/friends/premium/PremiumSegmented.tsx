@@ -1,9 +1,5 @@
-// components/friends/premium/PremiumSegmented.tsx
-// Drop-in ✅ calm premium segmented control
-
 import React from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
-import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { useTheme } from "@/content/ThemeProvider";
 import { withAlpha } from "@/lib/color";
@@ -13,11 +9,13 @@ export type FriendsTabKey = "friends" | "requests" | "sent";
 export function PremiumSegmented({
   value,
   onChange,
+  requestCount = 0,
 }: {
   value: FriendsTabKey;
   onChange: (v: FriendsTabKey) => void;
+  requestCount?: number;
 }) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   const items: { key: FriendsTabKey; label: string }[] = [
     { key: "friends", label: "Friends" },
@@ -30,44 +28,51 @@ export function PremiumSegmented({
       style={[
         styles.wrap,
         {
-          borderColor: colors.glassBorder,
-          backgroundColor: colors.surface,
+          backgroundColor: "#1A1A24",
+          borderColor: withAlpha(colors.text, 0.08),
         },
       ]}
     >
-      <BlurView
-        intensity={22}
-        tint={isDark ? "dark" : "light"}
-        style={StyleSheet.absoluteFillObject}
-      />
-      {items.map((it) => {
-        const active = value === it.key;
+      {items.map((item) => {
+        const active = value === item.key;
         return (
           <Pressable
-            key={it.key}
+            key={item.key}
             onPress={() => {
               Haptics.selectionAsync();
-              onChange(it.key);
+              onChange(item.key);
             }}
             style={({ pressed }) => [
               styles.item,
-              active && {
-                backgroundColor: withAlpha(colors.text, 0.12),
-                borderColor: withAlpha(colors.text, 0.16),
-              },
               pressed && !active
-                ? { backgroundColor: withAlpha(colors.text, 0.06) }
+                ? { backgroundColor: withAlpha(colors.text, 0.04) }
                 : null,
             ]}
           >
-            <Text
+            <View style={styles.labelRow}>
+              <Text
+                style={[
+                  styles.label,
+                  { color: active ? colors.text : colors.muted },
+                ]}
+              >
+                {item.label}
+              </Text>
+              {item.key === "requests" && requestCount > 0 ? (
+                <View style={styles.badgeDot}>
+                  <Text style={styles.badgeText}>{requestCount}</Text>
+                </View>
+              ) : null}
+            </View>
+            <View
               style={[
-                styles.text,
-                { color: active ? colors.text : colors.muted },
+                styles.underline,
+                {
+                  opacity: active ? 1 : 0,
+                  backgroundColor: "#6C63FF",
+                },
               ]}
-            >
-              {it.label}
-            </Text>
+            />
           </Pressable>
         );
       })}
@@ -80,21 +85,48 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     borderRadius: 18,
     borderWidth: StyleSheet.hairlineWidth,
-    overflow: "hidden",
-    padding: 4,
+    paddingHorizontal: 8,
+    paddingTop: 6,
+    paddingBottom: 4,
+    minHeight: 58,
   },
   item: {
     flex: 1,
-    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "space-between",
     borderRadius: 14,
+    paddingTop: 8,
+    paddingBottom: 0,
+  },
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minHeight: 24,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: "900",
+    letterSpacing: -0.2,
+  },
+  underline: {
+    marginTop: 8,
+    width: 28,
+    height: 3,
+    borderRadius: 999,
+  },
+  badgeDot: {
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 5,
+    borderRadius: 999,
+    backgroundColor: "#F44336",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "transparent",
   },
-  text: {
-    fontSize: 13,
-    fontWeight: "800",
-    letterSpacing: -0.2,
+  badgeText: {
+    color: "#FFFFFF",
+    fontWeight: "900",
+    fontSize: 10,
   },
 });

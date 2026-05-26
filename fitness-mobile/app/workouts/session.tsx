@@ -36,6 +36,12 @@ import { useAuth } from "@/content/AuthContext";
 import { fmt } from "@/utils/date";
 import { lbToKg, kgToLb } from "@/utils/units";
 import { withAlpha } from "@/components/workouts/utils/withAlpha";
+import {
+  inferPrimaryMuscle,
+  primaryMuscleLabel,
+  PRIMARY_MUSCLE_OPTIONS,
+  type PrimaryMuscleKey,
+} from "@/services/workoutMuscles";
 
 import { addWorkout, type Workout } from "@/services/workouts";
 import {
@@ -91,6 +97,7 @@ type EditSetState = {
   open: boolean;
   itemId: string | null;
   exercise: string;
+  primaryMuscle: string;
   reps: string;
   weight: string;
   note: string;
@@ -398,6 +405,32 @@ function makeStyles(p: Palette, isDark: boolean) {
       backgroundColor: withAlpha(p.text, isDark ? 0.06 : 0.05),
       color: withAlpha(p.text, 0.92),
       fontWeight: "800",
+    },
+    muscleChipWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginTop: 8,
+    },
+    muscleChip: {
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: withAlpha(p.text, isDark ? 0.05 : 0.045),
+      borderWidth: hair,
+      borderColor: withAlpha(p.text, isDark ? 0.12 : 0.1),
+    },
+    muscleChipActive: {
+      backgroundColor: withAlpha(p.primary, isDark ? 0.2 : 0.14),
+      borderColor: withAlpha(p.primary, isDark ? 0.35 : 0.26),
+    },
+    muscleChipText: {
+      color: withAlpha(p.text, 0.72),
+      fontWeight: "800",
+      fontSize: 12,
+    },
+    muscleChipTextActive: {
+      color: withAlpha(p.text, 0.92),
     },
     quickRow: {
       flexDirection: "row",
@@ -813,6 +846,7 @@ export default function WorkoutSessionScreen() {
   const pickedConsumed = useRef<string | null>(null);
 
   const [quickExercise, setQuickExercise] = useState("");
+  const [quickPrimaryMuscle, setQuickPrimaryMuscle] = useState("");
   const [quickReps, setQuickReps] = useState("10");
   const [quickWeight, setQuickWeight] = useState("");
 
@@ -820,6 +854,7 @@ export default function WorkoutSessionScreen() {
     open: false,
     itemId: null,
     exercise: "",
+    primaryMuscle: "",
     reps: "10",
     weight: "",
     note: "",
@@ -915,6 +950,7 @@ export default function WorkoutSessionScreen() {
           reps?: number;
           weightKg?: number;
           note?: string;
+          primaryMuscle?: string;
         }[];
       };
 
@@ -929,6 +965,7 @@ export default function WorkoutSessionScreen() {
             sets: 1,
             reps: ex.reps ?? 10,
             weightKg: ex.weightKg ?? 0,
+            primaryMuscle: inferPrimaryMuscle(ex.name, ex.primaryMuscle),
             note: ex.note ?? "",
             notes: ex.note ?? "",
             done: false,
@@ -937,17 +974,26 @@ export default function WorkoutSessionScreen() {
         }
       }
 
+      const shouldResetDraft = String(params?.templateLaunch || "") === "1";
+      const baseDraft = shouldResetDraft
+        ? newSessionDraft({
+            dateISO: draft.dateISO || todayISO,
+            title: seed.title || "Workout",
+          })
+        : draft;
+
       const next: WorkoutSessionDraft = {
-        ...draft,
-        title: seed.title || draft.title,
+        ...baseDraft,
+        title: seed.title || baseDraft.title,
         updatedAt: Date.now(),
-        items: [...nextItems, ...draft.items],
+        items: nextItems,
       };
 
       persist(next);
+      setTitleDraft(next.title || "Workout");
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     })();
-  }, [uidUser, draft?.id]);
+  }, [uidUser, draft?.id, params?.templateLaunch, todayISO]);
   useFocusEffect(
     React.useCallback(() => {
       let alive = true;
@@ -1117,12 +1163,13 @@ export default function WorkoutSessionScreen() {
     return {
       reps: Number(found.reps || 10),
       weightKg: Number(found.weightKg || 0),
+      primaryMuscle: String(found.primaryMuscle || ""),
     };
   }
 
   async function addSet(
     exerciseName: string,
-    opts?: { weightKg?: number; reps?: number }
+    opts?: { weightKg?: number; reps?: number; primaryMuscle?: string }
   ) {
     const base = draftRef.current; // ✅ always latest
     if (!base) return;
@@ -1138,6 +1185,8 @@ export default function WorkoutSessionScreen() {
     const last = lastUsedFor(ex);
     const reps = Number(opts?.reps ?? last.reps ?? 10) || 10;
     const weightKg = Number(opts?.weightKg ?? last.weightKg ?? 0) || 0;
+    const primaryMuscle =
+      inferPrimaryMuscle(ex, opts?.primaryMuscle || last.primaryMuscle) || "";
 
     const newItem: SetDraftItem = {
       id: uid(),
@@ -1145,6 +1194,7 @@ export default function WorkoutSessionScreen() {
       sets: 1,
       reps,
       weightKg,
+      primaryMuscle,
       notes: "",
       note: "",
       done: false,
@@ -1186,6 +1236,10 @@ export default function WorkoutSessionScreen() {
       open: true,
       itemId: String(it.id || ""),
       exercise: (it.exercise || "").toString(),
+      primaryMuscle: inferPrimaryMuscle(
+        String(it.exercise || ""),
+        String(it.primaryMuscle || "")
+      ) || "",
       reps: String(it.reps ?? 10),
       weight: w ? String(Math.round(w * 100) / 100) : "",
       note: String((it.note ?? it.notes ?? "") || ""),
@@ -1206,6 +1260,8 @@ export default function WorkoutSessionScreen() {
       if (String(it.id) !== edit.itemId) return it;
       const updated: SetDraftItem = {
         ...it,
+        primaryMuscle:
+          inferPrimaryMuscle(edit.exercise, edit.primaryMuscle) || "",
         reps: repsN,
         weightKg: Number(isFinite(weightKg) ? weightKg : 0),
         done: !!edit.done,
@@ -1272,6 +1328,8 @@ export default function WorkoutSessionScreen() {
       reps: Number(last.reps || 10),
       weight: Number(last.weightKg || 0),
       notes: (last.note || last.notes || "").trim(),
+      primaryMuscle:
+        inferPrimaryMuscle(ex, last.primaryMuscle) || "",
     } as any);
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -1345,6 +1403,8 @@ export default function WorkoutSessionScreen() {
                 const entry: Partial<Workout> & any = {
                   date: draft.dateISO,
                   exercise: it.exercise,
+                  primaryMuscle:
+                    inferPrimaryMuscle(it.exercise, it.primaryMuscle) || "",
                   sets: 1,
                   reps: it.reps,
                   weight: it.weightKg,
@@ -1488,8 +1548,11 @@ export default function WorkoutSessionScreen() {
     const w = Number(quickWeight || 0) || 0;
     const weightKg = unit === "lb" ? lbToKg(w) : w;
 
-    await addSet(ex, { reps, weightKg });
+    await addSet(ex, { reps, weightKg, primaryMuscle: quickPrimaryMuscle });
     setQuickExercise(ex); // keep name for speed
+    setQuickPrimaryMuscle(
+      inferPrimaryMuscle(ex, quickPrimaryMuscle) || ""
+    );
   }
 
   // theme-aware helpers (same components, just themed)
@@ -1762,6 +1825,54 @@ export default function WorkoutSessionScreen() {
                 </View>
               </View>
 
+              <View style={{ marginTop: 12 }}>
+                <Text style={styles.inputLabel}>Primary muscle (optional)</Text>
+                <Text style={styles.sectionSub}>
+                  Leave it on Auto and we’ll infer it from the exercise.
+                </Text>
+                <View style={styles.muscleChipWrap}>
+                  <Pressable
+                    onPress={() => setQuickPrimaryMuscle("")}
+                    style={({ pressed }) => [
+                      styles.muscleChip,
+                      !quickPrimaryMuscle && styles.muscleChipActive,
+                      pressed && { opacity: 0.9 },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.muscleChipText,
+                        !quickPrimaryMuscle && styles.muscleChipTextActive,
+                      ]}
+                    >
+                      Auto
+                    </Text>
+                  </Pressable>
+                  {PRIMARY_MUSCLE_OPTIONS.map((option) => (
+                    <Pressable
+                      key={option.key}
+                      onPress={() => setQuickPrimaryMuscle(option.key)}
+                      style={({ pressed }) => [
+                        styles.muscleChip,
+                        quickPrimaryMuscle === option.key &&
+                          styles.muscleChipActive,
+                        pressed && { opacity: 0.9 },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.muscleChipText,
+                          quickPrimaryMuscle === option.key &&
+                            styles.muscleChipTextActive,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+
               <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
                 <Pressable
                   onPress={quickAdd}
@@ -1781,6 +1892,7 @@ export default function WorkoutSessionScreen() {
                 <Pressable
                   onPress={() => {
                     setQuickExercise("");
+                    setQuickPrimaryMuscle("");
                     setQuickReps("10");
                     setQuickWeight("");
                     Keyboard.dismiss();
@@ -1865,7 +1977,7 @@ export default function WorkoutSessionScreen() {
                             {g.name}
                           </Text>
                           <Text style={styles.exerciseMeta} numberOfLines={1}>
-                            {doneCount}/{totalSets} done • Last: {lastLine}
+                            {doneCount}/{totalSets} done • {primaryMuscleLabel(last.primaryMuscle || inferPrimaryMuscle(g.name)) || "Auto"} • Last: {lastLine}
                           </Text>
                         </View>
 
@@ -1977,7 +2089,10 @@ export default function WorkoutSessionScreen() {
                                       style={styles.setNoteMuted}
                                       numberOfLines={1}
                                     >
-                                      Tap to add a note
+                                      {(primaryMuscleLabel(
+                                        it.primaryMuscle ||
+                                          inferPrimaryMuscle(it.exercise)
+                                      ) || "Auto") + " • Tap to add a note"}
                                     </Text>
                                   )}
                                 </View>
@@ -2077,6 +2192,53 @@ export default function WorkoutSessionScreen() {
                     placeholderTextColor={withAlpha(p.text, 0.35)}
                     style={styles.input}
                   />
+                </View>
+              </View>
+
+              <View style={{ marginTop: 10 }}>
+                <Text style={styles.inputLabel}>Primary muscle</Text>
+                <View style={styles.muscleChipWrap}>
+                  <Pressable
+                    onPress={() => setEdit((s) => ({ ...s, primaryMuscle: "" }))}
+                    style={({ pressed }) => [
+                      styles.muscleChip,
+                      !edit.primaryMuscle && styles.muscleChipActive,
+                      pressed && { opacity: 0.9 },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.muscleChipText,
+                        !edit.primaryMuscle && styles.muscleChipTextActive,
+                      ]}
+                    >
+                      Auto
+                    </Text>
+                  </Pressable>
+                  {PRIMARY_MUSCLE_OPTIONS.map((option) => (
+                    <Pressable
+                      key={option.key}
+                      onPress={() =>
+                        setEdit((s) => ({ ...s, primaryMuscle: option.key }))
+                      }
+                      style={({ pressed }) => [
+                        styles.muscleChip,
+                        edit.primaryMuscle === option.key &&
+                          styles.muscleChipActive,
+                        pressed && { opacity: 0.9 },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.muscleChipText,
+                          edit.primaryMuscle === option.key &&
+                            styles.muscleChipTextActive,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  ))}
                 </View>
               </View>
 

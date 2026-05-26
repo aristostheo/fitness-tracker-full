@@ -288,6 +288,15 @@ export function WorkoutEntryCardPremium({
   }, [intensity]);
 
   const highlight = summary.highlight;
+  const scorePct = Math.round(intensity * 100);
+  const scoreDescriptor =
+    scorePct <= 30
+      ? "Low"
+      : scorePct <= 60
+      ? "Fair"
+      : scorePct <= 85
+      ? "Good"
+      : "Elite";
 
   const accessibility = `${summary.title}. ${formatDateNice(summary.dateISO)} ${
     summary.timeLabel || ""
@@ -557,11 +566,11 @@ export function WorkoutEntryCardPremium({
                   </View>
 
                   <Text style={[styles.arcPct, { color: textStrong }]}>
-                    {Math.round(intensity * 100)}
+                    {scorePct}
                   </Text>
-                  {/* <Text style={[styles.arcPctLabel, { color: textMuted }]}>
-                    score
-                  </Text> */}
+                  <Text style={[styles.arcPctLabel, { color: textMuted }]}>
+                    {scoreDescriptor}
+                  </Text>
                 </View>
               </View>
             </View>
@@ -641,6 +650,28 @@ export function WorkoutEntryCardPremium({
                 {signal.label}
               </Text>
             </View>
+          </View>
+
+          <View style={styles.inlineActionsRow}>
+            <Pressable
+              onPress={() => {
+                HAPTIC_SELECT();
+                onDuplicate?.();
+              }}
+              style={({ pressed }) => [
+                styles.inlineActionBtn,
+                {
+                  backgroundColor: pillBg,
+                  borderColor: pillBorder,
+                },
+                pressed && { opacity: 0.85 },
+              ]}
+            >
+              <Ionicons name="copy-outline" size={14} color={withAlpha(textMid, 0.95)} />
+              <Text style={[styles.inlineActionText, { color: textStrong }]}>
+                Duplicate
+              </Text>
+            </Pressable>
           </View>
 
           {/* Actions menu (uncluttered) */}
@@ -987,6 +1018,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
+  },
+  inlineActionsRow: {
+    marginTop: 10,
+    flexDirection: "row",
+    justifyContent: "flex-start",
+  },
+  inlineActionBtn: {
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  inlineActionText: {
+    fontSize: 12,
+    fontWeight: "900" as any,
   },
 
   highlightCapsule: {

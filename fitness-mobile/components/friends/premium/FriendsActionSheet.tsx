@@ -21,6 +21,7 @@ export type FriendAction = {
   subtitle?: string;
   icon: keyof typeof Ionicons.glyphMap;
   destructive?: boolean;
+  disabled?: boolean;
   onPress: () => void;
 };
 
@@ -125,15 +126,17 @@ export function FriendActionsSheet({
 
           <ScrollView contentContainerStyle={{ paddingBottom: 6 }}>
             {actions.map((a) => (
-              <Pressable
+                <Pressable
                 key={a.key}
                 onPress={() => {
+                  if (a.disabled) return;
                   Haptics.selectionAsync();
                   a.onPress();
                 }}
                 style={({ pressed }) => [
                   styles.action,
                   {
+                    opacity: a.disabled ? 0.45 : 1,
                     backgroundColor: withAlpha(colors.text, pressed ? 0.1 : 0.06),
                     borderColor: colors.glassBorder,
                   },
@@ -161,7 +164,7 @@ export function FriendActionsSheet({
                   <Ionicons
                     name={a.icon}
                     size={18}
-                    color={a.destructive ? colors.danger : colors.text}
+                    color={a.destructive ? colors.danger : a.disabled ? colors.muted : colors.text}
                   />
                 </View>
 
@@ -169,7 +172,7 @@ export function FriendActionsSheet({
                   <Text
                     style={[
                       styles.actionTitle,
-                      { color: a.destructive ? colors.danger : colors.text },
+                      { color: a.destructive ? colors.danger : a.disabled ? colors.muted : colors.text },
                     ]}
                   >
                     {a.title}

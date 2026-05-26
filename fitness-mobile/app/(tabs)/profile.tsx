@@ -793,6 +793,17 @@ export default function ProfileScreen() {
           }}
         />
 
+        <StepsHistoryEntryCard
+          colors={colors}
+          isDark={isDark}
+          stepsMap={(((profile as any)?.steps ?? {}) as Record<string, number>) || {}}
+          stepsGoal={Number((profile as any)?.stepsGoal ?? stepsPerDay ?? 8000)}
+          onPress={() => {
+            Haptics.selectionAsync();
+            router.push("/profile/steps-history");
+          }}
+        />
+
         <SectionLabel title="Your Stats" colors={colors} />
 
         {/* <QuickActionsRow
@@ -921,6 +932,29 @@ export default function ProfileScreen() {
         <AppearanceCard>
           <ThemeToggle />
         </AppearanceCard>
+
+        <GlassCard>
+          <Pressable
+            onPress={() => {
+              Haptics.selectionAsync();
+              router.push("/profile/friend-visibility");
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Open Friend Visibility settings"
+            style={{ flexDirection: "row", alignItems: "center", gap: 10, minHeight: 48 }}
+          >
+            <Ionicons name="eye-outline" size={18} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.text, fontWeight: "900", fontSize: 14 }}>
+                👁 What friends can see
+              </Text>
+              <Text style={{ color: colors.muted, marginTop: 4, fontSize: 12.5 }}>
+                Control what your friends can see
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+          </Pressable>
+        </GlassCard>
 
         <View>
           <Pressable
@@ -1481,5 +1515,169 @@ function IntegrationsEntryCard({
         </View>
       </View>
     </Pressable>
+  );
+}
+
+function StepsHistoryEntryCard({
+  colors,
+  isDark,
+  stepsMap,
+  stepsGoal,
+  onPress,
+}: {
+  colors: any;
+  isDark: boolean;
+  stepsMap: Record<string, number>;
+  stepsGoal: number;
+  onPress: () => void;
+}) {
+  const today = new Date();
+  const ymd = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate()
+    ).padStart(2, "0")}`;
+  const addDays = (d: Date, n: number) => {
+    const x = new Date(d);
+    x.setDate(x.getDate() + n);
+    return x;
+  };
+  const last7 = Array.from({ length: 7 }, (_, i) => ymd(addDays(today, -6 + i)));
+  const values = last7.map((d) => Number(stepsMap[d] || 0));
+  const max = Math.max(...values, stepsGoal || 1, 1);
+  const avg = values.length ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : 0;
+  const todaySteps = values[values.length - 1] || 0;
+  const hitDays = values.filter((v) => v >= stepsGoal).length;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Open steps history"
+      style={({ pressed }) => ({
+        opacity: pressed ? 0.92 : 1,
+        transform: [{ scale: pressed ? 0.995 : 1 }],
+      })}
+    >
+      <LinearGradient
+        colors={[
+          withAlpha("#22D3EE", isDark ? 0.14 : 0.08),
+          withAlpha(colors.primary, isDark ? 0.16 : 0.08),
+        ]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{
+          borderRadius: 22,
+          borderWidth: 1,
+          borderColor: withAlpha("#22D3EE", isDark ? 0.22 : 0.16),
+          padding: 16,
+          gap: 14,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <View
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 16,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: withAlpha("#22D3EE", 0.16),
+              borderWidth: 1,
+              borderColor: withAlpha("#22D3EE", 0.26),
+            }}
+          >
+            <Ionicons name="footsteps-outline" size={22} color="#22D3EE" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}>
+              Steps History
+            </Text>
+            <Text style={{ color: colors.muted, fontWeight: "800", marginTop: 3 }}>
+              Daily trend, goal hits, and your recent pace
+            </Text>
+          </View>
+          <Text style={{ color: colors.text, fontWeight: "900" }}>View →</Text>
+        </View>
+
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <MiniStatCard
+            colors={colors}
+            label="Today"
+            value={todaySteps.toLocaleString()}
+            tint="#22D3EE"
+          />
+          <MiniStatCard
+            colors={colors}
+            label="7-day avg"
+            value={avg.toLocaleString()}
+            tint={colors.primary}
+          />
+          <MiniStatCard
+            colors={colors}
+            label="Goal hits"
+            value={`${hitDays}/7`}
+            tint="#4CAF50"
+          />
+        </View>
+
+        <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8, height: 70 }}>
+          {values.map((v, idx) => {
+            const h = 12 + Math.round((v / max) * 48);
+            const hit = v >= stepsGoal;
+            return (
+              <View key={`${last7[idx]}-${v}`} style={{ flex: 1, alignItems: "center", gap: 6 }}>
+                <View
+                  style={{
+                    width: "100%",
+                    maxWidth: 26,
+                    height: h,
+                    borderRadius: 999,
+                    backgroundColor: hit
+                      ? "#4CAF50"
+                      : idx === values.length - 1
+                      ? colors.primary
+                      : withAlpha(colors.text, 0.22),
+                  }}
+                />
+                <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800" }}>
+                  {new Date(`${last7[idx]}T12:00:00`).toLocaleDateString(undefined, {
+                    weekday: "narrow",
+                  })}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
+function MiniStatCard({
+  colors,
+  label,
+  value,
+  tint,
+}: {
+  colors: any;
+  label: string;
+  value: string;
+  tint: string;
+}) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        borderRadius: 16,
+        padding: 12,
+        backgroundColor: withAlpha(colors.text, 0.04),
+        borderWidth: 1,
+        borderColor: withAlpha(tint, 0.18),
+        gap: 4,
+      }}
+    >
+      <Text style={{ color: colors.muted, fontWeight: "800", fontSize: 11 }}>{label}</Text>
+      <Text style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}>{value}</Text>
+    </View>
   );
 }

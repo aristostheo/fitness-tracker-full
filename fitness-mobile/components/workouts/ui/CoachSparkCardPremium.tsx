@@ -166,12 +166,6 @@ export function CoachSparkCardPremium({
 
   return (
     <View style={style}>
-      <View style={styles.sectionHeaderRow}>
-        <Text style={[styles.sectionTitle, { color: tStrong }]}>
-          Coach Spark
-        </Text>
-      </View>
-
       <Pressable
         onPress={() => {
           // Tap anywhere: open full panel if provided (still calm)
@@ -249,6 +243,20 @@ export function CoachSparkCardPremium({
             </Text>
             <Text style={[styles.sub, { color: tMid }]} numberOfLines={2}>
               Curated generator • {trustLine}
+            </Text>
+          </View>
+
+          <View
+            style={[
+              styles.sparkChip,
+              {
+                backgroundColor: withAlpha(accent2, isDark ? 0.16 : 0.12),
+                borderColor: withAlpha(accent2, isDark ? 0.28 : 0.18),
+              },
+            ]}
+          >
+            <Text style={[styles.sparkChipText, { color: tStrong }]}>
+              ⚡ Spark
             </Text>
           </View>
 
@@ -479,16 +487,7 @@ function PickerPill({
 }
 
 const styles = StyleSheet.create({
-  sectionHeaderRow: {
-    marginTop: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  sectionTitle: { fontSize: 14, fontWeight: "900", letterSpacing: 0.4 },
-
   cardWrap: {
-    marginTop: 10,
     borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 14,
@@ -519,6 +518,13 @@ const styles = StyleSheet.create({
 
   title: { fontSize: 15, fontWeight: "900", letterSpacing: -0.1 },
   sub: { marginTop: 3, fontSize: 12, fontWeight: "700", lineHeight: 16 },
+  sparkChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  sparkChipText: { fontSize: 11, fontWeight: "900" },
 
   generateBtn: {
     borderRadius: 999,

@@ -72,8 +72,35 @@ export default function ActivityCard({
   const progress = goalMinutes > 0 ? Math.min(1, minutes / goalMinutes) : 0;
 
   const recent = useMemo(() => {
-    return [...entries].sort((a, b) => b.timestamp - a.timestamp).slice(0, 3);
+    return [...entries]
+      .filter((entry) => (entry.minutes || 0) > 0 || (entry.steps || 0) > 0)
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 3);
   }, [entries]);
+
+  const quickPresets =
+    presets && presets.length
+      ? presets
+      : [
+          {
+            type: "walk" as const,
+            minutes: 10,
+            intensity: "easy" as const,
+            label: "Walk 10",
+          },
+          {
+            type: "run" as const,
+            minutes: 20,
+            intensity: "moderate" as const,
+            label: "Run 20",
+          },
+          {
+            type: "bike" as const,
+            minutes: 20,
+            intensity: "moderate" as const,
+            label: "Bike 20",
+          },
+        ];
 
   function hapticLight() {
     if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => {});
@@ -165,13 +192,13 @@ export default function ActivityCard({
             <View style={{ flexDirection: "row", gap: 10 }}>
               <View style={{ alignItems: "flex-end" }}>
                 <Text style={{ color: colors.text, fontWeight: "900" }}>
-                  {calories || "—"}
+                  {calories || 0}
                 </Text>
                 <Text style={{ color: colors.muted, fontSize: 11 }}>cals</Text>
               </View>
               <View style={{ alignItems: "flex-end" }}>
                 <Text style={{ color: colors.text, fontWeight: "900" }}>
-                  {steps || "—"}
+                  {steps || 0}
                 </Text>
                 <Text style={{ color: colors.muted, fontSize: 11 }}>steps</Text>
               </View>
@@ -225,26 +252,7 @@ export default function ActivityCard({
 
         {/* Quick actions (gentle + optional) */}
         <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
-          {[
-            {
-              type: "walk" as const,
-              minutes: 10,
-              intensity: "easy" as const,
-              label: "Walk 10",
-            },
-            {
-              type: "run" as const,
-              minutes: 20,
-              intensity: "moderate" as const,
-              label: "Run 20",
-            },
-            {
-              type: "bike" as const,
-              minutes: 20,
-              intensity: "moderate" as const,
-              label: "Bike 20",
-            },
-          ].map((p) => (
+          {quickPresets.map((p) => (
             <Pressable
               key={p.label}
               onPress={() => {

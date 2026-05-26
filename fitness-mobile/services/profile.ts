@@ -102,6 +102,31 @@ export type Profile = {
   gymSessionsPerWeek?: number;
   sportSessionsPerWeek?: number;
   jobActivity?: "sedentary" | "light" | "active";
+  friendVisibility?: {
+    enabled?: boolean;
+    nutrition?: {
+      mealsLoggedToday?: boolean;
+      dailyCaloriesTotal?: boolean;
+      macroBreakdown?: boolean;
+      streakStatus?: boolean;
+    };
+    workouts?: {
+      workoutsLogged?: boolean;
+      workoutDetails?: boolean;
+      personalRecords?: boolean;
+      weeklyVolume?: boolean;
+    };
+    progress?: {
+      consistencyStreak?: boolean;
+      badgeCollection?: boolean;
+      weeklyReportCard?: boolean;
+      weightTrend?: boolean;
+    };
+    activity?: {
+      stepCount?: boolean;
+      cardioSessions?: boolean;
+    };
+  };
 };
 
 const ref = (uid: string) => doc(getFirestore() ?? db, "users", uid);

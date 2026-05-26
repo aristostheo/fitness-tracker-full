@@ -21,6 +21,8 @@ import * as Haptics from "expo-haptics";
 import BottomTabSpacer from "@/components/ui/BottomTapSpacer";
 import { useTheme } from "@/content/ThemeProvider";
 import { useAuth } from "@/content/AuthContext";
+import { subscribeProfile, type Profile } from "@/services/profile";
+import { getFriendVisibility } from "@/services/friends/visibility";
 
 import { withAlpha } from "@/components/workouts/utils/withAlpha";
 import { subscribeWorkouts, type Workout } from "@/services/workouts";
@@ -80,10 +82,19 @@ export default function FriendWorkoutsScreen() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [loading, setLoading] = useState(false);
   const [templateName, setTemplateName] = useState("");
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  useEffect(() => {
+    if (!friendUid) return;
+    return subscribeProfile(friendUid, setProfile);
+  }, [friendUid]);
+
+  const visibility = getFriendVisibility(profile);
+  const workoutsVisible = visibility.enabled && visibility.workouts?.workoutsLogged;
 
   // ✅ OLD BACKEND LOGIC: subscribeWorkouts(uid, cb, {from,to})
   useEffect(() => {
-    if (!friendUid) return;
+    if (!friendUid || !workoutsVisible) return;
 
     setLoading(true);
     const unsub = subscribeWorkouts(
@@ -101,7 +112,7 @@ export default function FriendWorkoutsScreen() {
       } catch {}
       setLoading(false);
     };
-  }, [friendUid, selectedDate]);
+  }, [friendUid, selectedDate, workoutsVisible]);
 
   const dayRows = useMemo(
     () => workouts.filter((w) => w.date === selectedDate),
@@ -260,6 +271,26 @@ export default function FriendWorkoutsScreen() {
                   Browse by day • Save as a template
                 </Text>
               </View>
+
+            {!workoutsVisible ? (
+              <View
+                style={{
+                  marginTop: 10,
+                  padding: 14,
+                  borderRadius: 16,
+                  backgroundColor: withAlpha(colors.text, 0.05),
+                  borderWidth: 1,
+                  borderColor: withAlpha(colors.text, 0.08),
+                }}
+              >
+                <Text style={{ color: colors.text, fontWeight: "900" }}>
+                  {title} hasn't shared workouts
+                </Text>
+                <Text style={{ color: colors.muted, marginTop: 4, lineHeight: 18 }}>
+                  Workout sharing is private and controlled by your friend.
+                </Text>
+              </View>
+            ) : null}
 
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <GlassIconButton

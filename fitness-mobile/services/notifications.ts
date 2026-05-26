@@ -2,6 +2,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDocs,
   getFirestore,
@@ -123,6 +124,10 @@ export async function markNotificationRead(uid: string, id: string) {
   await updateDoc(doc(col(uid), id), { readAt: serverTimestamp() });
 }
 
+export async function deleteNotification(uid: string, id: string) {
+  await deleteDoc(doc(col(uid), id));
+}
+
 export async function markAllNotificationsRead(uid: string) {
   const ref = getFirestore() ?? db;
   const unread = await getDocs(
@@ -166,14 +171,15 @@ export async function notifyFriendAccepted(
 
 export async function notifyPing(
   toUid: string,
-  from: { uid: string; displayName?: string | null }
+  from: { uid: string; displayName?: string | null },
+  opts: { message?: string } = {}
 ) {
   await addNotification(toUid, {
     type: "ping",
     title: from.displayName
       ? `${from.displayName} pinged you`
       : "You were pinged",
-    body: "Log a meal to keep your streak alive.",
+    body: opts.message || "Log a meal to keep your streak alive.",
     data: { fromUid: from.uid },
   });
 }
@@ -280,7 +286,7 @@ async function hasRecentSimilar(
 export async function notifyPingSafe(
   toUid: string,
   from: { uid: string; displayName?: string | null },
-  opts: { cooldownHours?: number } = {}
+  opts: { cooldownHours?: number; message?: string } = {}
 ) {
   const cooldownMs = (opts.cooldownHours ?? 6) * 60 * 60 * 1000;
 
@@ -298,7 +304,7 @@ export async function notifyPingSafe(
 
   if (exists) return; // silently ignore to feel respectful
 
-  await notifyPing(toUid, from);
+  await notifyPing(toUid, from, { message: opts.message });
 }
 
 export async function notifyFriendRequestSafe(
