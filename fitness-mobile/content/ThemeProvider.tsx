@@ -90,8 +90,8 @@ export function useTheme() {
 }
 
 // defaults if user hasn't customized
-const DEFAULT_PRIMARY = "#6366F1"; // indigo
-const DEFAULT_ACCENT = "#8B5CF6"; // violet
+const DEFAULT_PRIMARY = "#7B6FFF";
+const DEFAULT_ACCENT = "#7B6FFF";
 const DEFAULT_STYLE: GradientPairingStyle = "balanced";
 
 const STORAGE_KEYS = {
@@ -328,72 +328,71 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const colors: ThemeColors = useMemo(() => {
     if (isDark) {
-      const background = "#0B0F1A";
-      const text = "#EEF2FF";
+      const background = "#08080F";
+      const text = "#F0F0FF";
 
       return {
         background,
         text,
-        card: "rgba(18,22,33,0.72)",
-        border: "rgba(255,255,255,0.08)",
-        muted: "rgba(255,255,255,0.62)",
-        placeholder: "rgba(255,255,255,0.45)",
-        inputBg: "rgba(255,255,255,0.06)",
-        inputBorder: "rgba(255,255,255,0.12)",
-        chipActiveBg: `${primary}33`,
-        chipActiveText: "#fff",
+        card: "#0F0F1A",
+        border: "#FFFFFF08",
+        muted: "#8888AA",
+        placeholder: "#444466",
+        inputBg: "#1C1C2E",
+        inputBorder: "#FFFFFF12",
+        chipActiveBg: "#7B6FFF20",
+        chipActiveText: "#F0F0FF",
         buttonBg: primary,
-        buttonText: "#fff",
+        buttonText: "#F0F0FF",
         chartPrimary: primary,
         chartSecondary: accent,
         primary,
         accent,
 
         bg: background,
-        surface: "rgba(255,255,255,0.04)",
-        surface2: "rgba(255,255,255,0.07)",
-        glass: "rgba(18,22,33,0.55)",
-        glassBorder: "rgba(255,255,255,0.10)",
+        surface: "#0F0F1A",
+        surface2: "#141422",
+        glass: "rgba(15,15,26,0.85)",
+        glassBorder: "#FFFFFF08",
         shadow: "#000",
-        success: "#22C55E",
+        success: "#4ADE80",
         warning: "#F59E0B",
-        danger: "#EF4444",
-        ringTrack: "rgba(255,255,255,0.10)",
+        danger: "#F87171",
+        ringTrack: "#1C1C2E",
       };
     }
 
-    // Light mode tuned to feel “premium”
-    const background = "#F6F9FF";
-    const text = "#0B1220";
+    const background = "#F8F8FC";
+    const text = "#0A0A1A";
 
     return {
       background,
       text,
-      card: "rgba(255,255,255,0.88)",
-      border: "rgba(0,0,0,0.07)",
-      muted: "rgba(11,18,32,0.56)",
-      placeholder: "rgba(11,18,32,0.35)",
-      inputBg: "rgba(11,18,32,0.035)",
-      inputBorder: "rgba(11,18,32,0.10)",
-      chipActiveBg: `${primary}1F`,
-      chipActiveText: "#0B1220",
+      card: "#FFFFFF",
+      border: "#00000008",
+      muted: "#666688",
+      placeholder: "#AAABCC",
+      inputBg: "#EAEAF2",
+      inputBorder: "#00000012",
+      chipActiveBg: "#6355E810",
+      chipActiveText: "#0A0A1A",
       buttonBg: primary,
-      buttonText: "#fff",
+      buttonText: "#FFFFFF",
       chartPrimary: primary,
       chartSecondary: accent,
       primary,
       accent,
 
       bg: background,
-      surface: "rgba(255,255,255,0.70)",
-      surface2: "rgba(255,255,255,0.92)",
-      glass: "rgba(255,255,255,0.55)",
-      glassBorder: "rgba(11,18,32,0.08)",
+      surface: "#FFFFFF",
+      surface2: "#F2F2F8",
+      glass: "rgba(255,255,255,0.85)",
+      glassBorder: "#00000008",
       shadow: "rgba(0,0,0,0.25)",
-      success: "#16A34A",
+      success: "#22C55E",
       warning: "#D97706",
-      danger: "#DC2626",
-      ringTrack: "rgba(11,18,32,0.10)",
+      danger: "#E65C5C",
+      ringTrack: "#E8E8F0",
     };
   }, [isDark, primary, accent]);
 

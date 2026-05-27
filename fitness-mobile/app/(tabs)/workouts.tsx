@@ -1,6 +1,6 @@
 // app/(tabs)/workouts.tsx
 // Drop-in replacement ✅
-// Theme-adjusted: light mode is glossy + readable (no “washed out” text), dark mode unchanged vibe.
+// Theme-adjusted: light mode is glossy + readable (no "washed out" text), dark mode unchanged vibe.
 // Notes:
 // - Uses your ThemeProvider: { colors, isDark }
 // - Keeps your Coach Spark + template routes as-is
@@ -27,8 +27,6 @@ import {
   ActivityIndicator,
   Alert as RNAlert,
 } from "react-native";
-import { BlurView } from "expo-blur";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
   Easing,
@@ -316,78 +314,35 @@ function ScalePressable({
 
 /**
  * THEME MODEL (local to this file)
- * Goal: keep the exact same components, but drive every “white-on-dark” style
+ * Goal: keep the exact same components, but drive every "white-on-dark" style
  * from theme tokens so light mode is glossy + high-contrast.
  */
 function useSurfaceTokens() {
   const { colors, isDark } = useTheme();
 
-  // Background gradient
-  const bgGradient = isDark
-    ? ["#070A12", "#050711", "#03040A"]
-    : [
-        withAlpha(colors.primary, 0.12),
-        withAlpha("#FFFFFF", 0.92),
-        withAlpha(colors.card, 0.55),
-      ];
-
-  // Text
   const t1 = isDark ? withAlpha("#FFFFFF", 0.94) : withAlpha(colors.text, 0.94);
-  const t2 = isDark ? withAlpha("#FFFFFF", 0.62) : withAlpha(colors.text, 0.64);
-  const t3 = isDark ? withAlpha("#FFFFFF", 0.78) : withAlpha(colors.text, 0.78);
+  const t2 = isDark ? withAlpha("#FFFFFF", 0.52) : withAlpha(colors.text, 0.56);
+  const t3 = isDark ? withAlpha("#FFFFFF", 0.72) : withAlpha(colors.text, 0.72);
 
-  // Surfaces
-  const cardBorder = isDark
-    ? withAlpha("#FFFFFF", 0.2)
-    : withAlpha(colors.text, 0.12);
+  const cardBorder = withAlpha("#FFFFFF", 0.08);
+  const cardFill = isDark ? "#0F0F1A" : withAlpha("#FFFFFF", 0.78);
+  const chipFill = isDark ? "#141422" : withAlpha("#FFFFFF", 0.7);
+  const chipBorder = withAlpha("#FFFFFF", 0.08);
+  const hairline = withAlpha("#FFFFFF", 0.08);
 
-  const cardFill = isDark
-    ? withAlpha("#FFFFFF", 0.04)
-    : withAlpha("#FFFFFF", 0.78);
+  const icon = isDark ? withAlpha("#FFFFFF", 0.72) : withAlpha(colors.text, 0.72);
+  const iconBright = isDark ? withAlpha("#FFFFFF", 0.90) : withAlpha(colors.text, 0.90);
+  const chevron = isDark ? withAlpha("#FFFFFF", 0.28) : withAlpha(colors.text, 0.28);
 
-  const chipFill = isDark
-    ? withAlpha("#FFFFFF", 0.06)
-    : withAlpha("#FFFFFF", 0.7);
+  const tTitleSoft = isDark ? withAlpha("#FFFFFF", 0.72) : withAlpha(colors.text, 0.72);
+  const tMetaStrong = isDark ? withAlpha("#FFFFFF", 0.60) : withAlpha(colors.text, 0.60);
 
-  const chipBorder = isDark
-    ? withAlpha("#FFFFFF", 0.14)
-    : withAlpha(colors.text, 0.12);
-
-  const hairline = isDark
-    ? withAlpha("#FFFFFF", 0.12)
-    : withAlpha(colors.text, 0.1);
-
-  // Icons + chevrons
-  const icon = isDark
-    ? withAlpha("#FFFFFF", 0.9)
-    : withAlpha(colors.text, 0.86);
-  const iconBright = isDark
-    ? withAlpha("#FFFFFF", 0.98)
-    : withAlpha(colors.text, 0.92);
-  const chevron = isDark
-    ? withAlpha("#FFFFFF", 0.35)
-    : withAlpha(colors.text, 0.35);
-
-  // optional helpers for hierarchy
-  const tTitleSoft = isDark
-    ? withAlpha("#FFFFFF", 0.78)
-    : withAlpha(colors.text, 0.78);
-  const tMetaStrong = isDark
-    ? withAlpha("#FFFFFF", 0.72)
-    : withAlpha(colors.text, 0.72);
-
-  // “Ghost button” look
-  const ghostFill = isDark
-    ? withAlpha("#FFFFFF", 0.06)
-    : withAlpha("#FFFFFF", 0.72);
-  const ghostBorder = isDark
-    ? withAlpha("#FFFFFF", 0.14)
-    : withAlpha(colors.text, 0.14);
+  const ghostFill = isDark ? "#141422" : withAlpha("#FFFFFF", 0.72);
+  const ghostBorder = withAlpha("#FFFFFF", 0.08);
 
   return {
     colors,
     isDark,
-    bgGradient,
     t1,
     t2,
     t3,
@@ -409,65 +364,21 @@ function useSurfaceTokens() {
 function GlassCard({
   children,
   style,
-  intensity = 24,
 }: {
   children: React.ReactNode;
   style?: any;
   intensity?: number;
 }) {
   const s = useSurfaceTokens();
-
-  const gradColors = s.isDark
-    ? [
-        withAlpha("#FFFFFF", 0.14),
-        withAlpha("#FFFFFF", 0.06),
-        withAlpha("#000000", 0.02),
-      ]
-    : [
-        withAlpha("#FFFFFF", 0.94),
-        withAlpha(s.colors.primary, 0.1),
-        withAlpha("#FFFFFF", 0.78),
-      ];
-
   return (
     <View
       style={[
         styles.cardWrap,
-        { backgroundColor: s.cardFill, borderColor: s.cardBorder },
+        { backgroundColor: s.cardFill, borderColor: s.cardBorder, borderWidth: 1 },
         style,
       ]}
     >
-      <View
-        style={[styles.cardBorder, { borderColor: s.cardBorder }]}
-        pointerEvents="none"
-      />
-      <BlurView
-        intensity={intensity}
-        tint={s.isDark ? "dark" : "light"}
-        style={styles.cardBlur}
-      >
-        <LinearGradient
-          colors={gradColors as any}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.cardInner}
-        >
-          {/* subtle sheen */}
-          <View
-            pointerEvents="none"
-            style={[
-              StyleSheet.absoluteFill,
-              {
-                borderRadius: 18,
-                backgroundColor: s.isDark
-                  ? withAlpha("#FFFFFF", 0.09)
-                  : withAlpha("#FFFFFF", 0.4),
-              },
-            ]}
-          />
-          {children}
-        </LinearGradient>
-      </BlurView>
+      <View style={styles.cardInner}>{children}</View>
     </View>
   );
 }
@@ -486,9 +397,6 @@ function Pill({
   const iconStyle = useAnimatedStyle(() => ({
     transform: [{ scale: iconScale.value }],
   }));
-  const stroke = s.isDark
-    ? [withAlpha("#FFFFFF", 0.28), withAlpha("#FFFFFF", 0.08)]
-    : [withAlpha(s.colors.primary, 0.38), withAlpha("#FFFFFF", 0.35)];
   return (
     <ScalePressable
       onPress={onPress}
@@ -503,22 +411,17 @@ function Pill({
       accessibilityHint="Activates quick workout action"
       style={{ marginRight: 10 }}
     >
-      <LinearGradient colors={stroke as any} style={styles.pillStroke}>
-        <View
-          style={[
-            styles.pill,
-            {
-              backgroundColor: s.chipFill,
-              borderColor: s.chipBorder,
-            },
-          ]}
-        >
-          <Animated.View style={iconStyle}>
-            <Ionicons name={icon} size={15} color={s.iconBright} />
-          </Animated.View>
-          <Text style={[styles.pillText, { color: s.t1 }]}>{label}</Text>
-        </View>
-      </LinearGradient>
+      <View
+        style={[
+          styles.pill,
+          { backgroundColor: s.chipFill, borderColor: s.chipBorder },
+        ]}
+      >
+        <Animated.View style={iconStyle}>
+          <Ionicons name={icon} size={15} color={s.iconBright} />
+        </Animated.View>
+        <Text style={[styles.pillText, { color: s.t1 }]}>{label}</Text>
+      </View>
     </ScalePressable>
   );
 }
@@ -527,7 +430,7 @@ function Ring({
   label,
   value,
   sub,
-  accent = "#68D7FF",
+  accent = "#7B6FFF",
   onPress,
 }: {
   label: string;
@@ -604,18 +507,12 @@ function StatChip({
   dense?: boolean;
 }) {
   const s = useSurfaceTokens();
-  const bg = s.isDark
-    ? [withAlpha("#FFFFFF", 0.08), withAlpha("#FFFFFF", 0.04)]
-    : [withAlpha("#FFFFFF", 0.9), withAlpha("#FFFFFF", 0.6)];
   return (
-    <LinearGradient
-      colors={bg as any}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+    <View
       style={[
         styles.statChip,
         dense && styles.statChipDense,
-        { borderColor: withAlpha(s.colors.text, s.isDark ? 0.18 : 0.12) },
+        { backgroundColor: s.chipFill, borderColor: s.chipBorder },
       ]}
     >
       <Ionicons name={icon} size={dense ? 13 : 14} color={s.iconBright} />
@@ -628,7 +525,7 @@ function StatChip({
       >
         {label}
       </Text>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -1169,8 +1066,7 @@ export default function WorkoutsPage() {
   const [templateKeepUntil, setTemplateKeepUntil] = useState<Record<string, number>>({});
   const [profile, setProfile] = useState<Profile | null>(null);
 
-  const accent = "#68D7FF";
-  const accent2 = "#8B7CFF";
+  const accent = "#7B6FFF";
   const scrollY = useSharedValue(0);
   const [headerH, setHeaderH] = useState(0);
 
@@ -2288,7 +2184,7 @@ function fmtTime(ms: number) {
           style={[
             styles.headerBlur,
             {
-              backgroundColor: "#0D0D0F",
+              backgroundColor: "#08080F",
               borderBottomWidth: StyleSheet.hairlineWidth,
               borderBottomColor: withAlpha("#FFFFFF", 0.08),
             },
@@ -2316,33 +2212,15 @@ function fmtTime(ms: number) {
               accessibilityLabel="Start workout"
               accessibilityHint="Opens workout start options"
             >
-              <LinearGradient
-                colors={
-                  s.isDark
-                    ? [withAlpha(accent, 0.35), withAlpha("#FFFFFF", 0.1)]
-                    : [
-                        withAlpha(s.colors.primary, 0.95),
-                        withAlpha(s.colors.primary, 0.78),
-                      ]
-                }
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+              <View
                 style={[
                   styles.startBtn,
-                  {
-                    borderColor: s.isDark
-                      ? withAlpha("#FFFFFF", 0.2)
-                      : withAlpha(s.colors.primary, 0.65),
-                  },
+                  { backgroundColor: "#7B6FFF", borderColor: withAlpha("#7B6FFF", 0.5) },
                 ]}
               >
-                <Ionicons
-                  name="add"
-                  size={18}
-                  color="#fff"
-                />
+                <Ionicons name="add" size={18} color="#fff" />
                 <Text style={[styles.startBtnText, { color: "#fff" }]}>New</Text>
-              </LinearGradient>
+              </View>
             </ScalePressable>
           </View>
         </View>
@@ -2618,25 +2496,12 @@ function fmtTime(ms: number) {
               }}
               style={({ pressed }) => [
                 styles.sheetPrimaryBtn,
-                {
-                  backgroundColor: s.isDark
-                    ? withAlpha("#FFFFFF", 0.92)
-                    : withAlpha(s.colors.primary, 0.95),
-                },
-                pressed && { opacity: 0.9 },
+                { backgroundColor: "#7B6FFF" },
+                pressed && { opacity: 0.88 },
               ]}
             >
-              <Ionicons
-                name="sparkles-outline"
-                size={16}
-                color={s.isDark ? withAlpha("#111", 0.9) : "#fff"}
-              />
-              <Text
-                style={[
-                  styles.sheetPrimaryBtnText,
-                  { color: s.isDark ? withAlpha("#111", 0.92) : "#fff" },
-                ]}
-              >
+              <Ionicons name="sparkles-outline" size={16} color="#fff" />
+              <Text style={[styles.sheetPrimaryBtnText, { color: "#fff" }]}>
                 Create template
               </Text>
             </Pressable>
@@ -2687,7 +2552,7 @@ function fmtTime(ms: number) {
               styles.modalCard,
               {
                 backgroundColor: s.isDark
-                  ? withAlpha("#0B0F1A", 0.98)
+                  ? withAlpha("#08080F", 0.98)
                   : withAlpha("#FFFFFF", 0.9),
                 borderColor: s.hairline,
               },
@@ -2713,10 +2578,10 @@ function fmtTime(ms: number) {
                 styles.modalPrimary,
                 {
                   backgroundColor: s.isDark
-                    ? withAlpha("#68D7FF", 0.22)
+                    ? withAlpha("#7B6FFF", 0.22)
                     : withAlpha(s.colors.primary, 0.12),
                   borderColor: s.isDark
-                    ? withAlpha("#68D7FF", 0.35)
+                    ? withAlpha("#7B6FFF", 0.35)
                     : withAlpha(s.colors.primary, 0.25),
                 },
               ]}
@@ -2784,12 +2649,12 @@ function fmtTime(ms: number) {
                 if (activeTemplate.source !== "user") {
                   RNAlert.alert(
                     "Not editable",
-                    "Suggested templates can’t be deleted."
+                    "Suggested templates can't be deleted."
                   );
                   return;
                 }
 
-                RNAlert.alert("Delete template?", "This can’t be undone.", [
+                RNAlert.alert("Delete template?", "This can't be undone.", [
                   { text: "Cancel", style: "cancel" },
                   {
                     text: "Delete",
@@ -2855,7 +2720,7 @@ function StatTile({
     <View
       style={[
         styles.flatStatTile,
-        { backgroundColor: "#1A1A24", borderColor: s.hairline },
+        { backgroundColor: "#0F0F1A", borderColor: s.hairline },
       ]}
     >
       <Text style={[styles.flatStatTitle, { color: s.t2 }]}>{title}</Text>
@@ -2887,17 +2752,12 @@ function StartWorkoutCard({
     <View
       style={[
         styles.startWorkoutCard,
-        { backgroundColor: "#1A1A24", borderColor: s.hairline },
+        { backgroundColor: "#0F0F1A", borderColor: s.hairline },
       ]}
     >
       <View style={styles.startWorkoutHeader}>
-        <View style={styles.readyChip}>
-          <View
-            style={[
-              styles.readyChipDot,
-              { backgroundColor: s.colors.primary || "#6C63FF" },
-            ]}
-          />
+        <View style={[styles.readyChip, { borderWidth: 1, borderColor: withAlpha("#7B6FFF", 0.35), backgroundColor: withAlpha("#7B6FFF", 0.08) }]}>
+          <View style={[styles.readyChipDot, { backgroundColor: "#7B6FFF" }]} />
           <Text style={[styles.readyChipText, { color: s.t2 }]}>
             Ready when you are
           </Text>
@@ -2914,25 +2774,18 @@ function StartWorkoutCard({
         onPress={onStart}
         style={({ pressed }) => [
           styles.primaryWideButton,
-          {
-            backgroundColor: s.colors.primary || "#6C63FF",
-            opacity: pressed ? 0.92 : 1,
-          },
+          { backgroundColor: "#7B6FFF", opacity: pressed ? 0.88 : 1 },
         ]}
       >
         <Ionicons name="add" size={16} color="#FFFFFF" />
-        <Text style={styles.primaryWideButtonText}>+ Start</Text>
+        <Text style={styles.primaryWideButtonText}>Start</Text>
       </Pressable>
 
       <Pressable
         onPress={onOptions}
         style={({ pressed }) => [
           styles.secondaryButton,
-          {
-            backgroundColor: withAlpha("#FFFFFF", 0.04),
-            borderColor: s.hairline,
-            opacity: pressed ? 0.8 : 1,
-          },
+          { backgroundColor: "#141422", borderColor: s.hairline, opacity: pressed ? 0.8 : 1 },
         ]}
       >
         <Text style={[styles.secondaryButtonText, { color: s.t1 }]}>
@@ -2946,26 +2799,32 @@ function StartWorkoutCard({
             onPress={onResumeLast}
             style={({ pressed }) => [
               styles.quickStartChip,
-              { backgroundColor: withAlpha("#FFFFFF", 0.04), borderColor: s.hairline },
+              { backgroundColor: "#141422", borderColor: s.hairline },
               pressed && { opacity: 0.8 },
             ]}
           >
-            <Text style={[styles.quickStartChipText, { color: s.t1 }]} numberOfLines={1}>
-              ▶ Resume last: {resumeLabel || "Last workout"}
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Ionicons name="play" size={12} color={s.t2} />
+              <Text style={[styles.quickStartChipText, { color: s.t1 }]} numberOfLines={1}>
+                {resumeLabel || "Last workout"}
+              </Text>
+            </View>
           </Pressable>
         ) : null}
         <Pressable
           onPress={onSurprise}
           style={({ pressed }) => [
             styles.quickStartChip,
-            { backgroundColor: withAlpha("#FFFFFF", 0.04), borderColor: s.hairline },
+            { backgroundColor: "#141422", borderColor: s.hairline },
             pressed && { opacity: 0.8 },
           ]}
         >
-          <Text style={[styles.quickStartChipText, { color: s.t1 }]}>
-            🎲 Surprise me
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Ionicons name="shuffle" size={12} color={s.t2} />
+            <Text style={[styles.quickStartChipText, { color: s.t1 }]}>
+              Surprise me
+            </Text>
+          </View>
         </Pressable>
       </View>
     </View>
@@ -2985,7 +2844,7 @@ function NextWorkoutSuggestionChip({
       onPress={onPress}
       style={({ pressed }) => [
         styles.nextSuggestionChip,
-        { backgroundColor: withAlpha(s.colors.primary || "#6C63FF", 0.14), borderColor: withAlpha(s.colors.primary || "#6C63FF", 0.3) },
+        { backgroundColor: withAlpha(s.colors.primary || "#7B6FFF", 0.14), borderColor: withAlpha(s.colors.primary || "#7B6FFF", 0.3) },
         pressed && { opacity: 0.85 },
       ]}
     >
@@ -3006,25 +2865,25 @@ function WeeklySplitVisualizer({
   const toneForGroup = (group?: string) => {
     switch (group) {
       case "push":
-        return "#5AA6FF";
+        return "#7B6FFF";
       case "pull":
-        return "#6C63FF";
+        return "#9B8FFF";
       case "legs":
-        return "#4CAF50";
+        return "#7B6FFF";
       case "full":
-        return "#16C6C6";
+        return "#9B8FFF";
       case "cardio":
       case "recovery":
-        return "#6E6E7A";
+        return "#5A5A7A";
       default:
-        return "#2A2A35";
+        return "#141422";
     }
   };
   return (
     <View
       style={[
         styles.splitCard,
-        { backgroundColor: "#1A1A24", borderColor: s.hairline },
+        { backgroundColor: "#0F0F1A", borderColor: s.hairline },
       ]}
     >
       <View style={styles.splitHeaderRow}>
@@ -3041,7 +2900,7 @@ function WeeklySplitVisualizer({
                     ? withAlpha(toneForGroup(day.group), day.group === "full" ? 0.28 : 0.22)
                     : "transparent",
                   borderColor: day.isToday
-                    ? "#6C63FF"
+                    ? "#7B6FFF"
                     : day.group
                     ? withAlpha(toneForGroup(day.group), 0.34)
                     : withAlpha("#FFFFFF", 0.12),
@@ -3071,7 +2930,7 @@ function RecoveryCoachCard({ onPress }: { onPress?: () => void }) {
   const recovery = useMemo(() => getRecoveryMetrics(integrations), [integrations]);
   const score = recovery?.recoveryScore ?? null;
   const tone =
-    score == null ? "#FFC107" : score < 40 ? "#FFC107" : score > 80 ? "#4CAF50" : "#6C63FF";
+    score == null ? "#FFC107" : score < 40 ? "#FFC107" : score > 80 ? "#4CAF50" : "#7B6FFF";
   const badge =
     score == null ? "Fatigued" : score < 40 ? "Low recovery" : score > 80 ? "Recovered" : "Ready";
   const body =
@@ -3094,7 +2953,7 @@ function RecoveryCoachCard({ onPress }: { onPress?: () => void }) {
     <View
       style={[
         styles.recoveryCard,
-        { backgroundColor: "#1A1A24", borderColor: s.hairline },
+        { backgroundColor: "#0F0F1A", borderColor: s.hairline },
       ]}
     >
       <View style={styles.recoveryTopRow}>
@@ -3150,12 +3009,12 @@ function TemplatesOverview({
             onPress={() => onUseTemplate?.(template.id)}
             style={({ pressed }) => [
               styles.templateOverviewCard,
-              { backgroundColor: "#1A1A24", borderColor: s.hairline },
+              { backgroundColor: "#0F0F1A", borderColor: s.hairline },
               pressed && { opacity: 0.92 },
             ]}
           >
             <View style={styles.templateOverviewTop}>
-              <View style={[styles.templateOverviewIcon, { backgroundColor: withAlpha(s.colors.primary || "#6C63FF", 0.18) }]}>
+              <View style={[styles.templateOverviewIcon, { backgroundColor: withAlpha(s.colors.primary || "#7B6FFF", 0.18) }]}>
                 <Text style={styles.templateOverviewIconText}>
                   {(template.name || "W").slice(0, 2).toUpperCase()}
                 </Text>
@@ -3214,11 +3073,11 @@ function TemplatesOverview({
           style={({ pressed }) => [
             styles.templateOverviewCard,
             styles.templateCreateCard,
-            { backgroundColor: "#1A1A24", borderColor: withAlpha(s.colors.primary || "#6C63FF", 0.36) },
+            { backgroundColor: "#0F0F1A", borderColor: withAlpha(s.colors.primary || "#7B6FFF", 0.36) },
             pressed && { opacity: 0.92 },
           ]}
         >
-          <Ionicons name="add" size={20} color={s.colors.primary || "#6C63FF"} />
+          <Ionicons name="add" size={20} color={s.colors.primary || "#7B6FFF"} />
           <Text style={[styles.templateCreateText, { color: s.t1 }]}>Create new</Text>
         </Pressable>
       </View>
@@ -3244,17 +3103,18 @@ function PRFeed({ prs }: { prs: any[] }) {
             {prs.map((pr) => (
               <View
                 key={pr.id}
-                style={[styles.prFeedRow, { backgroundColor: "#1A1A24", borderColor: s.hairline }]}
+                style={[styles.prFeedRow, { backgroundColor: "#0F0F1A", borderColor: s.hairline }]}
               >
+                <Ionicons name="trophy" size={14} color="#7B6FFF" />
                 <Text style={[styles.prFeedText, { color: s.t1 }]} numberOfLines={2}>
-                  🏆 {pr.exercise} · {pr.text}{pr.when ? ` · ${pr.when}` : ""}
+                  {pr.exercise} · {pr.text}{pr.when ? ` · ${pr.when}` : ""}
                 </Text>
                 <Ionicons name="chevron-forward" size={15} color={s.t2} />
               </View>
             ))}
           </View>
         ) : (
-          <View style={[styles.prFeedEmpty, { backgroundColor: "#1A1A24", borderColor: s.hairline }]}>
+          <View style={[styles.prFeedEmpty, { backgroundColor: "#0F0F1A", borderColor: s.hairline }]}>
             <Text style={[styles.prFeedEmptyText, { color: s.t2 }]}>
               No PRs yet this month — push a little harder next session
             </Text>
@@ -3279,9 +3139,9 @@ function MuscleHeatmapCard({
   const s = useSurfaceTokens();
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const legend = [
-    { label: "Light", color: "rgba(108,99,255,0.4)" },
-    { label: "Moderate", color: "rgba(108,99,255,0.7)" },
-    { label: "Heavy", color: "#6C63FF" },
+    { label: "Light", color: "rgba(123,111,255,0.35)" },
+    { label: "Moderate", color: "rgba(123,111,255,0.65)" },
+    { label: "Heavy", color: "#7B6FFF" },
   ];
   const regionLabels: Record<string, string> = {
     chest: "Chest",
@@ -3371,7 +3231,7 @@ function MuscleHeatmapCard({
     <View
       style={[
         styles.heatmapCard,
-        { backgroundColor: "#1A1A24", borderColor: s.hairline },
+        { backgroundColor: "#0F0F1A", borderColor: s.hairline },
       ]}
     >
       <SectionHeader title="Muscle Heatmap" />
@@ -3383,8 +3243,8 @@ function MuscleHeatmapCard({
             side="front"
             scale={0.92}
             border="none"
-            defaultFill="#2A2A35"
-            colors={["rgba(108,99,255,0.4)", "rgba(108,99,255,0.7)", "#6C63FF"]}
+            defaultFill="#141422"
+            colors={["rgba(123,111,255,0.35)", "rgba(123,111,255,0.65)", "#7B6FFF"]}
             onBodyPartPress={(part) => {
               const key = slugToKeys[part.slug as BodySlug]?.[0];
               if (key) setActiveKey(key);
@@ -3399,8 +3259,8 @@ function MuscleHeatmapCard({
             side="back"
             scale={0.92}
             border="none"
-            defaultFill="#2A2A35"
-            colors={["rgba(108,99,255,0.4)", "rgba(108,99,255,0.7)", "#6C63FF"]}
+            defaultFill="#141422"
+            colors={["rgba(123,111,255,0.35)", "rgba(123,111,255,0.65)", "#7B6FFF"]}
             onBodyPartPress={(part) => {
               const key = slugToKeys[part.slug as BodySlug]?.[0];
               if (key) setActiveKey(key);
@@ -3478,13 +3338,13 @@ const styles = StyleSheet.create({
 
   title: {
     fontSize: 28,
-    fontWeight: "800",
+    fontWeight: "400",
     letterSpacing: -0.2,
   },
   subtitle: {
     marginTop: 2,
     fontSize: 13,
-    fontWeight: "600",
+    fontWeight: "300",
   },
 
   startBtn: {
@@ -3499,7 +3359,7 @@ const styles = StyleSheet.create({
   },
   startBtnText: {
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: "400",
     letterSpacing: 0.2,
   },
 
@@ -3517,17 +3377,17 @@ const styles = StyleSheet.create({
   continueTopRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   continueTitle: {
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "500",
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
   continueName: {
     marginTop: 6,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "500",
     letterSpacing: -0.2,
   },
-  continueMeta: { marginTop: 5, fontSize: 13, fontWeight: "600" },
+  continueMeta: { marginTop: 5, fontSize: 13, fontWeight: "300" },
   pulseDot: {
     width: 10,
     height: 10,
@@ -3546,7 +3406,7 @@ const styles = StyleSheet.create({
   },
   finishBtnText: {
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   continueCTA: {
     marginTop: 12,
@@ -3559,18 +3419,18 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  continueCTAText: { fontSize: 13, fontWeight: "800" },
+  continueCTAText: { fontSize: 13, fontWeight: "400" },
 
   emptyStateCard: { borderRadius: 22 },
-  emptyTitle: { fontSize: 18, fontWeight: "900", letterSpacing: -0.2 },
-  emptyText: { marginTop: 6, fontSize: 13, fontWeight: "600", lineHeight: 18 },
+  emptyTitle: { fontSize: 18, fontWeight: "500", letterSpacing: -0.2 },
+  emptyText: { marginTop: 6, fontSize: 13, fontWeight: "300", lineHeight: 18 },
   emptyCTA: {
     marginTop: 12,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  emptyCTAtext: { fontSize: 13, fontWeight: "800" },
+  emptyCTAtext: { fontSize: 13, fontWeight: "400" },
 
   ringsRow: { flexDirection: "row", marginTop: 2 },
   ringCard: { borderRadius: 18 },
@@ -3583,17 +3443,17 @@ const styles = StyleSheet.create({
   ringDot: { width: 8, height: 8, borderRadius: 8 },
   ringLabel: {
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "500",
     letterSpacing: 0.6,
     textTransform: "uppercase",
   },
   ringValue: {
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "500",
     letterSpacing: -0.2,
     fontVariant: ["tabular-nums"],
   },
-  ringSub: { marginTop: 2, fontSize: 12, fontWeight: "600" },
+  ringSub: { marginTop: 2, fontSize: 12, fontWeight: "300" },
 
   sectionHeader: {
     marginTop: 6,
@@ -3601,7 +3461,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  sectionTitle: { fontSize: 14, fontWeight: "900", letterSpacing: 0.4 },
+  sectionTitle: { fontSize: 14, fontWeight: "500", letterSpacing: 0.4 },
   sectionAction: {
     flexDirection: "row",
     alignItems: "center",
@@ -3609,8 +3469,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 8,
   },
-  sectionActionText: { fontSize: 13, fontWeight: "800" },
-  helperText: { marginTop: 6, fontSize: 12, fontWeight: "600" },
+  sectionActionText: { fontSize: 13, fontWeight: "400" },
+  helperText: { marginTop: 6, fontSize: 12, fontWeight: "300" },
 
   pillStroke: {
     borderRadius: 999,
@@ -3625,7 +3485,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  pillText: { fontSize: 12.5, fontWeight: "800", letterSpacing: 0.2 },
+  pillText: { fontSize: 12.5, fontWeight: "400", letterSpacing: 0.2 },
 
   templateCard: {
     borderRadius: 18,
@@ -3641,8 +3501,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   templateEmoji: { fontSize: 18 },
-  templateName: { fontSize: 14, fontWeight: "900", letterSpacing: -0.1 },
-  templateTag: { marginTop: 2, fontSize: 12, fontWeight: "700" },
+  templateName: { fontSize: 14, fontWeight: "500", letterSpacing: -0.1 },
+  templateTag: { marginTop: 2, fontSize: 12, fontWeight: "300" },
 
   templateBadge: {
     paddingHorizontal: 8,
@@ -3651,8 +3511,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   templateBadgeUser: {
-    backgroundColor: withAlpha("#68D7FF", 0.16),
-    borderColor: withAlpha("#68D7FF", 0.35),
+    backgroundColor: withAlpha("#7B6FFF", 0.16),
+    borderColor: withAlpha("#7B6FFF", 0.35),
   },
   templateBadgeAuto: {},
 
@@ -3678,7 +3538,7 @@ const styles = StyleSheet.create({
   intensityRowCompact: {
     marginTop: 8,
   },
-  intensityLabel: { fontSize: 12, fontWeight: "800", letterSpacing: 0.2 },
+  intensityLabel: { fontSize: 12, fontWeight: "400", letterSpacing: 0.2 },
   intensityBars: {
     flexDirection: "row",
     alignItems: "center",
@@ -3696,7 +3556,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
   },
-  bestSetBadgeText: { fontSize: 12, fontWeight: "800" },
+  bestSetBadgeText: { fontSize: 12, fontWeight: "400" },
   bestSetTag: {
     paddingHorizontal: 6,
     paddingVertical: 3,
@@ -3705,7 +3565,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: withAlpha("#FFD45A", 0.35),
   },
-  bestSetTagText: { fontSize: 10, fontWeight: "900", color: "#FFD45A" },
+  bestSetTagText: { fontSize: 10, fontWeight: "500", color: "#FFD45A" },
 
   cardActionsCompact: {
     marginTop: 8,
@@ -3721,14 +3581,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  templateBadgeText: { fontSize: 10, fontWeight: "900", letterSpacing: 0.6 },
-  templateBadgeTextUser: { color: withAlpha("#68D7FF", 0.95) },
+  templateBadgeText: { fontSize: 10, fontWeight: "500", letterSpacing: 0.6 },
+  templateBadgeTextUser: { color: "#7B6FFF" },
   templateBadgeTextAuto: { color: withAlpha("#FFFFFF", 0.78) },
 
   workoutCard: { borderRadius: 22 },
   workoutHeaderRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  workoutTitle: { fontSize: 16, fontWeight: "900", letterSpacing: -0.15 },
-  workoutMeta: { marginTop: 4, fontSize: 12, fontWeight: "700" },
+  workoutTitle: { fontSize: 16, fontWeight: "500", letterSpacing: -0.15 },
+  workoutMeta: { marginTop: 4, fontSize: 12, fontWeight: "300" },
 
   prBadge: {
     flexDirection: "row",
@@ -3739,7 +3599,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: withAlpha("#FFD66B", 0.92),
   },
-  prText: { color: withAlpha("#111", 0.9), fontSize: 12, fontWeight: "900" },
+  prText: { color: withAlpha("#111", 0.9), fontSize: 12, fontWeight: "500" },
 
   statsRow: { marginTop: 12, flexDirection: "row", gap: 8, flexWrap: "wrap" },
   statChip: {
@@ -3753,12 +3613,12 @@ const styles = StyleSheet.create({
   },
   statChipText: {
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "400",
     fontVariant: ["tabular-nums"],
   },
 
-  highlight: { marginTop: 10, fontSize: 12, fontWeight: "700" },
-  prLine: { marginTop: 6, fontSize: 12, fontWeight: "800" },
+  highlight: { marginTop: 10, fontSize: 12, fontWeight: "300" },
+  prLine: { marginTop: 6, fontSize: 12, fontWeight: "400" },
 
   cardActions: { marginTop: 12, flexDirection: "row", gap: 10 },
   actionBtn: {
@@ -3770,7 +3630,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  actionBtnText: { fontSize: 12, fontWeight: "800" },
+  actionBtnText: { fontSize: 12, fontWeight: "400" },
 
   /* Coach Spark */
   coachCard: { borderRadius: 22, padding: 0 },
@@ -3784,8 +3644,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: StyleSheet.hairlineWidth,
   },
-  coachTitle: { fontSize: 15, fontWeight: "900", letterSpacing: -0.1 },
-  coachSub: { marginTop: 4, fontSize: 12, fontWeight: "700", lineHeight: 16 },
+  coachTitle: { fontSize: 15, fontWeight: "500", letterSpacing: -0.1 },
+  coachSub: { marginTop: 4, fontSize: 12, fontWeight: "300", lineHeight: 16 },
   coachCTA: {
     flexDirection: "row",
     alignItems: "center",
@@ -3795,7 +3655,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  coachCTAText: { fontSize: 13, fontWeight: "900" },
+  coachCTAText: { fontSize: 13, fontWeight: "500" },
   coachChipsRow: {
     marginTop: 12,
     flexDirection: "row",
@@ -3811,7 +3671,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  coachChipText: { fontSize: 12, fontWeight: "800" },
+  coachChipText: { fontSize: 12, fontWeight: "400" },
 
   /* Sheets */
   sheetBackdrop: { flex: 1 },
@@ -3828,8 +3688,8 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 10,
   },
-  sheetTitle: { fontSize: 16, fontWeight: "900", letterSpacing: -0.2 },
-  sheetSubtitle: { marginTop: 4, fontSize: 12, fontWeight: "700" },
+  sheetTitle: { fontSize: 16, fontWeight: "500", letterSpacing: -0.2 },
+  sheetSubtitle: { marginTop: 4, fontSize: 12, fontWeight: "300" },
   sheetClose: {
     width: 40,
     height: 40,
@@ -3854,11 +3714,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: StyleSheet.hairlineWidth,
   },
-  sheetRowTitle: { fontSize: 14, fontWeight: "900" },
+  sheetRowTitle: { fontSize: 14, fontWeight: "500" },
   sheetRowSubtitle: {
     marginTop: 3,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "300",
     lineHeight: 16,
   },
   sheetPrimaryBtn: {
@@ -3870,7 +3730,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
   },
-  sheetPrimaryBtnText: { fontWeight: "900" },
+  sheetPrimaryBtnText: { fontWeight: "500" },
   sheetGhostBtn: {
     width: 120,
     height: 46,
@@ -3881,7 +3741,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
   },
-  sheetGhostBtnText: { fontWeight: "900" },
+  sheetGhostBtnText: { fontWeight: "500" },
 
   /* Toast */
   toastWrap: { position: "absolute", left: 14, right: 14, bottom: 98 },
@@ -3892,7 +3752,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  toastText: { flex: 1, fontWeight: "800", fontSize: 12, lineHeight: 16 },
+  toastText: { flex: 1, fontWeight: "400", fontSize: 12, lineHeight: 16 },
   toastBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -3900,7 +3760,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     marginLeft: 8,
   },
-  toastBtnText: { fontWeight: "900", fontSize: 12 },
+  toastBtnText: { fontWeight: "500", fontSize: 12 },
   deleteOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
@@ -3922,13 +3782,13 @@ const styles = StyleSheet.create({
   },
   deleteTitle: {
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "500",
     letterSpacing: 0.2,
   },
   deleteSub: {
     marginTop: 4,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "300",
   },
 
   /* Template actions modal */
@@ -3938,8 +3798,8 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  modalTitle: { fontWeight: "900", fontSize: 16 },
-  modalSub: { marginTop: 6, fontWeight: "700", fontSize: 12 },
+  modalTitle: { fontWeight: "500", fontSize: 16 },
+  modalSub: { marginTop: 6, fontWeight: "300", fontSize: 12 },
   modalPrimary: {
     marginTop: 12,
     paddingHorizontal: 14,
@@ -3947,7 +3807,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  modalPrimaryText: { fontWeight: "900" },
+  modalPrimaryText: { fontWeight: "500" },
   modalSecondary: {
     marginTop: 10,
     paddingHorizontal: 14,
@@ -3955,9 +3815,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  modalSecondaryText: { fontWeight: "900" },
+  modalSecondaryText: { fontWeight: "500" },
   heroCardWrap: {
-    // more “hero” elevation for the first card
+    // more "hero" elevation for the first card
     shadowColor: "#000",
     shadowOpacity: 0.18,
     shadowRadius: 22,
@@ -3989,11 +3849,11 @@ const styles = StyleSheet.create({
 
   bestSetText: {
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "300",
   },
 
   actionBtnPrimary: {
-    // tiny “primary” emphasis via shape only; colors already set inline
+    // tiny "primary" emphasis via shape only; colors already set inline
   },
 
   actionBtnIconOnly: {
@@ -4004,7 +3864,7 @@ const styles = StyleSheet.create({
     marginTop: 18,
     paddingBottom: 8,
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "500",
     letterSpacing: 1.1,
     textTransform: "uppercase",
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -4019,18 +3879,18 @@ const styles = StyleSheet.create({
   },
   flatStatTitle: {
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "500",
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
   flatStatValue: {
     fontSize: 28,
-    fontWeight: "900",
+    fontWeight: "500",
     letterSpacing: -0.4,
   },
   flatStatSub: {
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "300",
   },
   startWorkoutCard: {
     marginTop: 10,
@@ -4052,9 +3912,9 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.04)",
   },
   readyChipDot: { width: 8, height: 8, borderRadius: 999 },
-  readyChipText: { fontSize: 11, fontWeight: "800" },
-  startWorkoutTitle: { fontSize: 20, fontWeight: "900", letterSpacing: -0.3 },
-  startWorkoutSub: { fontSize: 13, lineHeight: 18, fontWeight: "700" },
+  readyChipText: { fontSize: 11, fontWeight: "400" },
+  startWorkoutTitle: { fontSize: 20, fontWeight: "500", letterSpacing: -0.3 },
+  startWorkoutSub: { fontSize: 13, lineHeight: 18, fontWeight: "300" },
   primaryWideButton: {
     marginTop: 16,
     height: 48,
@@ -4067,7 +3927,7 @@ const styles = StyleSheet.create({
   primaryWideButtonText: {
     color: "#FFFFFF",
     fontSize: 15,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   secondaryButton: {
     marginTop: 10,
@@ -4077,7 +3937,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  secondaryButtonText: { fontSize: 13, fontWeight: "800" },
+  secondaryButtonText: { fontSize: 13, fontWeight: "400" },
   quickStartRow: {
     marginTop: 12,
     gap: 8,
@@ -4088,7 +3948,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 11,
   },
-  quickStartChipText: { fontSize: 13, fontWeight: "800" },
+  quickStartChipText: { fontSize: 13, fontWeight: "400" },
   nextSuggestionChip: {
     marginTop: 12,
     borderRadius: 999,
@@ -4100,7 +3960,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 10,
   },
-  nextSuggestionText: { flex: 1, fontSize: 13, fontWeight: "800" },
+  nextSuggestionText: { flex: 1, fontSize: 13, fontWeight: "400" },
   splitCard: {
     marginTop: 10,
     borderRadius: 20,
@@ -4112,7 +3972,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  splitTitle: { fontSize: 15, fontWeight: "900" },
+  splitTitle: { fontSize: 15, fontWeight: "500" },
   splitPillRow: {
     marginTop: 12,
     flexDirection: "row",
@@ -4128,9 +3988,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: "center",
   },
-  splitDayLabel: { fontSize: 12, fontWeight: "900" },
-  splitDayDetail: { fontSize: 10, fontWeight: "700" },
-  splitInsight: { marginTop: 12, fontSize: 12, fontWeight: "700", lineHeight: 17 },
+  splitDayLabel: { fontSize: 12, fontWeight: "500" },
+  splitDayDetail: { fontSize: 10, fontWeight: "300" },
+  splitInsight: { marginTop: 12, fontSize: 12, fontWeight: "300", lineHeight: 17 },
   recoveryCard: {
     marginTop: 12,
     borderRadius: 20,
@@ -4144,9 +4004,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  recoveryBadgeText: { fontSize: 11, fontWeight: "900" },
-  recoveryTitle: { marginTop: 10, fontSize: 15, fontWeight: "900" },
-  recoveryBody: { marginTop: 6, fontSize: 13, fontWeight: "700", lineHeight: 18 },
+  recoveryBadgeText: { fontSize: 11, fontWeight: "500" },
+  recoveryTitle: { marginTop: 10, fontSize: 15, fontWeight: "500" },
+  recoveryBody: { marginTop: 6, fontSize: 13, fontWeight: "300", lineHeight: 18 },
   recoveryAction: {
     marginTop: 12,
     alignSelf: "flex-start",
@@ -4155,7 +4015,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  recoveryActionText: { fontSize: 13, fontWeight: "800" },
+  recoveryActionText: { fontSize: 13, fontWeight: "400" },
   templatesGrid: {
     marginTop: 10,
     gap: 10,
@@ -4179,11 +4039,11 @@ const styles = StyleSheet.create({
   },
   templateOverviewIconText: {
     color: "#FFFFFF",
-    fontWeight: "900",
+    fontWeight: "500",
     fontSize: 13,
   },
-  templateOverviewName: { fontSize: 15, fontWeight: "900" },
-  templateOverviewMeta: { marginTop: 4, fontSize: 12, fontWeight: "700" },
+  templateOverviewName: { fontSize: 15, fontWeight: "500" },
+  templateOverviewMeta: { marginTop: 4, fontSize: 12, fontWeight: "300" },
   staleChip: {
     marginTop: 10,
     alignSelf: "stretch",
@@ -4192,7 +4052,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  staleChipText: { color: "#FFC107", fontSize: 11, fontWeight: "800" },
+  staleChipText: { color: "#FFC107", fontSize: 11, fontWeight: "400" },
   staleActionsRow: {
     marginTop: 8,
     flexDirection: "row",
@@ -4205,7 +4065,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     backgroundColor: "rgba(255,255,255,0.04)",
   },
-  staleActionText: { fontSize: 11, fontWeight: "800" },
+  staleActionText: { fontSize: 11, fontWeight: "400" },
   templateTagRow: {
     marginTop: 12,
     flexDirection: "row",
@@ -4218,7 +4078,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  templateTagChipText: { fontSize: 11, fontWeight: "700" },
+  templateTagChipText: { fontSize: 11, fontWeight: "300" },
   templateCreateCard: {
     borderStyle: "dashed",
     minHeight: 92,
@@ -4226,13 +4086,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
   },
-  templateCreateText: { fontSize: 14, fontWeight: "800" },
+  templateCreateText: { fontSize: 14, fontWeight: "400" },
   collapsibleHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  collapsibleTitle: { fontSize: 15, fontWeight: "900" },
+  collapsibleTitle: { fontSize: 15, fontWeight: "500" },
   prFeedRow: {
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
@@ -4242,14 +4102,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
-  prFeedText: { flex: 1, fontSize: 13, fontWeight: "800", lineHeight: 18 },
+  prFeedText: { flex: 1, fontSize: 13, fontWeight: "400", lineHeight: 18 },
   prFeedEmpty: {
     marginTop: 10,
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 14,
   },
-  prFeedEmptyText: { fontSize: 13, fontWeight: "700" },
+  prFeedEmptyText: { fontSize: 13, fontWeight: "300" },
   heatmapCard: {
     marginTop: 18,
     borderRadius: 20,
@@ -4268,7 +4128,7 @@ const styles = StyleSheet.create({
   },
   silhouetteLabel: {
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: "300",
   },
   heatmapTooltip: {
     marginTop: 10,
@@ -4278,7 +4138,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  heatmapTooltipText: { fontSize: 12, fontWeight: "700" },
+  heatmapTooltipText: { fontSize: 12, fontWeight: "300" },
   heatmapLegendRow: {
     marginTop: 10,
     flexDirection: "row",
@@ -4295,6 +4155,6 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 999,
   },
-  heatmapLegendText: { fontSize: 11, fontWeight: "700" },
-  heatmapInsight: { marginTop: 12, fontSize: 12, fontWeight: "700", lineHeight: 18 },
+  heatmapLegendText: { fontSize: 11, fontWeight: "300" },
+  heatmapInsight: { marginTop: 12, fontSize: 12, fontWeight: "300", lineHeight: 18 },
 });

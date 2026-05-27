@@ -55,7 +55,13 @@ import MealHealthScoreIndicator from "@/components/nutrition/uiNew/MealHealthSco
 import { PENDING_MEAL_BUILDER_ADDITIONS_KEY } from "@/services/mealBuilder";
 
 type MealKey = "breakfast" | "lunch" | "dinner" | "snacks";
-type TabKey = "recents" | "search" | "describe" | "barcode" | "manual";
+type TabKey =
+  | "recents"
+  | "search"
+  | "describe"
+  | "barcode"
+  | "manual"
+  | "favorites";
 
 type AddPayload = {
   date: string;
@@ -135,6 +141,38 @@ function toNum(s: string) {
 function clamp0(n: number) {
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, n);
+}
+
+function formatSheetDate(dateISO: string) {
+  const date = new Date(`${dateISO}T12:00:00`);
+  const today = new Date();
+  const sameDay =
+    today.getFullYear() === date.getFullYear() &&
+    today.getMonth() === date.getMonth() &&
+    today.getDate() === date.getDate();
+  if (sameDay) return "Today";
+  return date.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function defaultMealForTime(): MealKey {
+  const hour = new Date().getHours();
+  if (hour < 11) return "breakfast";
+  if (hour < 16) return "lunch";
+  if (hour < 21) return "dinner";
+  return "snacks";
+}
+
+function titleCaseFoodName(name: string) {
+  return name
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 /* ───────────── Describe helpers ───────────── */
@@ -487,94 +525,68 @@ async function resolveBarcodeCandidates(
 
 /* ───────────── UI atoms ───────────── */
 function TopBar({
-  title,
-  subtitle,
+  dateLabel,
   onClose,
   colors,
-  isDark,
 }: {
-  title: string;
-  subtitle: string;
+  dateLabel: string;
   onClose: () => void;
   colors: any;
-  isDark: boolean;
 }) {
-  const inner = (
-    <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12 }}>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <View style={{ gap: 3 }}>
-          <Text
-            style={{ color: colors.muted, fontWeight: "900", fontSize: 12 }}
-          >
-            {subtitle}
-          </Text>
-          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}>
-            {title}
-          </Text>
-        </View>
-        <Pressable
-          onPress={onClose}
-          hitSlop={10}
-          style={{
-            width: 42,
-            height: 42,
-            borderRadius: 16,
-            borderWidth: 1,
-            borderColor: colors.border,
-            backgroundColor: withAlpha(colors.card, 0.55),
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Ionicons name="close" size={18} color={colors.text} />
-        </Pressable>
-      </View>
-    </View>
-  );
-
-  if (Platform.OS === "ios") {
-    return (
-      <View
-        style={{
-          borderBottomWidth: 1,
-          borderBottomColor: colors.border,
-          overflow: "hidden",
-        }}
-      >
-        <BlurView
-          intensity={22}
-          tint={isDark ? "systemThinMaterialDark" : "systemThinMaterialLight"}
-        >
-          <LinearGradient
-            colors={[
-              withAlpha(colors.primary, 0.2),
-              withAlpha(colors.card, 0.16),
-            ]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ position: "absolute", inset: 0 }}
-          />
-          {inner}
-        </BlurView>
-      </View>
-    );
-  }
-
   return (
     <View
       style={{
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
-        backgroundColor: colors.bg,
+        backgroundColor: colors.surface,
+        paddingHorizontal: 16,
+        paddingTop: 8,
+        paddingBottom: 12,
       }}
     >
-      {inner}
+      <View style={{ alignItems: "center", paddingBottom: 8 }}>
+        <View
+          style={{
+            width: 32,
+            height: 4,
+            borderRadius: 999,
+            backgroundColor: colors.surface2,
+          }}
+        />
+      </View>
+      <View style={{ alignItems: "center", justifyContent: "center" }}>
+        <Text
+          style={{
+            color: colors.placeholder,
+            fontSize: 12,
+            fontWeight: "300",
+          }}
+        >
+          {dateLabel}
+        </Text>
+        <Text style={{ color: colors.text, fontWeight: "500", fontSize: 20, marginTop: 4 }}>
+          Add Meal
+        </Text>
+      </View>
+      <Pressable
+        onPress={onClose}
+        hitSlop={10}
+        style={{
+          position: "absolute",
+          right: 16,
+          top: 20,
+          width: 32,
+          height: 32,
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.surface2,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Ionicons name="close" size={16} color={colors.placeholder} />
+      </Pressable>
     </View>
   );
 }
@@ -600,17 +612,7 @@ function SegmentedMeal({
   ];
 
   return (
-    <View
-      style={{
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: withAlpha(colors.card, 0.35),
-        padding: 6,
-        flexDirection: "row",
-        gap: 6,
-      }}
-    >
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
       {items.map((it) => {
         const active = it.key === value;
         return (
@@ -621,28 +623,27 @@ function SegmentedMeal({
               onChange(it.key);
             }}
             style={{
-              flex: 1,
-              height: 38,
+              height: 36,
               borderRadius: 999,
               borderWidth: 1,
-              borderColor: active
-                ? withAlpha(colors.primary, 0.35)
-                : "transparent",
-              overflow: "hidden",
-              backgroundColor: active
-                ? withAlpha(colors.primary, 0.14)
-                : "transparent",
+              borderColor: active ? colors.primary : colors.border,
+              backgroundColor: active ? colors.primary : colors.surface2,
               alignItems: "center",
               justifyContent: "center",
               flexDirection: "row",
               gap: 6,
+              paddingHorizontal: 12,
             }}
           >
-            <Ionicons name={it.icon} size={14} color={colors.text} />
+            <Ionicons
+              name={it.icon}
+              size={14}
+              color={active ? "#FFFFFF" : colors.placeholder}
+            />
             <Text
               style={{
-                color: colors.text,
-                fontWeight: active ? "900" : "800",
+                color: active ? "#FFFFFF" : colors.muted,
+                fontWeight: active ? "500" : "300",
                 fontSize: 12,
               }}
             >
@@ -673,6 +674,7 @@ function TabPills({
     { key: "search", label: "Search", icon: "search-outline" },
     { key: "describe", label: "Describe", icon: "sparkles-outline" },
     { key: "barcode", label: "Barcode", icon: "barcode-outline" },
+    { key: "favorites", label: "Favorites", icon: "star-outline" },
     { key: "manual", label: "Manual", icon: "create-outline" },
   ];
 
@@ -696,26 +698,27 @@ function TabPills({
             }}
             style={{
               paddingHorizontal: 12,
-              paddingVertical: 10,
+              minHeight: 34,
               borderRadius: 999,
               borderWidth: 1,
-              borderColor: active
-                ? withAlpha(colors.primary, 0.35)
-                : colors.border,
-              backgroundColor: active
-                ? withAlpha(colors.primary, 0.14)
-                : withAlpha(colors.card, 0.3),
+              borderColor: active ? colors.primary : colors.border,
+              backgroundColor: active ? colors.primary : colors.surface2,
               flexDirection: "row",
               alignItems: "center",
               gap: 8,
+              justifyContent: "center",
             }}
           >
-            <Ionicons name={it.icon} size={14} color={colors.text} />
+            <Ionicons
+              name={it.icon}
+              size={14}
+              color={active ? "#FFFFFF" : colors.placeholder}
+            />
             <Text
               style={{
-                color: colors.text,
-                fontWeight: active ? "900" : "800",
-                fontSize: 13,
+                color: active ? "#FFFFFF" : colors.muted,
+                fontWeight: "500",
+                fontSize: 12,
               }}
             >
               {it.label}
@@ -861,34 +864,56 @@ function ConfirmSheetContent({
 
   return (
     <View style={{ flex: 1 }}>
+      <View style={{ alignItems: "center", paddingTop: 8 }}>
+        <View
+          style={{
+            width: 32,
+            height: 4,
+            borderRadius: 999,
+            backgroundColor: colors.surface2,
+          }}
+        />
+      </View>
       <View
         style={{
           paddingHorizontal: 16,
-          paddingTop: 14,
+          paddingTop: 12,
           paddingBottom: 10,
           flexDirection: "row",
           justifyContent: "space-between",
           alignItems: "center",
         }}
       >
-        <Text style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}>
-          Review & confirm
-        </Text>
+        <View>
+          <Text style={{ color: colors.text, fontWeight: "500", fontSize: 20 }}>
+            {edits.name || "Food"}
+          </Text>
+          <Text
+            style={{
+              color: colors.placeholder,
+              fontWeight: "300",
+              fontSize: 12,
+              marginTop: 4,
+            }}
+          >
+            Review and add to your log
+          </Text>
+        </View>
         <Pressable
           onPress={onCancel}
           hitSlop={10}
           style={{
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            borderRadius: 999,
+            width: 32,
+            height: 32,
+            borderRadius: 16,
             borderWidth: 1,
             borderColor: colors.border,
-            backgroundColor: withAlpha(colors.card, 0.35),
+            backgroundColor: colors.surface2,
+            alignItems: "center",
+            justifyContent: "center",
           }}
         >
-          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 12 }}>
-            Close
-          </Text>
+          <Ionicons name="close" size={16} color={colors.placeholder} />
         </Pressable>
       </View>
 
@@ -902,6 +927,18 @@ function ConfirmSheetContent({
         }}
       >
         <View style={{ gap: 10 }}>
+          <View style={{ alignItems: "center", marginBottom: 8 }}>
+            <Text style={{ color: colors.text, fontSize: 48, fontWeight: "200" }}>
+              {Math.round(Number(edits.calories || 0))}{" "}
+              <Text style={{ color: colors.placeholder, fontSize: 14, fontWeight: "300" }}>
+                kcal
+              </Text>
+            </Text>
+            <Text style={{ color: colors.placeholder, fontSize: 12, fontWeight: "300", marginTop: 4 }}>
+              per {edits.qty || "1"} {edits.unit || "serving"}
+            </Text>
+          </View>
+
           <Field
             label="Name"
             value={edits.name}
@@ -1213,16 +1250,24 @@ export default function AddMealModal() {
     date?: string;
     initialTab?: string;
     returnTo?: string;
+    query?: string;
   }>();
   const [meal, setMeal] = useState<MealKey>(
-    (params.meal as MealKey) || "breakfast",
+    (params.meal as MealKey) || defaultMealForTime(),
   );
   const date = (params.date as string) || new Date().toISOString().slice(0, 10);
 
   const initialTab = (params.initialTab as TabKey) || "recents";
   const returnTo = String(params.returnTo || "");
   const [tab, setTab] = useState<TabKey>(
-    ["recents", "search", "describe", "barcode", "manual"].includes(initialTab)
+    [
+      "recents",
+      "search",
+      "describe",
+      "barcode",
+      "manual",
+      "favorites",
+    ].includes(initialTab)
       ? initialTab
       : "recents",
   );
@@ -1236,7 +1281,7 @@ export default function AddMealModal() {
   const [topFoodsLoading, setTopFoodsLoading] = useState(false);
 
   // Search
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(String(params.query || ""));
   const [results, setResults] = useState<any[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const debounce = useRef<any>(null);
@@ -1681,24 +1726,34 @@ export default function AddMealModal() {
 
   const quickTiles = useMemo(
     () =>
-      topFoods.map((item: any) => ({
-        name: item.name,
-        unit: item.unit || "serving",
-        qty: Number(item.qty || 1),
-        calories: Number(item.calories || 0),
-        protein: Number(item.protein || 0),
-        carbs: Number(item.carbs || 0),
-        fat: Number(item.fat || 0),
-        sugar: item.sugar,
-        fiber: item.fiber,
-        addedSugar: item.addedSugar,
-        satFat: item.satFat,
-        sodium: item.sodium,
-        wholeFoodRatio: item.wholeFoodRatio,
-        veggieFruitServings: item.veggieFruitServings,
-        unsatFatRatio: item.unsatFatRatio,
-        alcoholCalories: item.alcoholCalories,
-      })),
+      Array.from(
+        new Map(
+          topFoods.map((item: any) => {
+            const normalizedName = titleCaseFoodName(String(item.name || "Food"));
+            return [
+              normalizedName.toLowerCase(),
+              {
+                name: normalizedName,
+                unit: item.unit || "serving",
+                qty: Number(item.qty || 1),
+                calories: Number(item.calories || 0),
+                protein: Number(item.protein || 0),
+                carbs: Number(item.carbs || 0),
+                fat: Number(item.fat || 0),
+                sugar: item.sugar,
+                fiber: item.fiber,
+                addedSugar: item.addedSugar,
+                satFat: item.satFat,
+                sodium: item.sodium,
+                wholeFoodRatio: item.wholeFoodRatio,
+                veggieFruitServings: item.veggieFruitServings,
+                unsatFatRatio: item.unsatFatRatio,
+                alcoholCalories: item.alcoholCalories,
+              },
+            ];
+          }),
+        ).values(),
+      ),
     [topFoods],
   );
 
@@ -1910,11 +1965,9 @@ export default function AddMealModal() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <TopBar
-        title="Add Meal"
-        subtitle={date}
+        dateLabel={formatSheetDate(date)}
         onClose={() => router.back()}
         colors={colors}
-        isDark={!!isDark}
       />
 
       <KeyboardAvoidingView
@@ -1933,22 +1986,19 @@ export default function AddMealModal() {
           <Pressable
             onPress={openPhotoScan}
             style={{
-              borderRadius: 22,
-              overflow: "hidden",
+              borderRadius: 16,
               borderWidth: 1,
               borderColor: colors.border,
-              ...softShadow,
+              backgroundColor: colors.surface,
+              padding: 16,
             }}
           >
-            <LinearGradient
-              colors={[
-                withAlpha("#22c55e", isDark ? 0.12 : 0.16),
-                withAlpha(colors.primary, 0.12),
-                withAlpha(colors.card, 0.1),
-              ]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{ padding: 14 }}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
             >
               <View
                 style={{
@@ -1967,27 +2017,27 @@ export default function AddMealModal() {
                 >
                   <View
                     style={{
-                      width: 46,
-                      height: 46,
+                      width: 36,
+                      height: 36,
                       borderRadius: 18,
                       borderWidth: 1,
-                      borderColor: withAlpha(colors.primary, 0.25),
-                      backgroundColor: withAlpha(colors.primary, 0.12),
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface2,
                       alignItems: "center",
                       justifyContent: "center",
                     }}
                   >
                     <Ionicons
                       name="camera-outline"
-                      size={20}
-                      color={colors.text}
+                      size={18}
+                      color={colors.primary}
                     />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text
                       style={{
                         color: colors.text,
-                        fontWeight: "900",
+                        fontWeight: "500",
                         fontSize: 16,
                       }}
                     >
@@ -1995,8 +2045,9 @@ export default function AddMealModal() {
                     </Text>
                     <Text
                       style={{
-                        color: colors.muted,
-                        fontWeight: "800",
+                        color: colors.placeholder,
+                        fontWeight: "300",
+                        fontSize: 12,
                         marginTop: 2,
                       }}
                     >
@@ -2006,33 +2057,22 @@ export default function AddMealModal() {
                 </View>
                 <Ionicons
                   name="chevron-forward"
-                  size={18}
-                  color={colors.muted}
+                  size={16}
+                  color={colors.placeholder}
                 />
               </View>
-
-              <View
-                style={{
-                  marginTop: 12,
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: withAlpha(colors.border, 0.9),
-                  backgroundColor: withAlpha(colors.card, 0.26),
-                  padding: 12,
-                }}
-              >
-                <Text
-                  style={{
-                    color: colors.muted,
-                    fontWeight: "800",
-                    fontSize: 12,
-                  }}
-                >
-                  Tip: best results with good lighting and the full plate in
-                  frame.
-                </Text>
-              </View>
-            </LinearGradient>
+            </View>
+            <Text
+              style={{
+                color: colors.placeholder,
+                fontWeight: "300",
+                fontSize: 12,
+                fontStyle: "italic",
+                marginTop: 12,
+              }}
+            >
+              Best results: good lighting, full plate in frame.
+            </Text>
           </Pressable>
 
           {/* Quick Add card */}
@@ -2207,117 +2247,131 @@ export default function AddMealModal() {
             <View style={{ gap: 14 }}>
               <View
                 style={{
-                  borderRadius: 22,
-                  overflow: "hidden",
+                  borderRadius: 16,
                   borderWidth: 1,
                   borderColor: colors.border,
-                  backgroundColor: withAlpha(colors.card, 0.18),
+                  backgroundColor: colors.surface,
+                  padding: 16,
                 }}
               >
-                <LinearGradient
-                  colors={[
-                    withAlpha(colors.primary, 0.18),
-                    withAlpha(colors.card, 0.1),
-                  ]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={{ padding: 14 }}
+                <Text
+                  style={{
+                    color: colors.placeholder,
+                    fontWeight: "500",
+                    fontSize: 11,
+                    letterSpacing: 1,
+                    textTransform: "uppercase",
+                  }}
                 >
-                  <Text
-                    style={{
-                      color: colors.text,
-                      fontWeight: "900",
-                      fontSize: 16,
-                    }}
-                  >
-                    Top quick adds
-                  </Text>
-                  <Text
-                    style={{
-                      color: colors.muted,
-                      fontWeight: "800",
-                      marginTop: 4,
-                    }}
-                  >
-                    Tap once → confirm → add.
-                  </Text>
+                  Quick Adds
+                </Text>
 
-                  <View
-                    style={{
-                      marginTop: 12,
-                      flexDirection: "row",
-                      flexWrap: "wrap",
-                      gap: 10,
-                    }}
-                  >
-                    {topFoodsLoading ? (
-                      <View style={{ paddingVertical: 10 }}>
-                        <ActivityIndicator />
-                      </View>
-                    ) : quickTiles.length === 0 ? (
-                      <View
+                <View
+                  style={{
+                    marginTop: 12,
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: 10,
+                  }}
+                >
+                  {topFoodsLoading ? (
+                    <View style={{ paddingVertical: 10 }}>
+                      <ActivityIndicator />
+                    </View>
+                  ) : quickTiles.length === 0 ? (
+                    <View
+                      style={{
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        padding: 14,
+                        backgroundColor: colors.surface2,
+                        width: "100%",
+                      }}
+                    >
+                      <Text
+                        style={{ color: colors.placeholder, fontWeight: "300" }}
+                      >
+                        Log a few meals to see your top quick adds here.
+                      </Text>
+                    </View>
+                  ) : (
+                    quickTiles.slice(0, 6).map((t) => (
+                      <Pressable
+                        key={t.name}
+                        onPress={() => pick(t, "recent")}
                         style={{
-                          borderRadius: 18,
+                          width: "48%",
+                          borderRadius: 12,
                           borderWidth: 1,
                           borderColor: colors.border,
-                          padding: 14,
-                          backgroundColor: withAlpha(colors.card, 0.28),
-                          width: "100%",
+                          backgroundColor: colors.surface,
+                          padding: 12,
                         }}
                       >
                         <Text
-                          style={{ color: colors.muted, fontWeight: "800" }}
-                        >
-                          Log a few meals to see your top quick adds here.
-                        </Text>
-                      </View>
-                    ) : (
-                      quickTiles.slice(0, 6).map((t) => (
-                        <Pressable
-                          key={t.name}
-                          onPress={() => pick(t, "recent")}
                           style={{
-                            width: "48%",
-                            borderRadius: 18,
-                            borderWidth: 1,
-                            borderColor: withAlpha(colors.border, 0.9),
-                            backgroundColor: withAlpha(colors.card, 0.26),
-                            padding: 12,
+                            color: colors.text,
+                            fontWeight: "500",
+                            fontSize: 13,
+                            lineHeight: 18,
+                          }}
+                          numberOfLines={2}
+                        >
+                          {t.name}
+                        </Text>
+                        <Text
+                          style={{
+                            color: colors.placeholder,
+                            fontWeight: "300",
+                            marginTop: 4,
+                            fontSize: 12,
                           }}
                         >
-                          <Text
-                            style={{ color: colors.text, fontWeight: "900" }}
-                            numberOfLines={1}
-                          >
-                            {t.name}
-                          </Text>
-                          <Text
+                          {Math.round(t.calories)} kcal · P{" "}
+                          {Math.round(t.protein)}g
+                        </Text>
+                        <View
+                          style={{
+                            marginTop: 8,
+                            height: 3,
+                            borderRadius: 999,
+                            backgroundColor: colors.surface2,
+                            overflow: "hidden",
+                          }}
+                        >
+                          <View
                             style={{
-                              color: colors.muted,
-                              fontWeight: "800",
-                              marginTop: 4,
-                              fontSize: 12,
+                              width: `${Math.min(
+                                100,
+                                t.protein > 20 ? 100 : t.protein >= 10 ? 60 : 24,
+                              )}%`,
+                              height: "100%",
+                              backgroundColor:
+                                t.protein > 20
+                                  ? colors.primary
+                                  : t.protein >= 10
+                                    ? colors.warning
+                                    : colors.surface2,
                             }}
-                          >
-                            {Math.round(t.calories)} kcal • P{" "}
-                            {Math.round(t.protein)}g
-                          </Text>
-                        </Pressable>
-                      ))
-                    )}
-                  </View>
-                </LinearGradient>
+                          />
+                        </View>
+                      </Pressable>
+                    ))
+                  )}
+                </View>
               </View>
 
               <Text
                 style={{
-                  color: colors.muted,
-                  fontWeight: "900",
-                  fontSize: 12,
-                  letterSpacing: 0.6,
+                  color: colors.placeholder,
+                  fontWeight: "500",
+                  fontSize: 11,
+                  letterSpacing: 1,
+                  textTransform: "uppercase",
                 }}
               >
-                MY RECENTS (confirm before add)
+                Recents
               </Text>
 
               {recentsLoading ? (
@@ -2347,29 +2401,37 @@ export default function AddMealModal() {
                         key={`${r?.id || r?.name || "recent"}-${idx}`}
                         onPress={() => pick(r, "recent")}
                         style={{
-                          borderRadius: 18,
+                          borderRadius: 12,
                           borderWidth: 1,
                           borderColor: colors.border,
-                          backgroundColor: withAlpha(colors.card, 0.22),
+                          backgroundColor: colors.surface,
                           padding: 12,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 12,
                         }}
                       >
-                        <Text
-                          style={{ color: colors.text, fontWeight: "900" }}
-                          numberOfLines={1}
-                        >
-                          {r.name}
-                        </Text>
-                        <Text
-                          style={{
-                            color: colors.muted,
-                            fontWeight: "800",
-                            marginTop: 4,
-                            fontSize: 12,
-                          }}
-                        >
-                          {Math.round(Number(r.calories || 0))} kcal • P{" "}
-                          {Math.round(Number(r.protein || 0))}g
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={{ color: colors.text, fontWeight: "500", fontSize: 14 }}
+                            numberOfLines={2}
+                          >
+                            {titleCaseFoodName(String(r.name || "Food"))}
+                          </Text>
+                          <Text
+                            style={{
+                              color: colors.placeholder,
+                              fontWeight: "300",
+                              marginTop: 4,
+                              fontSize: 12,
+                            }}
+                          >
+                            {Math.round(Number(r.calories || 0))} kcal
+                          </Text>
+                        </View>
+                        <Text style={{ color: colors.primary, fontSize: 11, fontWeight: "400" }}>
+                          P {Math.round(Number(r.protein || 0))}g
                         </Text>
                       </Pressable>
                     ))}
@@ -2411,11 +2473,11 @@ export default function AddMealModal() {
             <View style={{ gap: 12 }}>
               <View
                 style={{
-                  borderRadius: 20,
+                  borderRadius: 12,
                   borderWidth: 1,
                   borderColor: colors.border,
-                  backgroundColor: withAlpha(colors.card, 0.22),
-                  padding: 12,
+                  backgroundColor: colors.surface2,
+                  paddingHorizontal: 12,
                 }}
               >
                 <View
@@ -2427,36 +2489,33 @@ export default function AddMealModal() {
                 >
                   <View
                     style={{
-                      width: 38,
-                      height: 38,
-                      borderRadius: 14,
-                      borderWidth: 1,
-                      borderColor: withAlpha(colors.primary, 0.25),
-                      backgroundColor: withAlpha(colors.primary, 0.12),
+                      width: 24,
+                      height: 44,
                       alignItems: "center",
                       justifyContent: "center",
                     }}
                   >
                     <Ionicons
                       name="search-outline"
-                      size={18}
-                      color={colors.text}
+                      size={16}
+                      color={colors.placeholder}
                     />
                   </View>
 
                   <TextInput
                     value={q}
                     onChangeText={setQ}
-                    placeholder="Search foods"
+                    placeholder="Search foods..."
                     placeholderTextColor={colors.placeholder}
                     style={{
                       flex: 1,
                       height: 44,
                       color: colors.text,
-                      fontWeight: "900",
+                      fontWeight: "300",
                     }}
                     returnKeyType="search"
                     onSubmitEditing={() => Keyboard.dismiss()}
+                    autoFocus={tab === "search"}
                   />
 
                   {q.length > 0 ? (
@@ -2470,6 +2529,40 @@ export default function AddMealModal() {
                   ) : null}
                 </View>
               </View>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8 }}
+              >
+                {["All", "My Foods", "Branded", "Generic", "Restaurant"].map(
+                  (label, index) => (
+                    <View
+                      key={label}
+                      style={{
+                        minHeight: 32,
+                        paddingHorizontal: 12,
+                        borderRadius: 999,
+                        borderWidth: 1,
+                        borderColor: index === 0 ? colors.primary : colors.border,
+                        backgroundColor:
+                          index === 0 ? colors.chipActiveBg : colors.surface2,
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: index === 0 ? colors.primary : colors.muted,
+                          fontSize: 12,
+                          fontWeight: "300",
+                        }}
+                      >
+                        {label}
+                      </Text>
+                    </View>
+                  ),
+                )}
+              </ScrollView>
 
               {searchLoading ? (
                 <View style={{ paddingVertical: 10 }}>
@@ -2508,34 +2601,65 @@ export default function AddMealModal() {
                   {results.slice(0, 20).map((r: any, idx: number) => (
                     <Pressable
                       key={`${r?.id || r?.name || "r"}-${idx}`}
-                      onPress={() => pick(r, "catalog")}
-                      style={{
-                        borderRadius: 18,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        backgroundColor: withAlpha(colors.card, 0.22),
-                        padding: 12,
-                      }}
-                    >
+                    onPress={() => pick(r, "catalog")}
+                    style={{
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface,
+                      padding: 12,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
                       <Text
-                        style={{ color: colors.text, fontWeight: "900" }}
-                        numberOfLines={1}
+                        style={{ color: colors.text, fontWeight: "500", fontSize: 14 }}
+                        numberOfLines={2}
                       >
                         {r.name || r.title || "Food"}
                       </Text>
                       <Text
                         style={{
-                          color: colors.muted,
-                          fontWeight: "800",
+                          color: colors.placeholder,
+                          fontWeight: "300",
                           marginTop: 4,
                           fontSize: 12,
                         }}
                       >
-                        {Math.round(Number(r.calories || 0))} kcal • P{" "}
-                        {Math.round(Number(r.protein || 0))}g
+                        {String(r.brand || r.category || "Food")}
                       </Text>
+                    </View>
+                    <View style={{ alignItems: "flex-end", gap: 4 }}>
+                      <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "300" }}>
+                        {Math.round(Number(r.calories || 0))} kcal
+                      </Text>
+                      <Text style={{ color: colors.primary, fontSize: 11, fontWeight: "400" }}>
+                        P {Math.round(Number(r.protein || 0))}g
+                      </Text>
+                    </View>
                     </Pressable>
                   ))}
+                  <Pressable
+                    onPress={() => setTab("manual")}
+                    style={{
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface,
+                      padding: 12,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <Ionicons name="add" size={16} color={colors.primary} />
+                    <Text style={{ color: colors.primary, fontSize: 14, fontWeight: "400" }}>
+                      Create new food
+                    </Text>
+                  </Pressable>
                 </View>
               )}
             </View>
@@ -2545,147 +2669,142 @@ export default function AddMealModal() {
             <View style={{ gap: 14 }}>
               <View
                 style={{
-                  borderRadius: 22,
-                  overflow: "hidden",
+                  borderRadius: 16,
                   borderWidth: 1,
                   borderColor: colors.border,
-                  backgroundColor: withAlpha(colors.card, 0.18),
+                  backgroundColor: colors.surface,
+                  padding: 16,
                 }}
               >
-                <LinearGradient
-                  colors={[
-                    withAlpha(colors.primary, 0.16),
-                    withAlpha(colors.card, 0.1),
-                  ]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={{ padding: 14 }}
+                <Field
+                  label="Description"
+                  value={descText}
+                  onChange={setDescText}
+                  colors={colors}
+                  placeholder="Describe what you ate..."
+                  multiline
+                  minHeight={120}
+                />
+                <Text
+                  style={{
+                    color: colors.placeholder,
+                    fontSize: 12,
+                    fontWeight: "300",
+                    marginTop: 2,
+                  }}
                 >
-                  <View
+                  Be specific — portions help
+                </Text>
+
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
+                  {["2 eggs and toast", "Bowl of oatmeal", "Chicken wrap"].map(
+                    (example) => (
+                      <Pressable
+                        key={example}
+                        onPress={() => setDescText(example)}
+                        style={{
+                          minHeight: 32,
+                          paddingHorizontal: 12,
+                          borderRadius: 999,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          backgroundColor: colors.surface2,
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "300" }}>
+                          {example}
+                        </Text>
+                      </Pressable>
+                    ),
+                  )}
+                </View>
+
+                {descError ? (
+                  <Text
                     style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 10,
+                      color: colors.danger,
+                      fontWeight: "300",
                     }}
                   >
-                    <View
+                    {descError}
+                  </Text>
+                ) : null}
+
+                <Pressable
+                  onPress={calculateFromDescription}
+                  disabled={descLoading || descText.trim().length <= 3}
+                  style={{
+                    marginTop: 4,
+                    height: 44,
+                    borderRadius: 999,
+                    backgroundColor:
+                      descLoading || descText.trim().length > 3
+                        ? colors.primary
+                        : colors.surface2,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    opacity: descLoading || descText.trim().length > 3 ? 1 : 0.8,
+                  }}
+                >
+                  {descLoading ? (
+                    <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "500" }}>
+                      Analyzing...
+                    </Text>
+                  ) : (
+                    <Text
                       style={{
-                        width: 42,
-                        height: 42,
-                        borderRadius: 16,
-                        borderWidth: 1,
-                        borderColor: withAlpha(colors.primary, 0.25),
-                        backgroundColor: withAlpha(colors.primary, 0.12),
-                        alignItems: "center",
-                        justifyContent: "center",
+                        color: descText.trim().length > 3 ? "#FFFFFF" : colors.placeholder,
+                        fontWeight: "500",
+                        fontSize: 14,
                       }}
                     >
-                      <Ionicons
-                        name="sparkles-outline"
-                        size={18}
-                        color={colors.text}
-                      />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={{
-                          color: colors.text,
-                          fontWeight: "900",
-                          fontSize: 16,
-                        }}
-                      >
-                        Describe your meal
-                      </Text>
-                      <Text
-                        style={{
-                          color: colors.muted,
-                          fontWeight: "800",
-                          marginTop: 2,
-                        }}
-                      >
-                        We’ll estimate macros, then you confirm.
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={{ marginTop: 12, gap: 10 }}>
-                    <Field
-                      label="Description"
-                      value={descText}
-                      onChange={setDescText}
-                      colors={colors}
-                      placeholder="e.g. chicken bowl with rice, beans, cheese, salsa"
-                      multiline
-                      minHeight={110}
-                    />
-
-                    {descError ? (
-                      <Text
-                        style={{
-                          color: withAlpha("#EF4444", 0.95),
-                          fontWeight: "800",
-                        }}
-                      >
-                        {descError}
-                      </Text>
-                    ) : null}
-
-                    <Pressable
-                      onPress={calculateFromDescription}
-                      disabled={descLoading || !descText.trim()}
-                      style={{
-                        marginTop: 2,
-                        height: 52,
-                        borderRadius: 18,
-                        borderWidth: 1,
-                        borderColor: withAlpha(colors.primary, 0.35),
-                        backgroundColor: descLoading
-                          ? withAlpha(colors.card, 0.22)
-                          : withAlpha(colors.primary, 0.16),
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexDirection: "row",
-                        gap: 10,
-                        opacity: !descText.trim() ? 0.55 : 1,
-                      }}
-                    >
-                      {descLoading ? (
-                        <ActivityIndicator />
-                      ) : (
-                        <Ionicons
-                          name="calculator-outline"
-                          size={18}
-                          color={colors.text}
-                        />
-                      )}
-                      <Text style={{ color: colors.text, fontWeight: "900" }}>
-                        {descLoading ? "Estimating…" : "Estimate macros"}
-                      </Text>
-                    </Pressable>
-
-                    <View
-                      style={{
-                        padding: 12,
-                        borderRadius: 16,
-                        borderWidth: 1,
-                        borderColor: withAlpha(colors.border, 0.9),
-                        backgroundColor: withAlpha(colors.card, 0.22),
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: colors.muted,
-                          fontWeight: "800",
-                          fontSize: 12,
-                        }}
-                      >
-                        Tip: include quantities (e.g. “2 eggs”, “1 cup rice”).
-                        You’ll edit before confirming.
-                      </Text>
-                    </View>
-                  </View>
-                </LinearGradient>
+                      Estimate →
+                    </Text>
+                  )}
+                </Pressable>
               </View>
+            </View>
+          )}
+
+          {tab === "favorites" && (
+            <View style={{ gap: 8 }}>
+              {quickTiles.length === 0 ? (
+                <View
+                  style={{
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.surface,
+                    padding: 14,
+                  }}
+                >
+                  <Text style={{ color: colors.placeholder, fontSize: 12, fontWeight: "300" }}>
+                    No favorites yet. Your most-used foods will show up here.
+                  </Text>
+                </View>
+              ) : (
+                quickTiles.map((item) => (
+                  <Pressable
+                    key={`favorite-${item.name}`}
+                    onPress={() => pick(item, "popular")}
+                    style={{
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface,
+                      padding: 12,
+                    }}
+                  >
+                    <Text style={{ color: colors.text, fontSize: 14, fontWeight: "500" }}>
+                      {item.name}
+                    </Text>
+                    <Text style={{ color: colors.placeholder, fontSize: 12, fontWeight: "300", marginTop: 4 }}>
+                      {Math.round(item.calories)} kcal · P {Math.round(item.protein)}g
+                    </Text>
+                  </Pressable>
+                ))
+              )}
             </View>
           )}
 

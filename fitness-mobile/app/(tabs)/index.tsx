@@ -79,8 +79,6 @@ import {
 } from "@/services/integrations";
 
 import { useFocusEffect } from "expo-router";
-import BadgeMedallion from "@/components/badges/new/BadgeMedalion";
-import { BADGE_BY_ID, BADGES } from "@/services/badges/registry";
 import { useBadgesLocal } from "@/services/badges/useBadgesLocal";
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
@@ -152,39 +150,39 @@ type HomeTokens = {
 };
 
 function makeTokens(isDark: boolean): HomeTokens {
-  const tint = "#64D2FF";
+  const tint = isDark ? "#7B6FFF" : "#6355E8";
   return isDark
     ? {
-        bg0: "#06070A",
-        bg1: "#0B1020",
-        card: "rgba(255,255,255,0.08)",
-        card2: "rgba(255,255,255,0.06)",
-        text: "#F4F6FF",
-        muted: "rgba(244,246,255,0.70)",
-        hairline: "rgba(255,255,255,0.12)",
-        shadow: "rgba(0,0,0,0.45)",
+        bg0: "#08080F",
+        bg1: "#08080F",
+        card: "#0F0F1A",
+        card2: "#141422",
+        text: "#F0F0FF",
+        muted: "#8888AA",
+        hairline: "#FFFFFF08",
+        shadow: "rgba(0,0,0,0.26)",
         tint,
-        ringA: "#64D2FF",
-        ringB: "#A78BFA",
-        good: "#7CFFB2",
-        warn: "#FFD37C",
-        bad: "#FF7C7C",
+        ringA: tint,
+        ringB: tint,
+        good: "#4ADE80",
+        warn: "#F59E0B",
+        bad: "#F87171",
       }
     : {
-        bg0: "#F6F7FB",
-        bg1: "#FFFFFF",
-        card: "rgba(255,255,255,0.72)",
-        card2: "rgba(255,255,255,0.56)",
-        text: "#0B1020",
-        muted: "rgba(11,16,32,0.62)",
-        hairline: "rgba(11,16,32,0.10)",
-        shadow: "rgba(11,16,32,0.12)",
+        bg0: "#F8F8FC",
+        bg1: "#F8F8FC",
+        card: "#FFFFFF",
+        card2: "#F2F2F8",
+        text: "#0A0A1A",
+        muted: "#666688",
+        hairline: "#00000008",
+        shadow: "rgba(11,16,32,0.06)",
         tint,
-        ringA: "#00B7FF",
-        ringB: "#7C5CFF",
-        good: "#15C47E",
-        warn: "#D9822B",
-        bad: "#D64545",
+        ringA: tint,
+        ringB: tint,
+        good: "#22C55E",
+        warn: "#D97706",
+        bad: "#E65C5C",
       };
 }
 
@@ -230,8 +228,7 @@ export default function HomeScreen() {
   );
   const [integrations, setIntegrations] = useState<IntegrationSnapshot | null>(null);
   const [syncSheetOpen, setSyncSheetOpen] = useState(false);
-  const { badgeUnlocks, featuredBadges, refreshBadgesLocal } =
-    useBadgesLocal(true);
+  const { badgeUnlocks, refreshBadgesLocal } = useBadgesLocal(true);
 
   const unlockedBadgeCount = useMemo(
     () => Object.keys(badgeUnlocks || {}).length,
@@ -243,26 +240,6 @@ export default function HomeScreen() {
       (s) => s && s.seen === false
     ).length;
   }, [badgeUnlocks]);
-
-  const featuredBadgeIdsForRow = useMemo(() => {
-    // Prefer featured, and prefer unlocked ones first
-    const featured = (featuredBadges || []).filter((id) => !!BADGE_BY_ID[id]);
-
-    const unlockedFeatured = featured.filter((id) => !!badgeUnlocks?.[id]);
-    const lockedFeatured = featured.filter((id) => !badgeUnlocks?.[id]);
-
-    // Fallback fill: use any unlocked badges if user hasn’t featured 3 yet
-    const unlockedAny = BADGES.map((b) => b.id).filter(
-      (id) => !!badgeUnlocks?.[id]
-    );
-    const fill = unlockedAny.filter((id) => !featured.includes(id));
-
-    const finalIds = [...unlockedFeatured, ...lockedFeatured, ...fill].slice(
-      0,
-      3
-    );
-    return finalIds;
-  }, [featuredBadges, badgeUnlocks]);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -1072,314 +1049,194 @@ export default function HomeScreen() {
       >
         {/* Header */}
         <View style={{ paddingHorizontal: 16 }}>
-          <LinearGradient
-            colors={
-              isDark ? lg("#0B1020", "#06070A") : lg("#FFFFFF", "#F6F7FB")
-            }
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+          <View
             style={{
-              borderRadius: 22,
-              overflow: "hidden",
+              borderRadius: 20,
               borderWidth: 1,
               borderColor: t.hairline,
+              backgroundColor: t.card,
+              padding: 20,
+              gap: 16,
               ...softShadow,
             }}
           >
-            <BlurView
-              intensity={isDark ? 18 : 28}
-              tint={isDark ? "dark" : "light"}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
             >
-              <View style={{ padding: 16, gap: 10 }}>
-                <View
+              <View style={{ flex: 1 }}>
+                <Text
                   style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 12,
+                    color: t.muted,
+                    fontSize: 11,
+                    fontWeight: "300",
+                    letterSpacing: 0.6,
                   }}
                 >
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        color: t.muted,
-                        fontSize: 12,
-                        fontWeight: "800",
-                        letterSpacing: 0.4,
-                      }}
-                    >
-                      {formatDateLong(today).toUpperCase()}
-                    </Text>
+                  {formatDateLong(today).toUpperCase()}
+                </Text>
 
-                    <Text
-                      style={{
-                        color: t.text,
-                        fontSize: 26,
-                        fontWeight: "900",
-                        marginTop: 4,
-                        letterSpacing: -0.2,
-                      }}
-                      accessibilityRole="header"
-                    >
-                      {getGreeting(now)}
-                    </Text>
-                  </View>
-
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <SyncIndicator
-                      snapshot={integrations}
-                      tokens={t}
-                      onPress={() => setSyncSheetOpen(true)}
-                    />
-                  <Pressable
-                    onPress={() => router.push("/(tabs)/profile")}
-                    accessibilityRole="button"
-                    accessibilityLabel="Open profile"
-                    accessibilityHint="Opens your profile and settings"
-                    hitSlop={12}
-                    style={({ pressed }) => ({
-                      transform: [{ scale: pressed ? 0.98 : 1 }],
-                      opacity: pressed ? 0.9 : 1,
-                    })}
-                  >
-                    <View
-                      style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 14,
-                        backgroundColor: withAlpha(
-                          isDark ? "#FFFFFF" : "#0B1020",
-                          isDark ? 0.08 : 0.06
-                        ),
-                        borderWidth: 1,
-                        borderColor: t.hairline,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Ionicons name="person-circle" size={26} color={t.text} />
-                    </View>
-                  </Pressable>
-                  </View>
-                </View>
-
-                {/* Streak */}
-                <View
+                <Text
                   style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 10,
+                    color: t.text,
+                    fontSize: 40,
+                    fontWeight: "300",
+                    marginTop: 4,
+                    letterSpacing: -1.2,
                   }}
+                  accessibilityRole="header"
                 >
-                  <View
-                    style={{
-                      paddingHorizontal: 10,
-                      paddingVertical: 7,
-                      borderRadius: 999,
-                      backgroundColor: withAlpha(t.tint, isDark ? 0.14 : 0.12),
-                      borderWidth: 1,
-                      borderColor: withAlpha(t.tint, isDark ? 0.26 : 0.22),
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 7,
-                    }}
-                    accessibilityRole="text"
-                    accessibilityLabel={`Streak ${streakDays} days`}
-                  >
-                    <MotiView
-                      from={
-                        reduceMotion || ![7, 14, 30].includes(streakDays)
-                          ? undefined
-                          : { scale: 1, opacity: 0.75 }
-                      }
-                      animate={
-                        reduceMotion || ![7, 14, 30].includes(streakDays)
-                          ? undefined
-                          : { scale: 1.18, opacity: 1 }
-                      }
-                      transition={
-                        reduceMotion || ![7, 14, 30].includes(streakDays)
-                          ? undefined
-                          : {
-                              type: "timing",
-                              duration: 700,
-                              loop: true,
-                              repeatReverse: true,
-                            }
-                      }
-                    >
-                      <Ionicons name="flame" size={14} color={t.tint} />
-                    </MotiView>
-                    <Text
-                      style={{ color: t.text, fontWeight: "900", fontSize: 12 }}
-                    >
-                      {streakDays} day streak
-                    </Text>
-                  </View>
+                  {getGreeting(now)}
+                </Text>
+              </View>
 
-                  <Text
-                    style={{
-                      color: t.muted,
-                      fontSize: 13,
-                      fontWeight: "600",
-                      flex: 1,
-                    }}
-                  >
-                    Calm progress. One log at a time.
-                  </Text>
-                </View>
-                {/* Badges (quiet recognition) */}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <SyncIndicator
+                  snapshot={integrations}
+                  tokens={t}
+                  onPress={() => setSyncSheetOpen(true)}
+                />
                 <Pressable
-                  onPress={() =>
-                    router.push({
-                      pathname: "/(modals)/badges",
-                      params: { source: "home" },
-                    } as any)
-                  }
+                  onPress={() => router.push("/(tabs)/profile")}
                   accessibilityRole="button"
-                  accessibilityLabel="Open badges"
-                  accessibilityHint="Shows your unlocked badges and progress"
-                  hitSlop={10}
+                  accessibilityLabel="Open profile"
+                  hitSlop={12}
                   style={({ pressed }) => ({
-                    opacity: pressed ? 0.92 : 1,
-                    transform: [{ scale: pressed ? 0.995 : 1 }],
+                    transform: [{ scale: pressed ? 0.98 : 1 }],
+                    opacity: pressed ? 0.9 : 1,
                   })}
                 >
                   <View
                     style={{
-                      marginTop: 6,
-                      paddingVertical: 10,
-                      paddingHorizontal: 12,
-                      borderRadius: 18,
+                      width: 40,
+                      height: 40,
+                      borderRadius: 12,
+                      backgroundColor: t.card2,
                       borderWidth: 1,
-                      borderColor: withAlpha(t.hairline, 1),
-                      backgroundColor: withAlpha(
-                        isDark ? "#FFFFFF" : "#0B1020",
-                        isDark ? 0.06 : 0.04
-                      ),
-                      flexDirection: "row",
+                      borderColor: t.hairline,
                       alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 12,
+                      justifyContent: "center",
                     }}
                   >
-                    {/* Left: label + count */}
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 8,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color: t.text,
-                            fontWeight: "900",
-                            fontSize: 14,
-                            letterSpacing: -0.1,
-                          }}
-                          numberOfLines={1}
-                        >
-                          Badges
-                        </Text>
-
-                        {unseenBadgeCount > 0 ? (
-                          <MotiView
-                            from={reduceMotion ? undefined : { opacity: 0.45, scale: 0.92 }}
-                            animate={reduceMotion ? undefined : { opacity: 1, scale: 1.08 }}
-                            transition={
-                              reduceMotion
-                                ? undefined
-                                : { type: "timing", duration: 850, loop: true, repeatReverse: true }
-                            }
-                            style={{
-                              width: 9,
-                              height: 9,
-                              borderRadius: 99,
-                              backgroundColor: t.tint,
-                              shadowColor: t.tint,
-                              shadowOpacity: 0.9,
-                              shadowRadius: 8,
-                              shadowOffset: { width: 0, height: 0 },
-                            }}
-                          />
-                        ) : null}
-                      </View>
-
-                      <Text
-                        style={{
-                          marginTop: 2,
-                          color: t.muted,
-                          fontWeight: "700",
-                          fontSize: 12,
-                        }}
-                        numberOfLines={1}
-                      >
-                        {unseenBadgeCount > 0
-                          ? `${unseenBadgeCount} ready • Tap to claim`
-                          : `${unlockedBadgeCount} unlocked`}
-                      </Text>
-                    </View>
-
-                    {/* Right: medallions */}
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 8,
-                      }}
-                    >
-                      {featuredBadgeIdsForRow.map((id) => {
-                        const def = BADGE_BY_ID[id];
-                        if (!def) return null;
-                        const unlocked = !!badgeUnlocks?.[id];
-                        return (
-                          <BadgeMedallion
-                            key={id}
-                            icon={toIoniconName(def.icon)}
-                            unlocked={unlocked}
-                            accent={def.accent}
-                            size={34}
-                          />
-                        );
-                      })}
-
-                      <Ionicons
-                        name="chevron-forward"
-                        size={16}
-                        color={withAlpha(t.text, isDark ? 0.55 : 0.4)}
-                      />
-                    </View>
+                    <Ionicons name="person-outline" size={20} color={t.muted} />
                   </View>
                 </Pressable>
               </View>
-            </BlurView>
-          </LinearGradient>
+            </View>
+
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+              }}
+            >
+              <View
+                style={{
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: withAlpha(t.tint, 0.3),
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 7,
+                }}
+              >
+                <Ionicons name="flame-outline" size={14} color={t.tint} />
+                <Text
+                  style={{
+                    color: t.tint,
+                    fontWeight: "500",
+                    fontSize: 11,
+                    letterSpacing: 1,
+                  }}
+                >
+                  {`${streakDays} DAY STREAK`}
+                </Text>
+              </View>
+
+              <Text
+                style={{
+                  color: t.muted,
+                  fontSize: 12,
+                  fontWeight: "300",
+                  flex: 1,
+                  letterSpacing: 0.3,
+                }}
+              >
+                Calm progress. One log at a time.
+              </Text>
+            </View>
+
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: "/(modals)/badges",
+                  params: { source: "home" },
+                } as any)
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Open badges"
+              hitSlop={10}
+              style={({ pressed }) => ({
+                opacity: pressed ? 0.92 : 1,
+                transform: [{ scale: pressed ? 0.995 : 1 }],
+              })}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <Text
+                  style={{
+                    color: t.tint,
+                    fontWeight: "400",
+                    fontSize: 13,
+                  }}
+                  numberOfLines={1}
+                >
+                  {unseenBadgeCount > 0
+                    ? `${unseenBadgeCount} badges ready`
+                    : `${unlockedBadgeCount} badges unlocked`}
+                </Text>
+
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={withAlpha(t.tint, 0.8)}
+                />
+              </View>
+            </Pressable>
+          </View>
         </View>
 
         {/* Today's focus */}
         <View style={{ paddingHorizontal: 16, marginTop: 14 }}>
           <View
             style={{
-              minHeight: 42,
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: withAlpha(t.ringB, isDark ? 0.32 : 0.22),
-              backgroundColor: withAlpha(t.ringB, isDark ? 0.14 : 0.09),
-              paddingHorizontal: 14,
+              minHeight: 28,
+              paddingHorizontal: 2,
               flexDirection: "row",
               alignItems: "center",
-              gap: 9,
+              gap: 8,
             }}
           >
-            <Ionicons name="sparkles" size={16} color={t.ringB} />
+            <Ionicons name="sparkles-outline" size={14} color={t.ringB} />
             <Text
               style={{
-                color: t.text,
-                fontWeight: "900",
-                fontSize: 13,
+                color: t.ringB,
+                fontWeight: "400",
+                fontSize: 12,
                 flex: 1,
+                letterSpacing: 0.3,
               }}
               numberOfLines={1}
             >

@@ -106,11 +106,9 @@ function isMealBundle(item: FoodEntry) {
 }
 function CalendarLaunchButton({
   colors,
-  isDark,
   onPress,
 }: {
   colors: any;
-  isDark: boolean;
   onPress: () => void;
 }) {
   return (
@@ -125,10 +123,10 @@ function CalendarLaunchButton({
         gap: 10,
         paddingHorizontal: 14,
         height: 44,
-        borderRadius: 999,
+        borderRadius: 14,
         borderWidth: 1,
-        borderColor: withAlpha(colors.border, isDark ? 0.22 : 0.28),
-        backgroundColor: withAlpha(colors.card, isDark ? 0.18 : 0.7),
+        borderColor: colors.border,
+        backgroundColor: colors.card,
         opacity: pressed ? 0.78 : 1,
       })}
     >
@@ -139,24 +137,24 @@ function CalendarLaunchButton({
           borderRadius: 12,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: withAlpha(colors.primary, 0.16),
+          backgroundColor: colors.surface2,
           borderWidth: 1,
-          borderColor: withAlpha(colors.primary, 0.25),
+          borderColor: colors.border,
         }}
       >
-        <Ionicons name="calendar-outline" size={16} color={colors.text} />
+        <Ionicons name="calendar-outline" size={16} color={colors.muted} />
       </View>
 
       <View style={{ flex: 1 }}>
-        <Text style={{ color: colors.text, fontWeight: "900", fontSize: 13 }}>
+        <Text style={{ color: colors.text, fontWeight: "500", fontSize: 16 }}>
           Calendar
         </Text>
-        <Text style={{ color: colors.muted, fontWeight: "800", fontSize: 11 }}>
+        <Text style={{ color: colors.placeholder ?? colors.muted, fontWeight: "300", fontSize: 12 }}>
           See your consistency story
         </Text>
       </View>
 
-      <Ionicons name="chevron-forward" size={16} color={colors.muted} />
+      <Ionicons name="chevron-forward" size={16} color={colors.placeholder ?? colors.muted} />
     </Pressable>
   );
 }
@@ -165,21 +163,6 @@ function CalendarLaunchButton({
 function toNum(v: any, fallback: number) {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
-}
-
-function topMacroDeficit(
-  totals: { protein: number; carbs: number; fat: number },
-  goals: { protein: number; carbs: number; fat: number },
-) {
-  const deficits = [
-    { key: "protein", label: "protein", value: Math.round((goals.protein || 0) - (totals.protein || 0)), unit: "g" },
-    { key: "carbs", label: "carbs", value: Math.round((goals.carbs || 0) - (totals.carbs || 0)), unit: "g" },
-    { key: "fat", label: "fat", value: Math.round((goals.fat || 0) - (totals.fat || 0)), unit: "g" },
-  ]
-    .filter((x) => x.value > 0)
-    .sort((a, b) => b.value - a.value);
-
-  return deficits[0] ?? { key: "balanced", label: "macros", value: 0, unit: "" };
 }
 
 function mealSuggestionsFor(
@@ -827,10 +810,19 @@ export default function NutritionScreen() {
       params: { meal, date: dateISO },
     });
   }
-  function openAdd(meal: MealKey) {
+  function openAdd(meal: MealKey, suggestion?: string) {
     router.push({
       pathname: "/(modals)/add-meal",
-      params: { meal, date: dateISO },
+      params: {
+        meal,
+        date: dateISO,
+        ...(suggestion
+          ? {
+              initialTab: "search",
+              query: suggestion.split("·")[0].trim(),
+            }
+          : {}),
+      },
     });
   }
 
@@ -916,10 +908,6 @@ export default function NutritionScreen() {
     });
   }, [mealsMap]);
 
-  const macroDeficit = useMemo(
-    () => topMacroDeficit(dayTotals, goals),
-    [dayTotals, goals],
-  );
   const caloriesRemaining = Math.max(
     0,
     Math.round((goals.calories || 0) - (dayTotals.calories || 0)),
@@ -928,9 +916,9 @@ export default function NutritionScreen() {
     0,
     Math.round((dayTotals.calories || 0) - (goals.calories || 0)),
   );
-  const calorieGoalPct = Math.max(
+  const proteinLeft = Math.max(
     0,
-    Math.min(1, goals.calories ? (dayTotals.calories || 0) / goals.calories : 0),
+    Math.round((goals.protein || 0) - (dayTotals.protein || 0)),
   );
   const showHydrationReminder =
     dateISO === isoToday() && waterMl <= 0 && new Date().getHours() >= 11;
@@ -960,87 +948,48 @@ export default function NutritionScreen() {
             paddingTop: Platform.OS === "ios" ? 54 : 16,
             paddingBottom: 10,
             paddingHorizontal: 16,
-            backgroundColor: withAlpha(colors.bg, isDark ? 0.65 : 0.85),
+            backgroundColor: colors.card,
             borderBottomWidth: 1,
-            borderBottomColor: withAlpha(colors.border, 0.6),
+            borderBottomColor: colors.border,
           }}
           accessibilityLabel={a11yDateLabel}
         >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "flex-start",
-              justifyContent: "space-between",
-              gap: 14,
-            }}
-          >
-            <View style={{ gap: 2, flex: 1 }}>
-              <Text
-                style={{
-                  color: withAlpha(colors.text, isDark ? 0.82 : 0.68),
-                  fontWeight: "900",
-                  fontSize: 12,
-                }}
-              >
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.text, fontWeight: "500", fontSize: 20 }}>
                 {fmtNice(dateISO)}
               </Text>
               <Text
-                style={{ color: colors.text, fontWeight: "900", fontSize: 20 }}
-              >
-                {caloriesOver > 0
-                  ? `${caloriesOver} kcal over`
-                  : `${caloriesRemaining} kcal left`}
-              </Text>
-              <Text
                 style={{
-                  color: withAlpha(colors.text, isDark ? 0.78 : 0.62),
-                  fontWeight: "800",
+                  color: colors.muted,
+                  fontWeight: "300",
                   fontSize: 12,
+                  marginTop: 4,
                 }}
+                numberOfLines={1}
               >
-                {macroDeficit.value > 0
-                  ? `Top gap: ${macroDeficit.value}${macroDeficit.unit} ${macroDeficit.label}`
-                  : "Macros on track"}
+                {`${caloriesOver > 0 ? caloriesOver + " kcal over" : caloriesRemaining + " kcal left"} · ${proteinLeft}g protein`}
               </Text>
-              <View
-                style={{
-                  height: 3,
-                  borderRadius: 99,
-                  overflow: "hidden",
-                  backgroundColor: withAlpha(colors.text, isDark ? 0.14 : 0.1),
-                  marginTop: 7,
-                }}
-                accessibilityLabel={`Calories ${Math.round(calorieGoalPct * 100)} percent of goal`}
-              >
-                <View
-                  style={{
-                    height: "100%",
-                    width: `${calorieGoalPct * 100}%`,
-                    borderRadius: 99,
-                    backgroundColor: withAlpha(colors.primary, 0.95),
-                  }}
-                />
-              </View>
             </View>
 
-            <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flexDirection: "row", gap: 8 }}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Previous day"
                 onPress={() => setDateISO((d) => isoAddDays(d, -1))}
                 hitSlop={10}
                 style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 14,
+                  width: 36,
+                  height: 36,
+                  borderRadius: 12,
                   borderWidth: 1,
                   borderColor: colors.border,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: withAlpha(colors.card, 0.35),
+                  backgroundColor: colors.surface2,
                 }}
               >
-                <Ionicons name="chevron-back" size={18} color={colors.text} />
+                <Ionicons name="chevron-back" size={16} color={colors.muted} />
               </Pressable>
 
               <Pressable
@@ -1050,20 +999,19 @@ export default function NutritionScreen() {
                 hitSlop={10}
                 style={{
                   paddingHorizontal: 12,
-                  height: 40,
-                  borderRadius: 14,
+                  height: 36,
+                  borderRadius: 12,
                   borderWidth: 1,
-                  borderColor: withAlpha(colors.primary, 0.35),
+                  borderColor: colors.primary,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: withAlpha(colors.primary, 0.14),
                 }}
               >
                 <Text
                   style={{
-                    color: colors.text,
-                    fontWeight: "900",
-                    fontSize: 13,
+                    color: colors.primary,
+                    fontWeight: "500",
+                    fontSize: 12,
                   }}
                 >
                   Today
@@ -1076,21 +1024,17 @@ export default function NutritionScreen() {
                 onPress={() => setDateISO((d) => isoAddDays(d, +1))}
                 hitSlop={10}
                 style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 14,
+                  width: 36,
+                  height: 36,
+                  borderRadius: 12,
                   borderWidth: 1,
                   borderColor: colors.border,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: withAlpha(colors.card, 0.35),
+                  backgroundColor: colors.surface2,
                 }}
               >
-                <Ionicons
-                  name="chevron-forward"
-                  size={18}
-                  color={colors.text}
-                />
+                <Ionicons name="chevron-forward" size={16} color={colors.muted} />
               </Pressable>
             </View>
           </View>
@@ -1115,19 +1059,20 @@ export default function NutritionScreen() {
             <View style={{ paddingHorizontal: 16 }}>
               <Text
                 style={{
-                  color: withAlpha(colors.text, isDark ? 0.82 : 0.68),
-                  fontWeight: "900",
-                  fontSize: 12,
+                  color: colors.placeholder ?? colors.muted,
+                  fontWeight: "500",
+                  fontSize: 11,
+                  letterSpacing: 1,
                 }}
               >
-                Nutrition
+                NUTRITION
               </Text>
               <Text
                 style={{
                   color: colors.text,
-                  fontWeight: "900",
+                  fontWeight: "500",
                   fontSize: 24,
-                  marginTop: 2,
+                  marginTop: 4,
                 }}
                 accessibilityLabel={a11yDateLabel}
               >
@@ -1135,10 +1080,11 @@ export default function NutritionScreen() {
               </Text>
               <Text
                 style={{
-                  color: withAlpha(colors.text, isDark ? 0.8 : 0.68),
-                  fontWeight: "800",
+                  color: colors.muted,
+                  fontWeight: "300",
+                  fontSize: 13,
                   marginTop: 6,
-                  lineHeight: 18,
+                  lineHeight: 20,
                 }}
               >
                 Keep it simple today. Small wins add up.
@@ -1162,7 +1108,6 @@ export default function NutritionScreen() {
             <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
               <CalendarLaunchButton
                 colors={colors}
-                isDark={isDark}
                 onPress={() => router.push("/(modals)/full-calendar")}
               />
             </View>
@@ -1191,7 +1136,6 @@ export default function NutritionScreen() {
           <View style={{ paddingHorizontal: 16, marginTop: 16 }}>
             <SectionHeader
               title="Hydration"
-              subtitle="Quick add, no friction."
               colors={colors}
             />
             {/* <HydrationCard
@@ -1249,7 +1193,6 @@ export default function NutritionScreen() {
         <View style={{ paddingHorizontal: 16, marginTop: 18, gap: 12 }}>
           <SectionHeader
             title="Meals"
-            subtitle="How do you want to log?"
             colors={colors}
             right={
               <View style={{ flexDirection: "row", gap: 8 }}>
@@ -1297,8 +1240,7 @@ export default function NutritionScreen() {
                     paddingVertical: 8,
                     borderRadius: 999,
                     borderWidth: 1,
-                    borderColor: withAlpha(colors.primary, 0.35),
-                    backgroundColor: withAlpha(colors.primary, 0.14),
+                    borderColor: colors.border,
                     flexDirection: "row",
                     alignItems: "center",
                     gap: 8,
@@ -1307,12 +1249,12 @@ export default function NutritionScreen() {
                   <Ionicons
                     name="layers-outline"
                     size={16}
-                    color={colors.text}
+                    color={colors.muted}
                   />
                   <Text
                     style={{
-                      color: colors.text,
-                      fontWeight: "900",
+                      color: colors.muted,
+                      fontWeight: "500",
                       fontSize: 12,
                     }}
                   >
@@ -1330,8 +1272,7 @@ export default function NutritionScreen() {
                     paddingVertical: 8,
                     borderRadius: 999,
                     borderWidth: 1,
-                    borderColor: withAlpha(colors.primary, 0.35),
-                    backgroundColor: withAlpha(colors.primary, 0.14),
+                    borderColor: colors.primary,
                     flexDirection: "row",
                     alignItems: "center",
                     gap: 8,
@@ -1340,12 +1281,12 @@ export default function NutritionScreen() {
                   <Ionicons
                     name="layers-outline"
                     size={16}
-                    color={colors.text}
+                    color={colors.primary}
                   />
                   <Text
                     style={{
-                      color: colors.text,
-                      fontWeight: "900",
+                      color: colors.primary,
+                      fontWeight: "500",
                       fontSize: 12,
                     }}
                   >
@@ -1365,7 +1306,7 @@ export default function NutritionScreen() {
               colors={colors}
               isDark={isDark}
               suggestions={mealSuggestionsFor(g.meal, dayTotals, goals)}
-              onPressAdd={() => openAdd(g.meal)}
+              onPressAdd={(suggestion) => openAdd(g.meal, suggestion)}
               onPressItem={(it) => {
                 if (!isMealBundle(it)) startEdit(it);
               }}
@@ -1399,11 +1340,8 @@ export default function NutritionScreen() {
             height: 54,
             borderRadius: 999,
             borderWidth: 1,
-            borderColor: withAlpha(colors.primary, 0.35),
-            backgroundColor:
-              Platform.OS === "ios"
-                ? withAlpha(colors.card, 0.5)
-                : withAlpha(colors.card, 0.92),
+            borderColor: colors.primary,
+            backgroundColor: colors.card,
             ...softShadow,
           }}
         >
@@ -1414,17 +1352,17 @@ export default function NutritionScreen() {
               borderRadius: 14,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: withAlpha(colors.primary, 0.18),
+              backgroundColor: withAlpha(colors.primary, 0.1),
               borderWidth: 1,
-              borderColor: withAlpha(colors.primary, 0.25),
+              borderColor: withAlpha(colors.primary, 0.18),
             }}
           >
-            <Ionicons name="add" size={18} color={colors.text} />
+            <Ionicons name="add" size={18} color={colors.primary} />
           </View>
-          <Text style={{ color: colors.text, fontWeight: "900" }}>
+          <Text style={{ color: colors.primary, fontWeight: "500" }}>
             Meal Builder
           </Text>
-          <Text style={{ color: colors.muted, fontWeight: "800" }}>
+          <Text style={{ color: colors.muted, fontWeight: "300" }}>
             • grouped logging
           </Text>
         </Pressable>
@@ -1440,6 +1378,19 @@ export default function NutritionScreen() {
         }}
         onSave={(patch) => {
           void saveEdit(patch as any);
+        }}
+        onDelete={async (id) => {
+          if (!user?.uid) return;
+          setEditOpen(false);
+          setEditItem(null);
+          const prev = foods;
+          setFoods((curr: FoodEntry[]) => curr.filter((f) => f.id !== id));
+          try {
+            await deleteFood(user.uid, id);
+          } catch {
+            setFoods(prev);
+            Alert.alert("Couldn't delete", "Try again.");
+          }
         }}
       />
     </View>

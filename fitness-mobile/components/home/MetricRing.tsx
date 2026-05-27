@@ -1,17 +1,11 @@
-// components/home/MetricRing.tsx
 import React, { useMemo } from "react";
 import { View, Text, Pressable, ViewStyle } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import Animated, {
   useAnimatedProps,
-  useAnimatedStyle,
   useSharedValue,
-  withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
 
 const ACircle = Animated.createAnimatedComponent(Circle);
 
@@ -19,19 +13,9 @@ function clamp01(v: number) {
   return Math.max(0, Math.min(1, v));
 }
 
-function withAlpha(hex: string, a: number) {
-  const h = hex.replace("#", "");
-  if (h.length !== 6) return hex;
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  return `rgba(${r},${g},${b},${clamp01(a)})`;
-}
-
 export type MetricTone = "tint" | "violet" | "mint";
 
 export function MetricRing({
-  tone,
   label,
   value,
   goal,
@@ -51,7 +35,6 @@ export function MetricRing({
   reduceMotion: boolean;
   tokens: {
     card: string;
-    card2: string;
     text: string;
     muted: string;
     hairline: string;
@@ -61,182 +44,142 @@ export function MetricRing({
     good: string;
     warn?: string;
     bad?: string;
+    ringTrack?: string;
   };
   style?: ViewStyle;
   onPress?: () => void;
 }) {
   const pct = useMemo(
     () => clamp01(goal <= 0 ? 0 : value / goal),
-    [value, goal]
+    [goal, value]
   );
-
-  const toneColor = useMemo(() => {
-    if (pct < 0.4) return tokens.bad ?? "#FF7C7C";
-    if (pct < 0.8) return tokens.warn ?? "#FFD37C";
-    return tokens.good;
-  }, [pct, tokens]);
-
-  const size = 94;
-  const stroke = 10;
+  const size = 104;
+  const stroke = 6;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
-
   const progress = useSharedValue(reduceMotion ? pct : 0);
-  const pulse = useSharedValue(1);
 
   React.useEffect(() => {
-    progress.value = withTiming(pct, { duration: reduceMotion ? 1 : 700 });
+    progress.value = withTiming(pct, { duration: reduceMotion ? 1 : 600 });
   }, [pct, reduceMotion, progress]);
 
-  React.useEffect(() => {
-    if (reduceMotion || pct >= 0.3) {
-      pulse.value = withTiming(1, { duration: 180 });
-      return;
-    }
-    pulse.value = withRepeat(withTiming(1.035, { duration: 900 }), -1, true);
-  }, [pct, reduceMotion, pulse]);
-
-  const pulseStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulse.value }],
+  const animatedProps = useAnimatedProps(() => ({
+    strokeDashoffset: c * (1 - progress.value),
   }));
-
-  const animatedProps = useAnimatedProps(() => {
-    const dashoffset = c * (1 - progress.value);
-    return { strokeDashoffset: dashoffset };
-  });
-
-  const icon = tone === "mint" ? "walk" : tone === "violet" ? "flash" : "flame";
 
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${label}. ${value}${
-        unit ? " " + unit : ""
-      }. ${Math.round(pct * 100)} percent of goal.`}
-      accessibilityHint={sublabel ? sublabel : "Opens details"}
-      hitSlop={10}
+      accessibilityLabel={`${label}. ${value}${unit ? ` ${unit}` : ""}. ${Math.round(
+        pct * 100
+      )} percent of goal.`}
       style={({ pressed }) => ({
-        opacity: pressed ? 0.92 : 1,
-        transform: [{ scale: pressed ? 0.99 : 1 }],
+        opacity: pressed ? 0.96 : 1,
+        transform: [{ scale: pressed ? 0.98 : 1 }],
       })}
     >
-      <Animated.View style={pulseStyle}>
-      <LinearGradient
-        colors={[withAlpha(tokens.card, 1), withAlpha(tokens.card2, 1)]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{
-          borderRadius: 22,
-          overflow: "hidden",
-          borderWidth: 1,
-          borderColor: tokens.hairline,
-          padding: 12,
-	          minHeight: 166,
-          ...(style as any),
-        }}
+      <View
+        style={[
+          {
+            borderRadius: 20,
+            paddingHorizontal: 20,
+            paddingVertical: 18,
+            borderWidth: 1,
+            borderColor: tokens.hairline,
+            backgroundColor: tokens.card,
+            minHeight: 176,
+            justifyContent: "space-between",
+          },
+          style,
+        ]}
       >
-        <BlurView intensity={18} tint="default">
-          <View style={{ padding: 2, gap: 10 }}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
+        <Text
+          style={{
+            color: tokens.muted,
+            fontSize: 11,
+            fontWeight: "500",
+            letterSpacing: 1,
+          }}
+          numberOfLines={1}
+        >
+          {label.toUpperCase()}
+        </Text>
+
+        <View style={{ alignItems: "center", justifyContent: "center", flex: 1 }}>
+          <Svg width={size} height={size}>
+            <Circle
+              cx={size / 2}
+              cy={size / 2}
+              r={r}
+              stroke={tokens.ringTrack ?? "#1C1C2E"}
+              strokeWidth={stroke}
+              fill="transparent"
+            />
+            <ACircle
+              animatedProps={animatedProps as any}
+              cx={size / 2}
+              cy={size / 2}
+              r={r}
+              stroke={tokens.tint}
+              strokeWidth={stroke}
+              strokeLinecap="round"
+              fill="transparent"
+              strokeDasharray={`${c} ${c}`}
+            />
+          </Svg>
+
+          <View style={{ position: "absolute", alignItems: "center", gap: 2 }}>
+            <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 4 }}>
               <Text
-                style={{ color: tokens.text, fontWeight: "900", fontSize: 13 }}
-              >
-                {label}
-              </Text>
-              <View
                 style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 10,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: withAlpha(toneColor, 0.14),
-                  borderWidth: 1,
-                  borderColor: withAlpha(toneColor, 0.24),
+                  color: tokens.text,
+                  fontSize: 34,
+                  fontWeight: "300",
+                  letterSpacing: -1.2,
                 }}
               >
-                <Ionicons name={icon as any} size={14} color={toneColor} />
-              </View>
-            </View>
-
-            <View style={{ alignItems: "center", justifyContent: "center" }}>
-              <Svg width={size} height={size}>
-                <Circle
-                  cx={size / 2}
-                  cy={size / 2}
-                  r={r}
-                  stroke={withAlpha(tokens.muted, 0.18)}
-                  strokeWidth={stroke}
-                  fill="transparent"
-                />
-                <ACircle
-                  animatedProps={animatedProps as any}
-                  cx={size / 2}
-                  cy={size / 2}
-                  r={r}
-                  stroke={toneColor}
-                  strokeWidth={stroke}
-                  strokeLinecap="round"
-                  fill="transparent"
-                  strokeDasharray={`${c} ${c}`}
-                />
-              </Svg>
-
-              <View style={{ position: "absolute", alignItems: "center" }}>
-                <Text
-                  style={{
-                    color: tokens.text,
-                    fontWeight: "900",
-                    fontSize: 18,
-                    letterSpacing: -0.2,
-                  }}
-                >
-                  {Math.round(value)}
-                  {unit ? (
-                    <Text
-                      style={{
-                        color: tokens.muted,
-                        fontWeight: "900",
-                        fontSize: 12,
-                      }}
-                    >
-                      {" "}
-                      {unit}
-                    </Text>
-                  ) : null}
-                </Text>
+                {Math.round(value).toLocaleString()}
+              </Text>
+              {unit ? (
                 <Text
                   style={{
                     color: tokens.muted,
-                    fontWeight: "800",
                     fontSize: 11,
-                    marginTop: 2,
+                    fontWeight: "300",
+                    letterSpacing: 0.3,
+                    marginBottom: 8,
                   }}
                 >
-	                  {label === "Steps" && value <= 0
-	                    ? "Start moving"
-	                    : `${Math.round(pct * 100)}%`}
+                  {unit}
                 </Text>
-              </View>
+              ) : null}
             </View>
-
             <Text
-              style={{ color: tokens.muted, fontWeight: "800", fontSize: 12 }}
-              numberOfLines={1}
+              style={{
+                color: tokens.muted,
+                fontSize: 11,
+                fontWeight: "300",
+                letterSpacing: 0.3,
+              }}
             >
-              {sublabel || "Tap for details"}
+              {Math.round(pct * 100)}% of goal
             </Text>
           </View>
-        </BlurView>
-      </LinearGradient>
-      </Animated.View>
+        </View>
+
+        <Text
+          style={{
+            color: tokens.muted,
+            fontSize: 11,
+            fontWeight: "300",
+            letterSpacing: 0.3,
+          }}
+          numberOfLines={1}
+        >
+          {sublabel || "Goal progress"}
+        </Text>
+      </View>
     </Pressable>
   );
 }

@@ -1,19 +1,6 @@
-// components/home/QuickActionRow.tsx
 import React from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-
-function clamp01(v: number) {
-  return Math.max(0, Math.min(1, v));
-}
-function withAlpha(hex: string, a: number) {
-  const h = hex.replace("#", "");
-  if (h.length !== 6) return hex;
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  return `rgba(${r},${g},${b},${clamp01(a)})`;
-}
 
 export type QuickAction = {
   key: string;
@@ -27,9 +14,15 @@ export type QuickAction = {
 export function QuickActionRow({
   tokens,
   actions,
-  reduceMotion,
 }: {
-  tokens: { text: string; muted: string; hairline: string; card: string };
+  tokens: {
+    text: string;
+    muted: string;
+    hairline: string;
+    card: string;
+    tint: string;
+    surface2?: string;
+  };
   actions: QuickAction[];
   reduceMotion: boolean;
   maxWidth: number;
@@ -37,9 +30,8 @@ export function QuickActionRow({
   return (
     <ScrollView
       horizontal
-      showsHorizontalScrollIndicator
-      indicatorStyle="white"
-      contentContainerStyle={{ gap: 10, paddingRight: 16 }}
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{ gap: 12, paddingRight: 16 }}
     >
       {actions.map((a) => (
         <Pressable
@@ -50,47 +42,43 @@ export function QuickActionRow({
           accessibilityHint={a.hint || "Activates action"}
           hitSlop={10}
           style={({ pressed }) => ({
-            opacity: pressed ? 0.9 : 1,
-            transform: [{ scale: pressed ? 0.99 : 1 }],
+            opacity: pressed ? 0.94 : 1,
+            transform: [{ scale: pressed ? 0.98 : 1 }],
           })}
         >
           <View
             style={{
               width: 112,
+              minHeight: 108,
               borderRadius: 20,
-              padding: 12,
+              paddingHorizontal: 16,
+              paddingVertical: 18,
               borderWidth: 1,
-	              borderColor: withAlpha(a.color, 0.28),
-	              backgroundColor: withAlpha(a.color, 0.11),
-	              gap: 10,
+              borderColor: tokens.hairline,
+              backgroundColor: tokens.card,
+              gap: 16,
             }}
           >
             <View
               style={{
-                width: 38,
-                height: 38,
-                borderRadius: 14,
+                width: 36,
+                height: 36,
+                borderRadius: 12,
                 alignItems: "center",
                 justifyContent: "center",
-	                backgroundColor: withAlpha(a.color, 0.18),
-	                borderWidth: 1,
-	                borderColor: withAlpha(a.color, 0.32),
+                backgroundColor: tokens.surface2 || tokens.card,
+                borderWidth: 1,
+                borderColor: tokens.hairline,
               }}
             >
-              <Ionicons name={a.icon} size={18} color={a.color} />
+              <Ionicons name={a.icon} size={18} color={tokens.tint} />
             </View>
 
             <Text
-              style={{ color: tokens.text, fontWeight: "900", fontSize: 13 }}
-              numberOfLines={1}
+              style={{ color: tokens.text, fontWeight: "500", fontSize: 14 }}
+              numberOfLines={2}
             >
               {a.label}
-            </Text>
-            <Text
-              style={{ color: tokens.muted, fontWeight: "800", fontSize: 11 }}
-              numberOfLines={1}
-            >
-              Tap
             </Text>
           </View>
         </Pressable>

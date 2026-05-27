@@ -1,7 +1,6 @@
 // components/profile/premium/PremiumProfileHeader.tsx
 import React, { useMemo } from "react";
 import { Image, View, Text, StyleSheet, Pressable } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
   useAnimatedStyle,
@@ -66,7 +65,7 @@ export function PremiumProfileHeader(props: {
   photoURL?: string | null;
   rightSlot?: React.ReactNode;
 }) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   const goalLabel = useMemo(() => {
     if (props.goalType === "cut") return "Cut";
@@ -96,24 +95,7 @@ export function PremiumProfileHeader(props: {
 
   return (
     <GlassCard style={{ padding: 0 }}>
-      <LinearGradient
-        colors={
-          isDark
-            ? [
-                withAlpha("#3B82F6", 0.16),
-                withAlpha("#22C55E", 0.08),
-                withAlpha("#A78BFA", 0.12),
-              ]
-            : [
-                withAlpha("#3B82F6", 0.14),
-                withAlpha("#22C55E", 0.07),
-                withAlpha("#A78BFA", 0.09),
-              ]
-        }
-        style={styles.heroBg}
-      />
-
-      <View style={{ padding: 14, gap: 12 }}>
+      <View style={{ padding: 20, gap: 16 }}>
         <View style={styles.row}>
           <PressScale
             onPress={() => {
@@ -127,7 +109,7 @@ export function PremiumProfileHeader(props: {
                 <Image source={{ uri: props.photoURL }} style={styles.avatarImg} />
               ) : (
                 <Text
-                  style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}
+                  style={{ color: colors.text, fontWeight: "500", fontSize: 22 }}
                 >
                   {props.initials}
                 </Text>
@@ -136,25 +118,31 @@ export function PremiumProfileHeader(props: {
                 style={[
                   styles.cameraBadge,
                   {
-                    backgroundColor: withAlpha(colors.primary, 0.95),
-                    borderColor: withAlpha(colors.text, 0.16),
+                    backgroundColor: colors.surface2,
+                    borderColor: colors.border,
                   },
                 ]}
               >
-                <Ionicons name="camera-outline" size={12} color="#fff" />
+                <Ionicons name="camera-outline" size={12} color={colors.muted} />
               </View>
             </View>
           </PressScale>
 
           <View style={{ flex: 1 }}>
             <Text
-              style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}
+              style={{ color: colors.text, fontWeight: "500", fontSize: 26 }}
               numberOfLines={1}
             >
               {props.name}
             </Text>
             <Text
-              style={{ color: colors.muted, marginTop: 2 }}
+              style={{
+                color: colors.placeholder,
+                marginTop: 4,
+                fontSize: 12,
+                fontWeight: "300",
+                letterSpacing: 0.3,
+              }}
               numberOfLines={1}
             >
               {props.subtitle}
@@ -204,18 +192,15 @@ export function PremiumProfileHeader(props: {
                   style={[
                     styles.iconBtn,
                     {
-                      backgroundColor: withAlpha(
-                        colors.card,
-                        isDark ? 0.2 : 0.55
-                      ),
-                      borderColor: withAlpha(colors.border, 0.65),
+                      backgroundColor: colors.surface2,
+                      borderColor: colors.border,
                     },
                   ]}
                 >
                   <Ionicons
                     name="settings-outline"
                     size={16}
-                    color={colors.text}
+                    color={colors.muted}
                   />
                 </View>
               </PressScale>
@@ -232,8 +217,8 @@ export function PremiumProfileHeader(props: {
                     style={[
                       styles.proPill,
                       {
-                        borderColor: withAlpha(colors.primary, 0.35),
-                        backgroundColor: withAlpha(colors.primary, 0.14),
+                        borderColor: withAlpha(colors.primary, 0.3),
+                        backgroundColor: "transparent",
                       },
                     ]}
                   >
@@ -244,8 +229,8 @@ export function PremiumProfileHeader(props: {
                     />
                     <Text
                       style={{
-                        color: colors.text,
-                        fontWeight: "900",
+                        color: colors.primary,
+                        fontWeight: "600",
                         fontSize: 12,
                       }}
                     >
@@ -262,12 +247,12 @@ export function PremiumProfileHeader(props: {
           <View
             style={[
               styles.stat,
-              { borderColor: withAlpha(colors.border, 0.6) },
+              { borderColor: colors.border, backgroundColor: colors.surface2 },
             ]}
           >
-              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "800" }}>Today weight</Text>
-              <Text
-              style={{ color: colors.text, fontWeight: "900", marginTop: 6, fontSize: 15 }}
+            <Text style={styles.label}>TODAY WEIGHT</Text>
+            <Text
+              style={{ color: colors.text, fontWeight: "300", marginTop: 8, fontSize: 26, letterSpacing: -0.8 }}
             >
               {unitWeight}
             </Text>
@@ -276,12 +261,12 @@ export function PremiumProfileHeader(props: {
           <View
             style={[
               styles.stat,
-              { borderColor: withAlpha(colors.border, 0.6) },
+              { borderColor: colors.border, backgroundColor: colors.surface2 },
             ]}
           >
-            <Text style={{ color: colors.muted, fontSize: 12 }}>Focus</Text>
+            <Text style={styles.label}>FOCUS</Text>
             <Text
-              style={{ color: colors.text, fontWeight: "900", marginTop: 4 }}
+              style={{ color: colors.text, fontWeight: "500", marginTop: 8, fontSize: 16 }}
             >
               {goalLabel}
             </Text>
@@ -297,12 +282,12 @@ export function PremiumProfileHeader(props: {
             <View
               style={[
                 styles.stat,
-                { borderColor: withAlpha(colors.border, 0.6) },
+                { borderColor: colors.border, backgroundColor: colors.surface2 },
               ]}
             >
-              <Text style={{ color: colors.muted, fontSize: 12 }}>Unit</Text>
+              <Text style={styles.label}>UNIT</Text>
               <Text
-                style={{ color: colors.text, fontWeight: "900", marginTop: 4 }}
+                style={{ color: colors.text, fontWeight: "500", marginTop: 8, fontSize: 16 }}
               >
                 {props.unit.toUpperCase()}
               </Text>
@@ -315,10 +300,10 @@ export function PremiumProfileHeader(props: {
           <View
             style={{ flexDirection: "row", justifyContent: "space-between" }}
           >
-            <Text style={{ color: colors.text, fontSize: 13, fontWeight: "900" }}>
+            <Text style={{ color: colors.text, fontSize: 13, fontWeight: "500" }}>
               Momentum · {progressPct}%
             </Text>
-            <Text style={{ color: momentumColor, fontSize: 12, fontWeight: "900" }}>
+            <Text style={{ color: momentumColor, fontSize: 12, fontWeight: "500" }}>
               {progressPct >= 70 ? "Strong" : progressPct >= 40 ? "Building" : "Needs attention"}
             </Text>
           </View>
@@ -326,7 +311,7 @@ export function PremiumProfileHeader(props: {
             style={[
               styles.track,
               {
-                backgroundColor: withAlpha(colors.border, isDark ? 0.18 : 0.35),
+                backgroundColor: colors.inputBg,
               },
             ]}
           >
@@ -335,13 +320,13 @@ export function PremiumProfileHeader(props: {
                 styles.fill,
                 {
                   width: `${progressPct}%`,
-                  backgroundColor: withAlpha(momentumColor, isDark ? 0.72 : 0.82),
-                  borderColor: withAlpha(momentumColor, 0.38),
+                  backgroundColor: momentumColor,
+                  borderColor: "transparent",
                 },
               ]}
             />
           </View>
-          <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 16, fontWeight: "700" }}>
+          <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18, fontWeight: "300" }}>
             Consistency score based on your last 7 days.
           </Text>
         </View>
@@ -351,31 +336,30 @@ export function PremiumProfileHeader(props: {
 }
 
 const styles = StyleSheet.create({
-  heroBg: { position: "absolute", inset: 0 },
   row: { flexDirection: "row", alignItems: "center", gap: 12 },
   avatar: {
-    width: 58,
-    height: 58,
-    borderRadius: 18,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(123,111,255,0.08)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
+    borderColor: "rgba(123,111,255,0.18)",
     overflow: "visible",
   },
   avatarImg: {
     width: "100%",
     height: "100%",
-    borderRadius: 18,
+    borderRadius: 36,
   },
   cameraBadge: {
     position: "absolute",
-    right: -3,
-    bottom: -3,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    right: -2,
+    bottom: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
@@ -398,21 +382,26 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 6,
   },
+  label: {
+    color: "#8888AA",
+    fontSize: 11,
+    fontWeight: "500",
+    letterSpacing: 1,
+  },
   stat: {
     flex: 1,
-    borderRadius: 18,
+    borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 13,
     borderWidth: 1,
-    backgroundColor: "rgba(255,255,255,0.06)",
   },
   track: {
-    height: 10,
+    height: 4,
     borderRadius: 999,
     overflow: "hidden",
   },
   fill: {
-    height: 10,
+    height: 4,
     borderRadius: 999,
     borderWidth: 1,
   },

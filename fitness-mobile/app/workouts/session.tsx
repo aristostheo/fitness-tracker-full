@@ -1,5 +1,5 @@
 // app/workouts/session.tsx
-// Sleek “Apple-ish” log workout page (fast during real workouts)
+// Sleek "Apple-ish" log workout page (fast during real workouts)
 // - Uses add-exercise.tsx modal for Browse + Presets
 // - Stores each set as ONE draft item (sets=1) to enable per-set editing
 // - Draft persisted via sessionDraft utils
@@ -24,8 +24,6 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
@@ -117,7 +115,7 @@ type Palette = {
   primary2: string;
   danger: string;
   success: string;
-  shadowInk: string; // used for “dark ink” icons on light surfaces
+  shadowInk: string; // used for "dark ink" icons on light surfaces
 };
 
 function clamp(v: number, min: number, max: number) {
@@ -177,7 +175,7 @@ function buildPalette(theme: any): { p: Palette; isDark: boolean } {
     colors?.subtext ??
     (isDark ? withAlpha("#FFFFFF", 0.6) : withAlpha("#0B0F1A", 0.55));
 
-  const primary = colors?.primary ?? colors?.accent ?? "#68D7FF";
+  const primary = colors?.primary ?? colors?.accent ?? "#7B6FFF";
   const danger = colors?.danger ?? colors?.error ?? "#FF5C6A";
   const success = colors?.success ?? colors?.ok ?? "#7CFFB5";
 
@@ -261,11 +259,8 @@ function makeStyles(p: Palette, isDark: boolean) {
       borderRadius: 22,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: isDark
-        ? withAlpha("#FFFFFF", 0.92)
-        : withAlpha(p.shadowInk, 0.92),
-      borderWidth: hair,
-      borderColor: withAlpha(p.text, isDark ? 0.2 : 0.14),
+      backgroundColor: p.primary,
+      borderWidth: 0,
     },
     finishOverlay: {
       ...StyleSheet.absoluteFillObject,
@@ -583,15 +578,12 @@ function makeStyles(p: Palette, isDark: boolean) {
       justifyContent: "center",
       flexDirection: "row",
       gap: 10,
-      backgroundColor: isDark
-        ? withAlpha("#FFFFFF", 0.92)
-        : withAlpha(p.shadowInk, 0.92),
-      borderWidth: hair,
-      borderColor: withAlpha(p.text, isDark ? 0.2 : 0.14),
+      backgroundColor: p.primary,
+      borderWidth: 0,
     },
     footerBtnText: {
-      color: isDark ? withAlpha("#111", 0.95) : withAlpha("#FFFFFF", 0.95),
-      fontWeight: "900",
+      color: "#FFFFFF",
+      fontWeight: "500",
       fontSize: 16,
     },
 
@@ -676,9 +668,8 @@ function makeStyles(p: Palette, isDark: boolean) {
 function GlassCard({
   children,
   style,
-  intensity = 30,
   styles,
-  isDark,
+  isDark: _isDark,
   p,
 }: {
   children: React.ReactNode;
@@ -688,37 +679,15 @@ function GlassCard({
   isDark: boolean;
   p: any;
 }) {
-  const gradColors = isDark
-    ? [
-        withAlpha("#FFFFFF", 0.1),
-        withAlpha("#FFFFFF", 0.06),
-        withAlpha("#000000", 0.06),
-      ]
-    : [
-        withAlpha("#FFFFFF", 0.85),
-        withAlpha(p.primary, 0.06),
-        withAlpha("#000000", 0.03),
-      ];
-
   return (
-    <View style={[styles.cardWrap, style]}>
-      <View style={styles.cardBorder} pointerEvents="none" />
-      <BlurView
-        pointerEvents="box-none"
-        intensity={intensity}
-        tint={isDark ? "dark" : "light"}
-        style={styles.cardBlur}
-      >
-        <LinearGradient
-          pointerEvents="box-none"
-          colors={gradColors as any}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.cardInner}
-        >
-          {children}
-        </LinearGradient>
-      </BlurView>
+    <View
+      style={[
+        styles.cardWrap,
+        { backgroundColor: "#0F0F1A", borderWidth: 1, borderColor: withAlpha("#FFFFFF", 0.08) },
+        style,
+      ]}
+    >
+      <View style={styles.cardInner}>{children}</View>
     </View>
   );
 }
@@ -1333,7 +1302,7 @@ export default function WorkoutSessionScreen() {
     } as any);
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    RNAlert.alert("Saved", `Preset created for “${ex}”.`);
+    RNAlert.alert("Saved", `Preset created for "${ex}".`);
   }
 
   async function deletePresetByName(exName: string) {
@@ -1570,18 +1539,8 @@ export default function WorkoutSessionScreen() {
   const contentMax = 980;
   const sidePad = 16;
 
-  const bgColors = isDark ? [p.bg2, "#050711", p.bg3] : [p.bg2, p.bg, p.bg3];
-
   return (
-    <View style={styles.root}>
-      {/* Background */}
-      <LinearGradient
-        pointerEvents="none"
-        colors={bgColors as any}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0.8, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
+    <View style={[styles.root, { backgroundColor: "#08080F" }]}>
 
       {isFinishing ? (
         <View style={styles.finishOverlay}>
@@ -1613,11 +1572,7 @@ export default function WorkoutSessionScreen() {
 
       {/* Sticky top bar */}
       <View style={{ paddingTop: topInset }}>
-        <BlurView
-          intensity={26}
-          tint={isDark ? "dark" : "light"}
-          style={styles.headerBlur}
-        >
+        <View style={[styles.headerBlur, { backgroundColor: "#08080F" }]}>
           <View style={[styles.headerRow, { paddingHorizontal: sidePad }]}>
             <Pressable
               onPress={() => {
@@ -1681,16 +1636,10 @@ export default function WorkoutSessionScreen() {
                 pressed && { opacity: 0.9 },
               ]}
             >
-              <Ionicons
-                name="checkmark"
-                size={20}
-                color={
-                  isDark ? withAlpha("#111", 0.95) : withAlpha("#FFFFFF", 0.95)
-                }
-              />
+              <Ionicons name="checkmark" size={20} color="#FFFFFF" />
             </Pressable>
           </View>
-        </BlurView>
+        </View>
       </View>
 
       <KeyboardAvoidingView
@@ -1828,7 +1777,7 @@ export default function WorkoutSessionScreen() {
               <View style={{ marginTop: 12 }}>
                 <Text style={styles.inputLabel}>Primary muscle (optional)</Text>
                 <Text style={styles.sectionSub}>
-                  Leave it on Auto and we’ll infer it from the exercise.
+                  Leave it on Auto and we'll infer it from the exercise.
                 </Text>
                 <View style={styles.muscleChipWrap}>
                   <Pressable
@@ -1937,30 +1886,12 @@ export default function WorkoutSessionScreen() {
                 } reps`;
                 const doneCount = g.items.filter((x) => x.done).length;
 
-                const exGradient = isDark
-                  ? [withAlpha(p.primary, 0.14), withAlpha("#FFFFFF", 0.04)]
-                  : [withAlpha(p.primary, 0.1), withAlpha("#FFFFFF", 0.65)];
-
                 return (
                   <Animated.View
                     key={g.name}
                     entering={FadeInDown.duration(360)}
                   >
-                    <View style={styles.exerciseCard}>
-                      <LinearGradient
-                        pointerEvents="none"
-                        colors={exGradient as any}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={StyleSheet.absoluteFill}
-                      />
-
-                      <BlurView
-                        pointerEvents="none"
-                        intensity={18}
-                        tint={isDark ? "dark" : "light"}
-                        style={StyleSheet.absoluteFill}
-                      />
+                    <View style={[styles.exerciseCard, { backgroundColor: "#0F0F1A" }]}>
 
                       {/* Header */}
                       <Pressable
