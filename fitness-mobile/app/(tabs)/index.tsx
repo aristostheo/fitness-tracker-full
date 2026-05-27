@@ -70,6 +70,8 @@ import ActivityLogSheet from "@/components/activity/ActivityLogSheet";
 import {
   connectedCount,
   formatLastSync,
+  getActivityMetrics,
+  getRecoveryMetrics,
   INTEGRATIONS,
   subscribeIntegrations,
   syncHealth,
@@ -492,6 +494,15 @@ export default function HomeScreen() {
     }
   }
 
+  const recoveryMetrics = useMemo(
+    () => getRecoveryMetrics(integrations),
+    [integrations]
+  );
+  const integrationActivity = useMemo(
+    () => getActivityMetrics(integrations),
+    [integrations]
+  );
+
   const burnToday = useMemo(() => {
     const workoutsBurn = exerciseToday.reduce(
       (sum, ex) => sum + Number(ex.calories || 0),
@@ -503,8 +514,9 @@ export default function HomeScreen() {
       0
     );
 
-    return workoutsBurn + activityBurn;
-  }, [exerciseToday, activityEntries]);
+    const nativeBurn = integrationActivity?.activeCalories || 0;
+    return Math.max(workoutsBurn + activityBurn, nativeBurn);
+  }, [exerciseToday, activityEntries, integrationActivity?.activeCalories]);
 
   const weeklyProteinHits = useMemo(() => {
     if (!proteinGoal) return 0;
@@ -578,39 +590,71 @@ export default function HomeScreen() {
 
   /* ───────────────── UI data mapping ───────────────── */
   const ringData = useMemo(
-    () => [
-      {
-        label: "Calories",
-        value: totals.calories,
-        goal: kcalGoal,
-        unit: "kcal",
-        tone: "tint" as const,
-        sublabel: `${caloriesRemaining.toLocaleString()} left`,
-        onPress: () => router.push("/(tabs)/nutrition"),
-      },
-      {
-        label: "Protein",
-        value: totals.protein,
-        goal: proteinGoal,
-        unit: "g",
-        tone: "violet" as const,
-        sublabel: `${proteinRemaining}g to goal`,
-        onPress: () => router.push("/(tabs)/nutrition"),
-      },
-      {
-        label: "Steps",
-        value: stepsToday,
-        goal: stepsGoal,
-        unit: "",
-        tone: "mint" as const,
-        sublabel: `${Math.max(
-          0,
-          stepsGoal - stepsToday
-        ).toLocaleString()} to go`,
-        onPress: () => router.push("/(tabs)/workouts"),
-      },
-    ],
+    () =>
+      ([
+        recoveryMetrics?.recoveryScore != null
+          ? {
+              label: "Recovery",
+              value: recoveryMetrics.recoveryScore,
+              goal: 100,
+              unit: "%",
+              tone:
+                recoveryMetrics.recoveryScore >= 80
+                  ? ("mint" as const)
+                  : recoveryMetrics.recoveryScore >= 50
+                  ? ("tint" as const)
+                  : ("violet" as const),
+              sublabel:
+                recoveryMetrics.sourceName === "RingConn"
+                  ? "Estimated from your RingConn data"
+                  : recoveryMetrics.hrvMs != null
+                  ? `HRV ${Math.round(recoveryMetrics.hrvMs)}ms`
+                  : "Daily readiness",
+              onPress: () => router.push("/profile/integrations"),
+            }
+          : null,
+        {
+          label: "Calories",
+          value: totals.calories,
+          goal: kcalGoal,
+          unit: "kcal",
+          tone: "tint" as const,
+          sublabel: `${caloriesRemaining.toLocaleString()} left`,
+          onPress: () => router.push("/(tabs)/nutrition"),
+        },
+        {
+          label: "Protein",
+          value: totals.protein,
+          goal: proteinGoal,
+          unit: "g",
+          tone: "violet" as const,
+          sublabel: `${proteinRemaining}g to goal`,
+          onPress: () => router.push("/(tabs)/nutrition"),
+        },
+        {
+          label: "Steps",
+          value: stepsToday,
+          goal: stepsGoal,
+          unit: "",
+          tone: "mint" as const,
+          sublabel: `${Math.max(
+            0,
+            stepsGoal - stepsToday
+          ).toLocaleString()} to go`,
+          onPress: () => router.push("/(tabs)/workouts"),
+        },
+      ].filter(Boolean) as Array<{
+        label: string;
+        value: number;
+        goal: number;
+        unit: string;
+        tone: "mint" | "tint" | "violet";
+        sublabel: string;
+        onPress: () => void;
+      }>),
     [
+      recoveryMetrics?.recoveryScore,
+      recoveryMetrics?.hrvMs,
       totals.calories,
       totals.protein,
       kcalGoal,
@@ -724,6 +768,23 @@ export default function HomeScreen() {
         icon: toIoniconName("checkmark-circle"),
         actionLabel: "Balance the day",
         onAction: () => router.push("/(tabs)/nutrition"),
+      });
+    }
+
+    if (
+      (recoveryMetrics?.recoveryScore || 0) > 0 &&
+      (recoveryMetrics?.recoveryScore || 0) < 50
+    ) {
+      addSuggestion(99, {
+        id: "ai-recovery-low",
+        title: "Recovery is low today",
+        body: `${recoveryMetrics?.sourceName || "Your wearable"} shows ${Math.round(
+          recoveryMetrics?.recoveryScore || 0
+        )}% recovery. Consider lighter movement and a strong protein-first day.`,
+        pill: `${Math.round(recoveryMetrics?.recoveryScore || 0)}% recovery`,
+        icon: toIoniconName("moon"),
+        actionLabel: "View workout plan",
+        onAction: () => router.push("/(tabs)/workouts"),
       });
     }
 
@@ -928,6 +989,8 @@ export default function HomeScreen() {
     fatPct,
     goalMode,
     goalLabel,
+    recoveryMetrics?.recoveryScore,
+    recoveryMetrics?.sourceName,
     weightKg,
     targetWeightKg,
     weightDeltaAbs,
@@ -2318,9 +2381,7 @@ function SyncIndicator({
   onPress: () => void;
 }) {
   const health = snapshot ? syncHealth(snapshot) : "none";
-  const count = snapshot ? connectedCount(snapshot) : 0;
-  const dot =
-    health === "error" ? tokens.bad : health === "syncing" ? tokens.good : count > 0 ? "rgba(244,246,255,0.62)" : "rgba(244,246,255,0.34)";
+  if (health !== "error") return null;
   return (
     <Pressable
       onPress={onPress}
@@ -2342,8 +2403,8 @@ function SyncIndicator({
       >
         <Ionicons name="sync-outline" size={20} color={tokens.text} />
         <MotiView
-          animate={{ opacity: health === "syncing" ? [0.45, 1, 0.45] : 1 }}
-          transition={{ loop: health === "syncing", type: "timing", duration: 900 }}
+          animate={{ opacity: 1 }}
+          transition={{ type: "timing", duration: 200 }}
           style={{
             position: "absolute",
             right: 8,
@@ -2351,7 +2412,7 @@ function SyncIndicator({
             width: 8,
             height: 8,
             borderRadius: 999,
-            backgroundColor: dot,
+            backgroundColor: tokens.bad,
           }}
         />
       </View>

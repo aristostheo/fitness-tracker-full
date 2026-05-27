@@ -78,6 +78,11 @@ import {
   type ActivityEntry as CardioEntry,
 } from "@/services/activity";
 import {
+  getRecoveryMetrics,
+  subscribeIntegrations,
+  type IntegrationSnapshot,
+} from "@/services/integrations";
+import {
   loadSessionDraft,
   type WorkoutSessionDraft,
 } from "@/components/workouts/sessionDraft";
@@ -3059,6 +3064,32 @@ function WeeklySplitVisualizer({
 
 function RecoveryCoachCard({ onPress }: { onPress?: () => void }) {
   const s = useSurfaceTokens();
+  const [integrations, setIntegrations] = useState<IntegrationSnapshot | null>(
+    null
+  );
+  useEffect(() => subscribeIntegrations(setIntegrations), []);
+  const recovery = useMemo(() => getRecoveryMetrics(integrations), [integrations]);
+  const score = recovery?.recoveryScore ?? null;
+  const tone =
+    score == null ? "#FFC107" : score < 40 ? "#FFC107" : score > 80 ? "#4CAF50" : "#6C63FF";
+  const badge =
+    score == null ? "Fatigued" : score < 40 ? "Low recovery" : score > 80 ? "Recovered" : "Ready";
+  const body =
+    score == null
+      ? "Your last session was rated Fatigued. Consider a lighter session or rest today."
+      : score < 40
+      ? `Low recovery detected. ${recovery?.sourceName || "Your wearable"} suggests rest or light movement today.`
+      : score > 80
+      ? `Recovery: ${Math.round(score)}% · HRV: ${Math.round(
+          recovery?.hrvMs || 0
+        )}ms · Resting HR: ${Math.round(
+          recovery?.restingHeartRateBpm || 0
+        )}bpm · Good day to push intensity.`
+      : `Recovery: ${Math.round(score)}% · HRV: ${Math.round(
+          recovery?.hrvMs || 0
+        )}ms · Resting HR: ${Math.round(
+          recovery?.restingHeartRateBpm || 0
+        )}bpm · Ready to train.`;
   return (
     <View
       style={[
@@ -3067,13 +3098,13 @@ function RecoveryCoachCard({ onPress }: { onPress?: () => void }) {
       ]}
     >
       <View style={styles.recoveryTopRow}>
-        <View style={[styles.recoveryBadge, { backgroundColor: withAlpha("#FFC107", 0.14), borderColor: withAlpha("#FFC107", 0.28) }]}>
-          <Text style={[styles.recoveryBadgeText, { color: "#FFC107" }]}>Fatigued</Text>
+        <View style={[styles.recoveryBadge, { backgroundColor: withAlpha(tone, 0.14), borderColor: withAlpha(tone, 0.28) }]}>
+          <Text style={[styles.recoveryBadgeText, { color: tone }]}>{badge}</Text>
         </View>
       </View>
       <Text style={[styles.recoveryTitle, { color: s.t1 }]}>Recovery check</Text>
       <Text style={[styles.recoveryBody, { color: s.t2 }]}>
-        Your last session was rated Fatigued. Consider a lighter session or rest today.
+        {body}
       </Text>
       <Pressable
         onPress={onPress}

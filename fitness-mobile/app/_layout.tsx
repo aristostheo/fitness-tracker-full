@@ -25,6 +25,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider, useAuth } from "@/content/AuthContext";
 import { ThemeProvider, useTheme } from "@/content/ThemeProvider";
 import { SettingsProvider } from "@/content/SettingsContext";
+import { startIntegrationAutoSync } from "@/services/integrations";
 
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
@@ -158,6 +159,13 @@ function Gate() {
       useNativeDriver: true,
     }).start();
   }, [pathname, user]);
+
+  useEffect(() => {
+    const stop = startIntegrationAutoSync(() => user?.uid);
+    return () => {
+      stop?.();
+    };
+  }, [user?.uid]);
 
   if (initializing) {
     return (

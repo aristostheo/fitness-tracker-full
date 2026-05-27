@@ -14,6 +14,7 @@ export function MetricsCard(props: {
   heightCm: number;
   bodyFatPct?: number;
   waistCm?: number;
+  restingHeartRateBpm?: number;
   lastUpdatedVia?: string;
   lastUpdatedAt?: number;
   onPressAdd: () => void;
@@ -82,6 +83,21 @@ export function MetricsCard(props: {
         ) : null}
         <Row label="Target" value={targetLabel} />
         <Row label="Height" value={`${fmt.num0(props.heightCm)} cm`} />
+        <Row
+          label="Resting HR"
+          value={
+            props.restingHeartRateBpm != null && Number(props.restingHeartRateBpm) > 0
+              ? `${fmt.num0(props.restingHeartRateBpm)} bpm`
+              : "—"
+          }
+          subtleNote={
+            props.lastUpdatedVia === "RingConn" &&
+            props.restingHeartRateBpm != null &&
+            Number(props.restingHeartRateBpm) > 0
+              ? "via RingConn"
+              : undefined
+          }
+        />
         <Row
           label="BMI"
           value={bmi ? `${bmi}` : "—"}

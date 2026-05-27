@@ -92,6 +92,10 @@ export type Profile = {
   proteinFocus?: number;
   trackingAccurate?: boolean;
   bodyFatPct?: number;
+  restingHeartRateBpm?: number;
+  hrvMs?: number;
+  recoveryScore?: number;
+  bloodOxygenPct?: number;
   waistCm?: number;
   healthLastUpdatedVia?: string;
   healthLastUpdatedAt?: number;

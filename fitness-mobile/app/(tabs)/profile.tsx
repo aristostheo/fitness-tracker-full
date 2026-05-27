@@ -830,6 +830,7 @@ export default function ProfileScreen() {
               heightCm={Number(heightCm || 0)}
               bodyFatPct={(profile as any)?.bodyFatPct}
               waistCm={(profile as any)?.waistCm}
+              restingHeartRateBpm={(profile as any)?.restingHeartRateBpm}
               lastUpdatedVia={(profile as any)?.healthLastUpdatedVia}
               lastUpdatedAt={(profile as any)?.healthLastUpdatedAt}
               onPressAdd={() => {

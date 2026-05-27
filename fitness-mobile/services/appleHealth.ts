@@ -38,6 +38,34 @@ type HealthKitModule = {
     options: { startDate: string; endDate: string; type: string },
     callback: (error: string | null, result?: { data?: any[] } | any[]) => void
   ) => void;
+  getHeartRateSamples: (
+    options: { startDate: string; endDate: string },
+    callback: (error: string | null, results: any[]) => void
+  ) => void;
+  getRestingHeartRateSamples: (
+    options: { startDate: string; endDate: string },
+    callback: (error: string | null, results: any[]) => void
+  ) => void;
+  getHeartRateVariabilitySamples: (
+    options: { startDate: string; endDate: string },
+    callback: (error: string | null, results: any[]) => void
+  ) => void;
+  getOxygenSaturationSamples: (
+    options: { startDate: string; endDate: string },
+    callback: (error: string | null, results: any[]) => void
+  ) => void;
+  getRespiratoryRateSamples: (
+    options: { startDate: string; endDate: string },
+    callback: (error: string | null, results: any[]) => void
+  ) => void;
+  getBodyTemperatureSamples: (
+    options: { startDate: string; endDate: string },
+    callback: (error: string | null, results: any[]) => void
+  ) => void;
+  getSleepSamples: (
+    options: { startDate: string; endDate: string; ascending?: boolean; limit?: number },
+    callback: (error: string | null, results: any[]) => void
+  ) => void;
 };
 
 const READ_PERMISSIONS = [
@@ -46,6 +74,11 @@ const READ_PERMISSIONS = [
   "BasalEnergyBurned",
   "Workout",
   "HeartRate",
+  "RestingHeartRate",
+  "HeartRateVariability",
+  "OxygenSaturation",
+  "RespiratoryRate",
+  "BodyTemperature",
   "SleepAnalysis",
   "Weight",
   "BodyFatPercentage",
@@ -61,7 +94,7 @@ export type AppleHealthSyncResult = {
   bodyFatPct?: number;
 };
 
-function getNativeHealthKit(): HealthKitModule | null {
+export function getNativeHealthKit(): HealthKitModule | null {
   if (Platform.OS !== "ios") return null;
   try {
     const { NativeModules } = require("react-native");
