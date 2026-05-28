@@ -826,6 +826,23 @@ export default function NutritionScreen() {
     });
   }
 
+  function openWhatShouldIEat() {
+    const hour = new Date().getHours();
+    const mealContext: MealKey =
+      hour < 11 ? "breakfast" : hour < 16 ? "lunch" : hour < 21 ? "dinner" : "snacks";
+    router.push({
+      pathname: "/(modals)/what-should-i-eat",
+      params: {
+        date: dateISO,
+        meal: mealContext,
+        kcalLeft: String(Math.max(0, Math.round(goals.calories - dayTotals.calories))),
+        proteinLeft: String(Math.max(0, Math.round(goals.protein - dayTotals.protein))),
+        carbsLeft: String(Math.max(0, Math.round(goals.carbs - dayTotals.carbs))),
+        fatLeft: String(Math.max(0, Math.round(goals.fat - dayTotals.fat))),
+      },
+    });
+  }
+
   function openMealBuilder(meal: MealKey) {
     router.push({
       pathname: "/(modals)/meal-builder",
@@ -1126,6 +1143,7 @@ export default function NutritionScreen() {
                 goals={goals}
                 totals={dayTotals as any}
                 onPressLog={() => openAdd("snacks")}
+                onPressSuggest={openWhatShouldIEat}
                 forecast={{ enabled: true }}
                 reduceMotion={false /* wire your setting if you have it */}
               />

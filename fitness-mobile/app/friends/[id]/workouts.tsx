@@ -31,7 +31,7 @@ import { GradientButton } from "@/components/workouts/ui/GradientButton";
 
 const softShadow = Platform.select({
   ios: {
-    shadowColor: "#000",
+    shadowColor: "black",
     shadowOpacity: 0.14,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
@@ -208,13 +208,13 @@ export default function FriendWorkoutsScreen() {
       {/* floating ribbons */}
       <Ribbon
         side="right"
-        colors={["#5ce1ff", "#ff5ac8"] as const}
+        colors={[colors.info, colors.danger] as const}
         opacity={isDark ? 0.18 : 0.22}
       />
       <Ribbon
         side="left"
         top={260}
-        colors={["#8cfb9f", "#ffc857"] as const}
+        colors={[colors.success, colors.warning] as const}
         opacity={isDark ? 0.14 : 0.18}
       />
 

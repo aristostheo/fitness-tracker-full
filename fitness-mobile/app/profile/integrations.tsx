@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
 import { useAuth } from "@/content/AuthContext";
+import { useTheme } from "@/content/ThemeProvider";
 import {
   connectedCount,
   describeSyncInterval,
@@ -37,21 +38,24 @@ import {
   type SyncFrequency,
 } from "@/services/integrations";
 
-const C = {
-  bg: "#0D0D0F",
-  card: "#1A1A24",
-  card2: "#202033",
-  text: "#F6F7FF",
-  muted: "rgba(246,247,255,0.66)",
-  hairline: "rgba(255,255,255,0.10)",
-  purple: "#6C63FF",
-  blue: "#4DA3FF",
-  green: "#4CAF50",
-  amber: "#FFC107",
-  red: "#F44336",
-  gray: "#2A2A35",
-  teal: "#14B8A6",
-};
+function useC() {
+  const { colors } = (useTheme as any)();
+  return {
+    bg: colors.background as string,
+    card: colors.surface1 as string,
+    card2: colors.surface2 as string,
+    text: colors.textPrimary as string,
+    muted: colors.textTertiary as string,
+    hairline: colors.border as string,
+    purple: colors.accent as string,
+    blue: colors.accent as string,
+    green: colors.success as string,
+    amber: colors.warning as string,
+    red: colors.danger as string,
+    gray: colors.surface3 as string,
+    teal: colors.accent as string,
+  };
+}
 
 function alpha(hex: string, a: number) {
   const h = hex.replace("#", "");
@@ -82,6 +86,7 @@ function ringConnPlatformLabel() {
 }
 
 export default function IntegrationsScreen() {
+  const C = useC();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -226,11 +231,12 @@ function Header({
   onBack: () => void;
   syncState: ReturnType<typeof getGlobalSyncStatus>;
 }) {
+  const C = useC();
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
       <Pressable
         onPress={onBack}
-        style={iconButton()}
+        style={iconButton(C)}
         accessibilityRole="button"
         accessibilityLabel="Back"
       >
@@ -316,6 +322,7 @@ function Header({
 }
 
 function InfoBanner() {
+  const C = useC();
   return (
     <View
       style={{
@@ -337,7 +344,9 @@ function InfoBanner() {
   );
 }
 
-function OnboardingCard({ onDone }: { onDone: () => void }) {
+function OnboardingCard({
+  onDone }: { onDone: () => void }) {
+  const C = useC();
   const steps = [
     ["Choose your sources", "Select which apps and devices you use."],
     ["Approve permissions", "We request only what you select."],
@@ -382,7 +391,7 @@ function OnboardingCard({ onDone }: { onDone: () => void }) {
           </View>
         </View>
       ))}
-      <Pressable onPress={onDone} style={primaryButton()}>
+      <Pressable onPress={onDone} style={primaryButton(C)}>
         <Text style={{ color: C.text, fontWeight: "900" }}>
           Start choosing sources
         </Text>
@@ -398,6 +407,7 @@ function Section({
   title: string;
   children: React.ReactNode;
 }) {
+  const C = useC();
   return (
     <View style={{ gap: 10 }}>
       <Text
@@ -429,6 +439,7 @@ function SyncSettingsCard({
   onTogglePerf: () => void;
   onOpenHistory: () => void;
 }) {
+  const C = useC();
   const syncState = getGlobalSyncStatus(snapshot);
   return (
     <Section title="Sync Settings">
@@ -455,7 +466,7 @@ function SyncSettingsCard({
             value={snapshot.settings.autoSync}
             onValueChange={(v) => updateIntegrationSettings({ autoSync: v })}
             trackColor={{ false: C.gray, true: alpha(C.purple, 0.42) }}
-            thumbColor={snapshot.settings.autoSync ? C.purple : "#9CA3AF"}
+            thumbColor={snapshot.settings.autoSync ? C.purple : C.gray}
           />
         </View>
 
@@ -603,7 +614,7 @@ function SyncSettingsCard({
           </Text>
           <Pressable
             onPress={() => runIntegrationSync(uid, { reason: "manual", force: true })}
-            style={primaryButton()}
+            style={primaryButton(C)}
           >
             <Text style={{ color: C.text, fontWeight: "900" }}>Sync now →</Text>
           </Pressable>
@@ -640,6 +651,7 @@ function IntegrationCard({
   onDetail: () => void;
   onConnect: () => void;
 }) {
+  const C = useC();
   const conn = snapshot.connections[item.id];
   const appleConn = snapshot.connections.apple_health;
   const connected = !!conn?.connected;
@@ -699,7 +711,7 @@ function IntegrationCard({
             justifyContent: "center",
           }}
         >
-          <Ionicons name={item.icon as any} size={22} color="#fff" />
+          <Ionicons name={item.icon as any} size={22} color="white" />
         </View>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -761,7 +773,7 @@ function IntegrationCard({
               }
             }}
             trackColor={{ false: C.gray, true: alpha(C.green, 0.46) }}
-            thumbColor={connected ? C.green : "#9CA3AF"}
+            thumbColor={connected ? C.green : C.gray}
           />
         )}
       </View>
@@ -848,6 +860,7 @@ function DetailSheet({
   uid?: string;
   onClose: () => void;
 }) {
+  const C = useC();
   if (!item) return null;
   const conn = snapshot.connections[item.id];
   const latest = conn?.latestValues;
@@ -888,7 +901,7 @@ function DetailSheet({
                 justifyContent: "center",
               }}
             >
-              <Ionicons name={item.icon as any} size={20} color="#fff" />
+              <Ionicons name={item.icon as any} size={20} color="white" />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ color: C.text, fontWeight: "900", fontSize: 20 }}>
@@ -898,7 +911,7 @@ function DetailSheet({
                 {item.description}
               </Text>
             </View>
-            <Pressable onPress={onClose} style={iconButton()}>
+            <Pressable onPress={onClose} style={iconButton(C)}>
               <Ionicons name="close" size={20} color={C.text} />
             </Pressable>
           </View>
@@ -1059,7 +1072,7 @@ function DetailSheet({
             {item.primaryEligible && conn?.connected ? (
               <Pressable
                 onPress={() => markPrimaryIntegration(item.id)}
-                style={[primaryButton(), { flex: 1 }]}
+                style={[primaryButton(C), { flex: 1 }]}
               >
                 <Text style={{ color: C.text, fontWeight: "900" }}>
                   Set as primary
@@ -1123,7 +1136,9 @@ function DetailSheet({
   );
 }
 
-function LatestValuesGrid({ values }: { values?: IntegrationLatestValues }) {
+function LatestValuesGrid({
+  values }: { values?: IntegrationLatestValues }) {
+  const C = useC();
   if (!values) return null;
   const rows = [
     values.recoveryScore != null
@@ -1199,6 +1214,7 @@ function Segmented({
   options: Array<{ key: string; label: string }>;
   onChange: (v: string) => void;
 }) {
+  const C = useC();
   return (
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7 }}>
       {options.map((o) => {
@@ -1235,6 +1251,7 @@ function SettingLabel({
   title: string;
   subtitle?: string;
 }) {
+  const C = useC();
   return (
     <View style={{ gap: 3 }}>
       <Text style={{ color: C.text, fontWeight: "900" }}>{title}</Text>
@@ -1258,6 +1275,7 @@ function ToggleRow({
   value: boolean;
   onChange: (v: boolean) => void;
 }) {
+  const C = useC();
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
       <View style={{ flex: 1 }}>
@@ -1267,13 +1285,15 @@ function ToggleRow({
         value={value}
         onValueChange={onChange}
         trackColor={{ false: C.gray, true: alpha(C.purple, 0.42) }}
-        thumbColor={value ? C.purple : "#9CA3AF"}
+        thumbColor={value ? C.purple : C.gray}
       />
     </View>
   );
 }
 
-function Chip({ text, color }: { text: string; color: string }) {
+function Chip({
+  text, color }: { text: string; color: string }) {
+  const C = useC();
   return (
     <View
       style={{
@@ -1298,7 +1318,9 @@ function Chip({ text, color }: { text: string; color: string }) {
   );
 }
 
-function Note({ text }: { text: string }) {
+function Note({
+  text }: { text: string }) {
+  const C = useC();
   return (
     <View
       style={{
@@ -1316,7 +1338,7 @@ function Note({ text }: { text: string }) {
   );
 }
 
-function iconButton() {
+function iconButton(C: ReturnType<typeof useC>) {
   return {
     width: 42,
     height: 42,
@@ -1329,7 +1351,7 @@ function iconButton() {
   };
 }
 
-function primaryButton() {
+function primaryButton(C: ReturnType<typeof useC>) {
   return {
     minHeight: 44,
     borderRadius: 14,

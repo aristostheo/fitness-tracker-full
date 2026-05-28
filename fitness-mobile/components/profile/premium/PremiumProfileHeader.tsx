@@ -91,7 +91,7 @@ export function PremiumProfileHeader(props: {
   }, [props.weightKg, props.targetWeightKg]);
   const progressPct = Math.round(progress * 100);
   const momentumColor =
-    progressPct >= 70 ? colors.primary : progressPct >= 40 ? "#FFC107" : "#F44336";
+    progressPct >= 70 ? colors.accent : progressPct >= 40 ? colors.warning : colors.danger;
 
   return (
     <GlassCard style={{ padding: 0 }}>
@@ -109,7 +109,7 @@ export function PremiumProfileHeader(props: {
                 <Image source={{ uri: props.photoURL }} style={styles.avatarImg} />
               ) : (
                 <Text
-                  style={{ color: colors.text, fontWeight: "500", fontSize: 22 }}
+                  style={{ color: colors.surface1, fontWeight: "500", fontSize: 22 }}
                 >
                   {props.initials}
                 </Text>
@@ -217,21 +217,23 @@ export function PremiumProfileHeader(props: {
                     style={[
                       styles.proPill,
                       {
-                        borderColor: withAlpha(colors.primary, 0.3),
-                        backgroundColor: "transparent",
+                        borderColor: withAlpha(colors.accent, 0.3),
+                        backgroundColor: withAlpha(colors.accent, 0.12),
                       },
                     ]}
                   >
                     <Ionicons
-                      name="sparkles-outline"
+                      name="diamond-outline"
                       size={14}
-                      color={colors.text}
+                      color={colors.accent}
                     />
                     <Text
                       style={{
-                        color: colors.primary,
-                        fontWeight: "600",
-                        fontSize: 12,
+                        color: colors.accent,
+                        fontWeight: "500",
+                        fontSize: 11,
+                        textTransform: "uppercase",
+                        letterSpacing: 1,
                       }}
                     >
                       Pro
@@ -300,7 +302,7 @@ export function PremiumProfileHeader(props: {
           <View
             style={{ flexDirection: "row", justifyContent: "space-between" }}
           >
-            <Text style={{ color: colors.text, fontSize: 13, fontWeight: "500" }}>
+            <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: "500" }}>
               Momentum · {progressPct}%
             </Text>
             <Text style={{ color: momentumColor, fontSize: 12, fontWeight: "500" }}>
@@ -326,7 +328,7 @@ export function PremiumProfileHeader(props: {
               ]}
             />
           </View>
-          <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18, fontWeight: "300" }}>
+          <Text style={{ color: colors.textTertiary, fontSize: 11, lineHeight: 18, fontWeight: "300" }}>
             Consistency score based on your last 7 days.
           </Text>
         </View>
@@ -343,9 +345,7 @@ const styles = StyleSheet.create({
     borderRadius: 36,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(123,111,255,0.08)",
     borderWidth: 1,
-    borderColor: "rgba(123,111,255,0.18)",
     overflow: "visible",
   },
   avatarImg: {
@@ -383,7 +383,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   label: {
-    color: "#8888AA",
     fontSize: 11,
     fontWeight: "500",
     letterSpacing: 1,

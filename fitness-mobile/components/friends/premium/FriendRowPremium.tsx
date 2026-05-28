@@ -37,14 +37,16 @@ export function FriendRowPremium({
   onPress: () => void;
   onPing: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme() as any;
 
   const ringColor =
     streakRingTone === "gold"
-      ? "#FFC107"
+      ? colors.warning
       : streakRingTone === "green"
-      ? "#4CAF50"
-      : withAlpha(colors.text, 0.14);
+      ? colors.success
+      : "transparent";
+
+  const chipsToRender = chips.slice(0, 3);
 
   return (
     <Pressable onPress={onPress}>
@@ -53,121 +55,109 @@ export function FriendRowPremium({
           style={[
             styles.card,
             {
-              backgroundColor: pressed ? withAlpha(colors.text, 0.04) : "#1A1A24",
-              borderColor: withAlpha(colors.text, 0.08),
+              backgroundColor: colors.surface1,
+              borderColor: colors.border,
+              shadowColor: colors.textPrimary,
+              shadowOpacity: isDark ? 0 : 0.05,
+              shadowRadius: isDark ? 0 : 8,
+              shadowOffset: { width: 0, height: 2 },
+              elevation: isDark ? 0 : 1,
+              transform: [{ scale: pressed ? 0.99 : 1 }],
             },
           ]}
         >
-          <View style={[styles.avatarRing, { borderColor: ringColor }]}>
-            <View
-              style={[
-                styles.avatar,
-                {
-                  backgroundColor: withAlpha(accentColor, 0.2),
-                  borderColor: withAlpha(accentColor, 0.32),
-                },
-              ]}
-            >
-              <Text style={[styles.avatarText, { color: colors.text }]}>
+          <View
+            style={[
+              styles.avatarRing,
+              { borderColor: ringColor, borderWidth: ringColor === "transparent" ? 0 : 2 },
+            ]}
+          >
+            <View style={[styles.avatar, { backgroundColor: accentColor }]}>
+              <Text style={[styles.avatarText, { color: colors.surface1 }]}>
                 {(displayName || "F")[0]?.toUpperCase() || "F"}
               </Text>
             </View>
           </View>
 
-          <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={styles.content}>
             <View style={styles.nameRow}>
               <Text
-                style={[styles.name, { color: colors.text }]}
+                style={[styles.name, { color: colors.textPrimary }]}
                 numberOfLines={1}
               >
                 {displayName}
               </Text>
               {nicknameMissing ? (
                 <Pressable onPress={onAddNickname}>
-                  <Text style={styles.nicknamePrompt}>Add nickname →</Text>
+                  <Text style={[styles.nicknamePrompt, { color: colors.accent }]}>
+                    Add nickname →
+                  </Text>
                 </Pressable>
               ) : null}
             </View>
 
-            <Text style={[styles.uid, { color: colors.muted }]} numberOfLines={1}>
+            <Text style={[styles.uid, { color: colors.textTertiary }]} numberOfLines={1}>
               {uidLabel}
             </Text>
 
-            <Text
-              style={[styles.summary, { color: colors.muted }]}
-              numberOfLines={1}
-            >
-              {activitySummary}
-            </Text>
+            <View style={styles.summaryRow}>
+              <Ionicons
+                name="ellipse-outline"
+                size={12}
+                color={colors.textTertiary}
+                style={{ marginTop: 1 }}
+              />
+              <Text
+                style={[styles.summary, { color: colors.textSecondary }]}
+                numberOfLines={1}
+              >
+                {activitySummary}
+              </Text>
+            </View>
 
-            <View
-              style={{
-                marginTop: 12,
-                height: 1,
-                backgroundColor: withAlpha(colors.text, 0.06),
-              }}
-            />
+            <View style={[styles.rule, { backgroundColor: colors.border }]} />
 
             <View style={styles.chipsRow}>
-              {chips.slice(0, 3).map((chip) => {
-                const tone =
-                  chip.tone === "amber"
-                    ? "#FFC107"
-                    : chip.tone === "green"
-                    ? "#4CAF50"
-                    : chip.tone === "purple"
-                    ? "#6C63FF"
-                    : "#7A7A86";
-                return (
-                  <View
-                    key={chip.key}
-                    style={[
-                      styles.chip,
-                      {
-                        backgroundColor: withAlpha(tone, chip.tone === "gray" ? 0.08 : 0.14),
-                        borderColor: withAlpha(tone, chip.tone === "gray" ? 0.14 : 0.24),
-                      },
-                    ]}
+              {chipsToRender.map((chip) => (
+                <View
+                  key={chip.key}
+                  style={[
+                    styles.chip,
+                    {
+                      backgroundColor: colors.surface2,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[styles.chipText, { color: colors.textSecondary }]}
+                    numberOfLines={1}
                   >
-                    <Text
-                      style={[
-                        styles.chipText,
-                        { color: chip.tone === "gray" ? colors.muted : colors.text },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {chip.label}
-                    </Text>
-                  </View>
-                );
-              })}
+                    {chip.label}
+                  </Text>
+                </View>
+              ))}
             </View>
           </View>
 
           <Pressable
             onPress={onPing}
             hitSlop={10}
-            style={({ pressed: pingPressed }) => [
-              styles.pingWrap,
+            style={[
+              styles.pingButton,
               {
-                backgroundColor: canPing
-                  ? withAlpha("#6C63FF", pingPressed ? 0.28 : 0.18)
-                  : pingPressed
-                  ? withAlpha(colors.text, 0.1)
-                  : withAlpha(colors.text, 0.04),
-                borderColor: canPing
-                  ? withAlpha("#6C63FF", 0.34)
-                  : withAlpha(colors.text, 0.12),
+                backgroundColor: colors.surface2,
+                borderColor: colors.border,
               },
             ]}
           >
             <Ionicons
               name="notifications-outline"
               size={18}
-              color={canPing ? "#C9C5FF" : colors.muted}
+              color={canPing ? colors.textSecondary : withAlpha(colors.textTertiary, 0.5)}
             />
             {pingCooldownLabel ? (
-              <Text style={[styles.cooldown, { color: colors.muted }]}>
+              <Text style={[styles.cooldown, { color: colors.textTertiary }]}>
                 {pingCooldownLabel}
               </Text>
             ) : null}
@@ -180,18 +170,17 @@ export function FriendRowPremium({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 22,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 16,
+    borderWidth: 1,
     padding: 14,
     flexDirection: "row",
     gap: 12,
     alignItems: "flex-start",
   },
   avatarRing: {
-    width: 56,
-    height: 56,
+    width: 52,
+    height: 52,
     borderRadius: 999,
-    borderWidth: 2,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -199,13 +188,16 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 999,
-    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
   avatarText: {
-    fontSize: 18,
-    fontWeight: "900",
+    fontSize: 20,
+    fontWeight: "500",
+  },
+  content: {
+    flex: 1,
+    minWidth: 0,
   },
   nameRow: {
     flexDirection: "row",
@@ -214,33 +206,44 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: 16,
-    fontWeight: "900",
-    letterSpacing: -0.25,
+    fontWeight: "500",
     flexShrink: 1,
   },
   nicknamePrompt: {
-    color: "#9C95FF",
-    fontSize: 12,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "500",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
   },
   uid: {
     marginTop: 4,
-    fontSize: 11.5,
-    fontWeight: "700",
+    fontSize: 11,
+    fontWeight: "300",
+    letterSpacing: 0.3,
+  },
+  summaryRow: {
+    marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   summary: {
-    marginTop: 8,
-    fontSize: 13,
-    fontWeight: "700",
+    fontSize: 12,
+    fontWeight: "300",
+    flex: 1,
+  },
+  rule: {
+    marginTop: 10,
+    height: 1,
   },
   chipsRow: {
-    marginTop: 12,
+    marginTop: 10,
     flexDirection: "row",
     gap: 8,
     flexWrap: "wrap",
   },
   chip: {
-    minHeight: 28,
+    minHeight: 26,
     paddingHorizontal: 10,
     borderRadius: 999,
     borderWidth: 1,
@@ -248,23 +251,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   chipText: {
-    fontSize: 11.5,
-    fontWeight: "900",
+    fontSize: 11,
+    fontWeight: "400",
   },
-  pingWrap: {
-    width: 76,
-    minHeight: 52,
-    borderRadius: 16,
+  pingButton: {
+    width: 40,
+    minHeight: 40,
+    borderRadius: 10,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    gap: 4,
+    paddingHorizontal: 4,
+    gap: 2,
   },
   cooldown: {
-    fontSize: 10,
-    fontWeight: "800",
+    fontSize: 9,
+    fontWeight: "300",
     textAlign: "center",
   },
 });

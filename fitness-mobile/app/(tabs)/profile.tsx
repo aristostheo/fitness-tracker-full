@@ -16,7 +16,6 @@ import {
   RefreshControl,
   Alert,
   Pressable,
-  StyleSheet,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -35,8 +34,6 @@ import {
   updateProfile,
   type Profile,
 } from "@/services/profile";
-
-import { computeTargets } from "@/utils/macros";
 import { kgToLb, lbToKg } from "@/utils/units";
 
 import ThemeToggle from "@/components/ThemeToggle";
@@ -50,10 +47,9 @@ import { FriendsPreviewCard } from "@/components/profile/premium/FriendsPreviewC
 import { GlassCard } from "@/components/profile/premium/GlassCard";
 import { EmptyState } from "@/components/profile/premium/EmptyState";
 import { withAlpha } from "@/components/profile/premium/ui";
-import MacroGoalsEngineCard from "@/components/profile/premium/MacroGoalsEngineCard";
+import MacroGoalsCard from "@/components/profile/MacroGoalsCard";
 
 import { AppearanceCard } from "@/components/profile/premium/AppearenceCard";
-import { MacroMethodCard } from "@/components/profile/premium/MacroMethodCard";
 import { loadUnlocksLocal, loadFeaturedLocal } from "@/services/badges/store";
 import type { UnlockMap } from "@/services/badges/types";
 import {
@@ -68,6 +64,7 @@ import {
   syncHealth,
   type IntegrationSnapshot,
 } from "@/services/integrations";
+import { buildGoalInputsFromProfile } from "@/services/macroCalculator";
 
 export type GoalUILabel = "maintain" | "cut" | "lean_bulk" | "bulk";
 export type ActivityLevel =
@@ -76,13 +73,6 @@ export type ActivityLevel =
   | "moderate"
   | "active"
   | "athlete";
-
-type Targets = {
-  calorieGoal: number;
-  proteinGoal: number;
-  carbGoal: number;
-  fatGoal: number;
-};
 
 const initialsFrom = (displayName?: string | null, email?: string | null) => {
   const source = (displayName || email || "You").trim();
@@ -96,13 +86,6 @@ const initialsFrom = (displayName?: string | null, email?: string | null) => {
     "U"
   ).toUpperCase()}`;
 };
-
-const getSavedTargets = (p: Profile | null): Targets => ({
-  calorieGoal: Number(p?.calorieGoal ?? p?.dailyCaloriesTarget ?? 2200),
-  proteinGoal: Number(p?.proteinGoal ?? p?.dailyProteinTarget ?? 150),
-  carbGoal: Number(p?.carbGoal ?? 250),
-  fatGoal: Number(p?.fatGoal ?? 70),
-});
 
 export default function ProfileScreen() {
   const { colors, isDark } = useTheme();
@@ -124,51 +107,13 @@ export default function ProfileScreen() {
   const [weightInput, setWeightInput] = useState("75");
   const [targetWeightInput, setTargetWeightInput] = useState("70");
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>("moderate");
-  const [stepsPerDay, setStepsPerDay] = useState("7000");
-  const [gymSessionsPerWeek, setGymSessionsPerWeek] = useState("4");
-  const [sportSessionsPerWeek, setSportSessionsPerWeek] = useState("0");
-  const [jobActivity, setJobActivity] = useState<
-    "sedentary" | "light" | "active"
-  >("light");
-  const [macroEngineMode, setMacroEngineMode] =
-    useState<GoalUILabel>("maintain");
-  const [macroEngineSimple, setMacroEngineSimple] = useState(true);
-  const [goalIntensity, setGoalIntensity] = useState(0.35);
-  const [performanceFocus, setPerformanceFocus] = useState(0.55);
-  const [proteinFocus, setProteinFocus] = useState(0.6);
-  const [trackingAccurate, setTrackingAccurate] = useState(false);
-  const [bodyFatPctInput, setBodyFatPctInput] = useState("");
-
   const [goalType, setGoalType] = useState<GoalUILabel>("maintain");
-  const [weeklyPace, setWeeklyPace] = useState("0.5");
-
-  // ✅ Old feature states (re-skinned)
-  const [macroMethod, setMacroMethod] = useState<
-    "proteinPerKg" | "percent" | "cycling"
-  >("proteinPerKg");
-  const [macroMethodOpen, setMacroMethodOpen] = useState(true);
-  const [proteinPerKgInput, setProteinPerKgInput] = useState("1.8");
-  const [proteinPctInput, setProteinPctInput] = useState("30");
-  const [carbPctInput, setCarbPctInput] = useState("40");
-  const [fatPctInput, setFatPctInput] = useState("30");
-  const [trainingCarbPctInput, setTrainingCarbPctInput] = useState("45");
-  const [restCarbPctInput, setRestCarbPctInput] = useState("30");
-  const [trainingFatPctInput, setTrainingFatPctInput] = useState("25");
-  const [restFatPctInput, setRestFatPctInput] = useState("35");
-  const [macroGoalsOpen, setMacroGoalsOpen] = useState(true);
-
-  const [mealsPerDay, setMealsPerDay] = useState<string | number>(3);
-  const [breakfastTime, setBreakfastTime] = useState("08:00");
-  const [lastMealTime, setLastMealTime] = useState("19:00");
 
   // Save / dirty
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<null | "ok" | "err">(null);
 
-  // Targets preview (from GoalsCard)
-  const [targetsPreview, setTargetsPreview] = useState<Targets | null>(null);
-  const lastPreviewKey = useRef<string>("");
   const lastMetricsRef = useRef<{
     weightUnit?: "kg" | "lb";
     weightKg?: number;
@@ -289,41 +234,10 @@ export default function ProfileScreen() {
         );
 
         setActivityLevel((p?.activityLevel as ActivityLevel) || "moderate");
-        setGoalType(((p as any)?.goal as GoalUILabel) || "maintain");
-        setWeeklyPace(String((p as any)?.weeklyPace ?? "0.5"));
-
-        // ✅ hydrate old feature fields if present
-        setMacroMethod(((p as any)?.macroMethod as any) || "proteinPerKg");
-        setMealsPerDay((p as any)?.mealsPerDay ?? 3);
-        setBreakfastTime((p as any)?.breakfastTime ?? "08:00");
-        setLastMealTime((p as any)?.lastMealTime ?? "19:00");
-        setProteinPerKgInput(String((p as any)?.proteinPerKg ?? "1.8"));
-        setProteinPctInput(String((p as any)?.proteinPct ?? "30"));
-        setCarbPctInput(String((p as any)?.carbPct ?? "40"));
-        setFatPctInput(String((p as any)?.fatPct ?? "30"));
-        setTrainingCarbPctInput(
-          String((p as any)?.cycling?.trainingCarbPct ?? "45")
-        );
-        setRestCarbPctInput(String((p as any)?.cycling?.restCarbPct ?? "30"));
-        setTrainingFatPctInput(
-          String((p as any)?.cycling?.trainingFatPct ?? "25")
-        );
-        setRestFatPctInput(String((p as any)?.cycling?.restFatPct ?? "35"));
-
-        setStepsPerDay(String((p as any)?.stepsPerDay ?? 7000));
-        setGymSessionsPerWeek(String((p as any)?.gymSessionsPerWeek ?? 4));
-        setSportSessionsPerWeek(String((p as any)?.sportSessionsPerWeek ?? 0));
-        setJobActivity(((p as any)?.jobActivity as any) || "light");
-        setMacroEngineMode(
-          ((p as any)?.macroEngineMode as GoalUILabel) || "maintain"
-        );
-        setMacroEngineSimple((p as any)?.macroEngineSimple ?? true);
-        setGoalIntensity(Number((p as any)?.goalIntensity ?? 0.35));
-        setPerformanceFocus(Number((p as any)?.performanceFocus ?? 0.55));
-        setProteinFocus(Number((p as any)?.proteinFocus ?? 0.6));
-        setTrackingAccurate(Boolean((p as any)?.trackingAccurate ?? false));
-        setBodyFatPctInput(
-          (p as any)?.bodyFatPct != null ? String((p as any)?.bodyFatPct) : ""
+        setGoalType(
+          ((p as any)?.goalInputs?.mode as GoalUILabel) ||
+            ((p as any)?.goal as GoalUILabel) ||
+            "maintain"
         );
         setHydrated(true);
       }
@@ -380,6 +294,20 @@ export default function ProfileScreen() {
     }
   }, [profile, weightUnit]);
 
+  useEffect(() => {
+    if (!profile) return;
+    const nextGoal =
+      ((profile as any)?.goalInputs?.mode as GoalUILabel) ||
+      ((profile as any)?.goal as GoalUILabel) ||
+      "maintain";
+    if (nextGoal !== goalType) setGoalType(nextGoal);
+    const nextActivity =
+      ((profile as any)?.goalInputs?.activityLevel as ActivityLevel) ||
+      ((profile as any)?.activityLevel as ActivityLevel) ||
+      "moderate";
+    if (nextActivity !== activityLevel) setActivityLevel(nextActivity);
+  }, [activityLevel, goalType, profile]);
+
   const weightKg = useMemo(() => {
     const n = Number(weightInput || 0);
     return weightUnit === "lb" ? lbToKg(n) : n;
@@ -390,75 +318,10 @@ export default function ProfileScreen() {
     return weightUnit === "lb" ? lbToKg(n) : n;
   }, [targetWeightInput, weightUnit]);
 
-  const savedTargets = useMemo(() => getSavedTargets(profile), [profile]);
-
-  // ✅ Old algorithm: maintenance computed from computeTargets
-  const maintenanceTargets = useMemo(() => {
-    const baseParams = {
-      sex,
-      weightKg: Number(weightKg || 0),
-      heightCm: Number(heightCm || 0),
-      age: Number(age || 0),
-      activityLevel,
-      goal: "maintain" as const,
-    };
-    const out = computeTargets(baseParams, {
-      mode: "proteinPerKg",
-      proteinPerKg: 1.8,
-    });
-    return {
-      calorieGoal: out?.calorieGoal ?? 2200,
-      proteinGoal: out?.proteinGoal ?? 150,
-      carbGoal: out?.carbGoal ?? 250,
-      fatGoal: out?.fatGoal ?? 70,
-    } satisfies Targets;
-  }, [sex, weightKg, heightCm, age, activityLevel]);
-
-  const macroMethodSummary = useMemo(() => {
-    if (macroMethod === "proteinPerKg") {
-      return `Protein-first · ${proteinPerKgInput || "—"} g/kg`;
-    }
-    if (macroMethod === "percent") {
-      return `Split ${proteinPctInput || "—"}/${carbPctInput || "—"}/${
-        fatPctInput || "—"
-      }`;
-    }
-    return `Cycling ${trainingCarbPctInput || "—"}/${
-      restCarbPctInput || "—"
-    } carbs`;
-  }, [
-    macroMethod,
-    proteinPerKgInput,
-    proteinPctInput,
-    carbPctInput,
-    fatPctInput,
-    trainingCarbPctInput,
-    restCarbPctInput,
-  ]);
-
-  const macroGoalsSummary = useMemo(() => {
-    const t = targetsPreview ?? savedTargets;
-    const kcal = t?.calorieGoal ?? 0;
-    const modeLabel =
-      macroEngineMode === "lean_bulk"
-        ? "Lean bulk"
-        : macroEngineMode.charAt(0).toUpperCase() + macroEngineMode.slice(1);
-    return `${modeLabel} · ${Math.round(kcal)} kcal`;
-  }, [targetsPreview, savedTargets, macroEngineMode]);
-
   const initials = initialsFrom(
     profile?.displayName || user?.displayName,
     user?.email
   );
-
-  const onPreviewTargets = useCallback((t: Targets) => {
-    const key = `${t.calorieGoal}|${t.proteinGoal}|${t.carbGoal}|${t.fatGoal}`;
-    if (key === lastPreviewKey.current) return;
-    lastPreviewKey.current = key;
-
-    setTargetsPreview(t);
-    setDirty(true);
-  }, []);
 
   const onToggleUnit = useCallback(async () => {
     if (!user?.uid) return;
@@ -520,17 +383,7 @@ export default function ProfileScreen() {
     setSaveStatus(null);
 
     try {
-      const t = targetsPreview ?? savedTargets;
-
       await updateProfile(user.uid, {
-        // targets
-        calorieGoal: t.calorieGoal,
-        proteinGoal: t.proteinGoal,
-        carbGoal: t.carbGoal,
-        fatGoal: t.fatGoal,
-        dailyCaloriesTarget: t.calorieGoal,
-        dailyProteinTarget: t.proteinGoal,
-
         // body basics
         sex,
         age: Number(age || 0),
@@ -541,44 +394,13 @@ export default function ProfileScreen() {
 
         // goal meta
         goal: goalType,
-        weeklyPace: Number(weeklyPace || 0.5),
         activityLevel,
-
-        // ✅ old profile features (now persisted)
-        macroMethod,
-        proteinPerKg: Number(proteinPerKgInput || 0),
-        proteinPct: Number(proteinPctInput || 0),
-        carbPct: Number(carbPctInput || 0),
-        fatPct: Number(fatPctInput || 0),
-        cycling: {
-          trainingCarbPct: Number(trainingCarbPctInput || 0),
-          restCarbPct: Number(restCarbPctInput || 0),
-          trainingFatPct: Number(trainingFatPctInput || 0),
-          restFatPct: Number(restFatPctInput || 0),
-        },
-        mealsPerDay,
-        breakfastTime,
-        lastMealTime,
-        // macro engine activity inputs (optional but recommended)
-        stepsPerDay: Number(stepsPerDay || 7000),
-        gymSessionsPerWeek: Number(gymSessionsPerWeek || 4),
-        sportSessionsPerWeek: Number(sportSessionsPerWeek || 0),
-        jobActivity,
-        macroEngineMode,
-        macroEngineSimple,
-        goalIntensity,
-        performanceFocus,
-        proteinFocus,
-        trackingAccurate,
-        bodyFatPct: bodyFatPctInput ? Number(bodyFatPctInput) : null,
 
         updatedAt: Date.now(),
       } as any);
 
       setSaveStatus("ok");
       setDirty(false);
-      setTargetsPreview(null);
-      lastPreviewKey.current = "";
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e) {
       setSaveStatus("err");
@@ -589,8 +411,6 @@ export default function ProfileScreen() {
     }
   }, [
     user?.uid,
-    targetsPreview,
-    savedTargets,
     sex,
     age,
     heightCm,
@@ -598,32 +418,7 @@ export default function ProfileScreen() {
     weightKg,
     targetWeightKg,
     goalType,
-    weeklyPace,
     activityLevel,
-    macroMethod,
-    proteinPerKgInput,
-    proteinPctInput,
-    carbPctInput,
-    fatPctInput,
-    trainingCarbPctInput,
-    restCarbPctInput,
-    trainingFatPctInput,
-    restFatPctInput,
-    mealsPerDay,
-    breakfastTime,
-    lastMealTime,
-
-    stepsPerDay,
-    gymSessionsPerWeek,
-    sportSessionsPerWeek,
-    jobActivity,
-    macroEngineMode,
-    macroEngineSimple,
-    goalIntensity,
-    performanceFocus,
-    proteinFocus,
-    trackingAccurate,
-    bodyFatPctInput,
   ]);
 
   const onRefresh = useCallback(async () => {
@@ -649,7 +444,7 @@ export default function ProfileScreen() {
     return (
       <View style={{ flex: 1 }}>
         <LinearGradient
-          colors={isDark ? ["#070A12", "#0B1020"] : ["#EAF2FF", "#F7FAFF"]}
+          colors={[colors.background, colors.background]}
           style={{ position: "absolute", inset: 0 }}
         />
         <View
@@ -663,9 +458,7 @@ export default function ProfileScreen() {
     );
   }
 
-  const gradient = isDark
-    ? (["#070A12", "#0B1020", "#070A12"] as [string, string, string])
-    : (["#EEF4FF", "#FFFFFF", "#EEF4FF"] as [string, string, string]);
+  const gradient = [colors.background, colors.background, colors.background] as [string, string, string];
 
   const savePill = (
     <Pressable
@@ -680,11 +473,11 @@ export default function ProfileScreen() {
         borderRadius: 999,
         backgroundColor: dirty
           ? withAlpha(colors.primary, pressed ? 0.22 : 0.18)
-          : withAlpha("#4CAF50", 0.16),
+          : withAlpha(colors.success, 0.16),
         borderWidth: 1,
         borderColor: dirty
           ? withAlpha(colors.primary, 0.35)
-          : withAlpha("#4CAF50", 0.38),
+          : withAlpha(colors.success, 0.38),
         flexDirection: "row",
         alignItems: "center",
         gap: 6,
@@ -693,11 +486,11 @@ export default function ProfileScreen() {
       accessibilityLabel={dirty ? "Save profile changes" : "No changes to save"}
     >
       {!dirty && saveStatus !== "err" ? (
-        <Ionicons name="checkmark-circle" size={14} color="#4CAF50" />
+        <Ionicons name="checkmark-circle" size={14} color={colors.success} />
       ) : null}
       <Text
         style={{
-          color: dirty ? colors.text : saveStatus === "err" ? "#F44336" : "#4CAF50",
+          color: dirty ? colors.text : saveStatus === "err" ? colors.danger : colors.success,
           fontWeight: "900",
           fontSize: 12,
         }}
@@ -767,10 +560,15 @@ export default function ProfileScreen() {
           targetWeightKg={Number(targetWeightKg || 0)}
           weightKg={Number(weightKg || 0)}
           unit={weightUnit}
-          proteinGoal={(targetsPreview ?? savedTargets).proteinGoal}
+          proteinGoal={Number(
+            (profile as any)?.goalResult?.protein ??
+              profile?.proteinGoal ??
+              profile?.dailyProteinTarget ??
+              150
+          )}
           onPressStreak={() => router.push("/profile/insights-progress")}
-          onPressGoal={() => setMacroGoalsOpen(true)}
-          onPressProtein={() => setMacroMethodOpen(true)}
+          onPressGoal={() => router.push("/profile/goal-setup")}
+          onPressProtein={() => router.push("/profile/goal-setup")}
         />
 
         <InsightsEntryCard
@@ -797,7 +595,7 @@ export default function ProfileScreen() {
           colors={colors}
           isDark={isDark}
           stepsMap={(((profile as any)?.steps ?? {}) as Record<string, number>) || {}}
-          stepsGoal={Number((profile as any)?.stepsGoal ?? stepsPerDay ?? 8000)}
+          stepsGoal={Number((profile as any)?.stepsGoal ?? 8000)}
           onPress={() => {
             Haptics.selectionAsync();
             router.push("/profile/steps-history");
@@ -957,216 +755,18 @@ export default function ProfileScreen() {
           </Pressable>
         </GlassCard>
 
-        <View>
-          <Pressable
-            onPress={() => setMacroMethodOpen((v) => !v)}
-            style={({ pressed }) => [
-              {
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-                borderRadius: 14,
-                borderWidth: StyleSheet.hairlineWidth,
-                borderColor: colors.glassBorder,
-                backgroundColor: pressed ? colors.surface2 : colors.surface,
-              },
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="Toggle macro method"
-          >
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={{ color: colors.text, fontWeight: "900", fontSize: 14 }}>
-                Macro method
-              </Text>
-              {!macroMethodOpen ? (
-                <Text style={{ color: colors.muted, fontSize: 12.5 }}>
-                  {macroMethodSummary}
-                </Text>
-              ) : null}
-            </View>
-            <Ionicons
-              name={macroMethodOpen ? "chevron-up" : "chevron-down"}
-              size={18}
-              color={colors.muted}
-            />
-          </Pressable>
-          {macroMethodOpen ? (
-            <View style={{ marginTop: 10 }}>
-              <MacroMethodCard
-                hideHeader
-                value={macroMethod}
-                onChange={(v) => {
-                  setMacroMethod(v);
-                  setDirty(true);
-                }}
-                proteinPerKg={proteinPerKgInput}
-                onChangeProteinPerKg={(v) => {
-                  setProteinPerKgInput(v);
-                  setDirty(true);
-                }}
-                proteinPct={proteinPctInput}
-                carbPct={carbPctInput}
-                fatPct={fatPctInput}
-                onChangeProteinPct={(v) => {
-                  setProteinPctInput(v);
-                  setDirty(true);
-                }}
-                onChangeCarbPct={(v) => {
-                  setCarbPctInput(v);
-                  setDirty(true);
-                }}
-                onChangeFatPct={(v) => {
-                  setFatPctInput(v);
-                  setDirty(true);
-                }}
-                trainingCarbPct={trainingCarbPctInput}
-                restCarbPct={restCarbPctInput}
-                trainingFatPct={trainingFatPctInput}
-                restFatPct={restFatPctInput}
-                onChangeTrainingCarbPct={(v) => {
-                  setTrainingCarbPctInput(v);
-                  setDirty(true);
-                }}
-                onChangeRestCarbPct={(v) => {
-                  setRestCarbPctInput(v);
-                  setDirty(true);
-                }}
-                onChangeTrainingFatPct={(v) => {
-                  setTrainingFatPctInput(v);
-                  setDirty(true);
-                }}
-                onChangeRestFatPct={(v) => {
-                  setRestFatPctInput(v);
-                  setDirty(true);
-                }}
-              />
-            </View>
-          ) : null}
-        </View>
-
-        <View>
-          <Pressable
-            onPress={() => setMacroGoalsOpen((v) => !v)}
-            style={({ pressed }) => [
-              {
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-                borderRadius: 14,
-                borderWidth: StyleSheet.hairlineWidth,
-                borderColor: colors.glassBorder,
-                backgroundColor: pressed ? colors.surface2 : colors.surface,
-              },
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="Toggle macro goals"
-          >
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={{ color: colors.text, fontWeight: "900", fontSize: 14 }}>
-                Macro goals
-              </Text>
-              {!macroGoalsOpen ? (
-                <Text style={{ color: colors.muted, fontSize: 12.5 }}>
-                  {macroGoalsSummary}
-                </Text>
-              ) : null}
-            </View>
-            <Ionicons
-              name={macroGoalsOpen ? "chevron-up" : "chevron-down"}
-              size={18}
-              color={colors.muted}
-            />
-          </Pressable>
-          {macroGoalsOpen ? (
-            <View style={{ marginTop: 10 }}>
-              <MacroGoalsEngineCard
-                hideHeaderText
-                currentWeightKg={Number(weightKg || 0)}
-                targetWeightKg={Number(targetWeightKg || 0)}
-                targetWeightInput={targetWeightInput}
-                onChangeTargetWeight={(v) => {
-                  setTargetWeightInput(v);
-                  setDirty(true);
-                }}
-                weightUnit={weightUnit}
-                maintenanceTargets={maintenanceTargets}
-                sex={sex}
-                age={Number(age || 25)}
-                heightCm={Number(heightCm || 175)}
-                defaultStepsPerDay={Number(stepsPerDay || 7000)}
-                defaultGymSessionsPerWeek={Number(gymSessionsPerWeek || 4)}
-                defaultSportSessionsPerWeek={Number(sportSessionsPerWeek || 0)}
-                defaultJobActivity={jobActivity}
-                initialMode={macroEngineMode}
-                initialSimple={macroEngineSimple}
-                initialGoalIntensity={goalIntensity}
-                initialPerformanceFocus={performanceFocus}
-                initialProteinFocus={proteinFocus}
-                initialTrackingAccurate={trackingAccurate}
-                initialBodyFatPct={bodyFatPctInput}
-                onChangeStepsPerDay={(v) => {
-                  setStepsPerDay(v);
-                  setDirty(true);
-                }}
-                onChangeGymSessionsPerWeek={(v) => {
-                  setGymSessionsPerWeek(v);
-                  setDirty(true);
-                }}
-                onChangeSportSessionsPerWeek={(v) => {
-                  setSportSessionsPerWeek(v);
-                  setDirty(true);
-                }}
-                onChangeJobActivity={(v) => {
-                  setJobActivity(v);
-                  setDirty(true);
-                }}
-                onChangeMode={(v) => {
-                  setMacroEngineMode(v);
-                  setDirty(true);
-                }}
-                onChangeSimple={(v) => {
-                  setMacroEngineSimple(v);
-                  setDirty(true);
-                }}
-                onChangeGoalIntensity={(v) => {
-                  setGoalIntensity(v);
-                  setDirty(true);
-                }}
-                onChangePerformanceFocus={(v) => {
-                  setPerformanceFocus(v);
-                  setDirty(true);
-                }}
-                onChangeProteinFocus={(v) => {
-                  setProteinFocus(v);
-                  setDirty(true);
-                }}
-                onChangeTrackingAccurate={(v) => {
-                  setTrackingAccurate(v);
-                  setDirty(true);
-                }}
-                onChangeBodyFatPct={(v) => {
-                  setBodyFatPctInput(v);
-                  setDirty(true);
-                }}
-                savedTargets={savedTargets}
-                onPreview={(t, meta) => {
-                  onPreviewTargets(t);
-                }}
-              />
-            </View>
-          ) : null}
-        </View>
-
         <DietPreferencesCard
           value={(profile as any)?.dietPreferences}
           onPress={() => {
             Haptics.selectionAsync();
             router.push("/(modals)/diet-preferences");
           }}
+        />
+
+        <MacroGoalsCard
+          inputs={buildGoalInputsFromProfile(profile ?? {})}
+          result={(profile as any)?.goalResult ?? null}
+          onPress={() => router.push("/profile/goal-setup")}
         />
 
         <GlassCard>
@@ -1315,17 +915,19 @@ function QuickStatsRow({
       : "Maintain";
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 6 }}>
-      <StatChip colors={colors} isDark={isDark} label="🔥 7 day streak" onPress={onPressStreak} />
+      <StatChip colors={colors} isDark={isDark} icon="flame-outline" label="7 day streak" onPress={onPressStreak} />
       <StatChip
         colors={colors}
         isDark={isDark}
-        label={`🎯 ${goalLabel} · ${targetWeightKg && weightKg ? `${remaining} to go` : "set target"}`}
+        icon="locate-outline"
+        label={`${goalLabel} · ${targetWeightKg && weightKg ? `${remaining} to go` : "set target"}`}
         onPress={onPressGoal}
       />
       <StatChip
         colors={colors}
         isDark={isDark}
-        label={`⚡ ${Math.round(proteinGoal || 185)}g protein goal`}
+        icon="flash-outline"
+        label={`${Math.round(proteinGoal || 185)}g protein goal`}
         onPress={onPressProtein}
       />
     </ScrollView>
@@ -1335,11 +937,13 @@ function QuickStatsRow({
 function StatChip({
   colors,
   isDark,
+  icon,
   label,
   onPress,
 }: {
   colors: any;
   isDark: boolean;
+  icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
 }) {
@@ -1352,17 +956,21 @@ function StatChip({
       accessibilityRole="button"
       accessibilityLabel={label}
       style={({ pressed }) => ({
-        minHeight: 44,
+        minHeight: 32,
         paddingHorizontal: 14,
         borderRadius: 999,
         borderWidth: 1,
-        borderColor: withAlpha(colors.primary, pressed ? 0.44 : 0.28),
-        backgroundColor: withAlpha(colors.primary, isDark ? 0.12 : 0.08),
+        borderColor: colors.border,
+        backgroundColor: colors.surface1,
         alignItems: "center",
         justifyContent: "center",
+        flexDirection: "row",
+        gap: 8,
+        opacity: pressed ? 0.85 : 1,
       })}
     >
-      <Text style={{ color: colors.text, fontWeight: "900", fontSize: 13 }}>{label}</Text>
+      <Ionicons name={icon} size={14} color={colors.textTertiary} />
+      <Text style={{ color: colors.textSecondary, fontWeight: "500", fontSize: 12 }}>{label}</Text>
     </Pressable>
   );
 }
@@ -1393,8 +1001,8 @@ function InsightsEntryCard({
       <LinearGradient
         colors={[
           withAlpha(colors.primary, isDark ? 0.28 : 0.16),
-          withAlpha("#6C63FF", isDark ? 0.18 : 0.1),
-          withAlpha("#22D3EE", isDark ? 0.08 : 0.06),
+          withAlpha(colors.accent, isDark ? 0.18 : 0.1),
+          withAlpha(colors.accent, isDark ? 0.08 : 0.06),
         ]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -1429,7 +1037,10 @@ function InsightsEntryCard({
                 width: 6,
                 height: 10 + Math.round((v / max) * 28),
                 borderRadius: 999,
-                backgroundColor: idx === safeValues.length - 1 ? colors.primary : withAlpha(colors.text, 0.26),
+                backgroundColor:
+                  idx === safeValues.length - 1
+                    ? colors.accent
+                    : withAlpha(colors.accent, 0.55),
               }}
             />
           ))}
@@ -1454,7 +1065,7 @@ function IntegrationsEntryCard({
   const count = snapshot ? connectedCount(snapshot) : 0;
   const health = snapshot ? syncHealth(snapshot) : "none";
   const chipColor =
-    health === "error" ? "#F44336" : count > 0 ? "#4CAF50" : colors.muted;
+    health === "error" ? colors.danger : count > 0 ? colors.success : colors.muted;
   const chipText = health === "error" ? "Sync error" : count > 0 ? `${count} connected` : "Not set up";
   return (
     <Pressable
@@ -1507,10 +1118,16 @@ function IntegrationsEntryCard({
             paddingVertical: 6,
             borderWidth: 1,
             borderColor: withAlpha(chipColor, 0.32),
-            backgroundColor: withAlpha(chipColor, count > 0 || health === "error" ? 0.13 : 0.08),
+            backgroundColor: withAlpha(chipColor, 0.12),
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
           }}
         >
-          <Text style={{ color: chipColor, fontWeight: "900", fontSize: 11 }}>
+          {health === "error" ? (
+            <Ionicons name="warning-outline" size={12} color={chipColor} />
+          ) : null}
+          <Text style={{ color: chipColor, fontWeight: "500", fontSize: 11 }}>
             {chipText}
           </Text>
         </View>
@@ -1559,17 +1176,12 @@ function StepsHistoryEntryCard({
         transform: [{ scale: pressed ? 0.995 : 1 }],
       })}
     >
-      <LinearGradient
-        colors={[
-          withAlpha("#22D3EE", isDark ? 0.14 : 0.08),
-          withAlpha(colors.primary, isDark ? 0.16 : 0.08),
-        ]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+      <View
         style={{
           borderRadius: 22,
           borderWidth: 1,
-          borderColor: withAlpha("#22D3EE", isDark ? 0.22 : 0.16),
+          borderColor: colors.border,
+          backgroundColor: colors.surface1,
           padding: 16,
           gap: 14,
         }}
@@ -1582,12 +1194,12 @@ function StepsHistoryEntryCard({
               borderRadius: 16,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: withAlpha("#22D3EE", 0.16),
+              backgroundColor: colors.surface3,
               borderWidth: 1,
-              borderColor: withAlpha("#22D3EE", 0.26),
+              borderColor: colors.border,
             }}
           >
-            <Ionicons name="footsteps-outline" size={22} color="#22D3EE" />
+            <Ionicons name="footsteps-outline" size={22} color={colors.accent} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}>
@@ -1605,7 +1217,7 @@ function StepsHistoryEntryCard({
             colors={colors}
             label="Today"
             value={todaySteps.toLocaleString()}
-            tint="#22D3EE"
+            tint={colors.accent}
           />
           <MiniStatCard
             colors={colors}
@@ -1617,7 +1229,7 @@ function StepsHistoryEntryCard({
             colors={colors}
             label="Goal hits"
             value={`${hitDays}/7`}
-            tint="#4CAF50"
+            tint={colors.success}
           />
         </View>
 
@@ -1634,10 +1246,8 @@ function StepsHistoryEntryCard({
                     height: h,
                     borderRadius: 999,
                     backgroundColor: hit
-                      ? "#4CAF50"
-                      : idx === values.length - 1
-                      ? colors.primary
-                      : withAlpha(colors.text, 0.22),
+                      ? colors.accent
+                      : colors.surface3,
                   }}
                 />
                 <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800" }}>
@@ -1649,7 +1259,7 @@ function StepsHistoryEntryCard({
             );
           })}
         </View>
-      </LinearGradient>
+      </View>
     </Pressable>
   );
 }
@@ -1671,9 +1281,9 @@ function MiniStatCard({
         flex: 1,
         borderRadius: 16,
         padding: 12,
-        backgroundColor: withAlpha(colors.text, 0.04),
+        backgroundColor: colors.surface2,
         borderWidth: 1,
-        borderColor: withAlpha(tint, 0.18),
+        borderColor: colors.border,
         gap: 4,
       }}
     >

@@ -1083,11 +1083,14 @@ export default function HomeScreen() {
                 <Text
                   style={{
                     color: t.text,
-                    fontSize: 40,
-                    fontWeight: "300",
+                    fontSize: 36,
+                    fontWeight: "200",
                     marginTop: 4,
-                    letterSpacing: -1.2,
+                    letterSpacing: -1,
                   }}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.88}
                   accessibilityRole="header"
                 >
                   {getGreeting(now)}
@@ -1249,13 +1252,18 @@ export default function HomeScreen() {
         <View
           style={{
             flexDirection: "row",
-            gap: 12,
+            flexWrap: "wrap",
+            gap: 8,
             paddingHorizontal: 16,
             marginTop: 14,
+            justifyContent: "space-between",
           }}
         >
           {ringData.map((r) => (
-            <View key={r.label} style={{ flex: 1 }}>
+            <View
+              key={r.label}
+              style={{ width: "48%", minWidth: 160 }}
+            >
               <MetricRing
                 tone={r.tone}
                 label={r.label}
@@ -1267,6 +1275,9 @@ export default function HomeScreen() {
                 tokens={t}
                 style={softShadow as any}
                 onPress={r.onPress}
+                size={88}
+                minHeight={160}
+                valueFontSize={24}
               />
             </View>
           ))}
@@ -1277,9 +1288,9 @@ export default function HomeScreen() {
           <Text
             style={{
               color: t.muted,
-              fontWeight: "900",
-              fontSize: 12,
-              letterSpacing: 0.6,
+              fontWeight: "500",
+              fontSize: 11,
+              letterSpacing: 1,
               marginBottom: 10,
             }}
           >

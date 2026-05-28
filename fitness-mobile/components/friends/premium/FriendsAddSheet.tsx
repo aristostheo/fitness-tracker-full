@@ -1,7 +1,3 @@
-// components/friends/premium/FriendsAddSheet.tsx
-// Drop-in ✅ privacy-first add flow (no public directory)
-// Input: email or UID + optional display name
-
 import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -11,9 +7,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from "react-native";
-import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import Animated, {
@@ -44,7 +38,7 @@ export function FriendsAddSheet({
   privacyNote?: string;
   myUid?: string;
 }) {
-  const { colors, isDark } = useTheme();
+  const { colors, isDark } = useTheme() as any;
   const [target, setTarget] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [showQr, setShowQr] = useState(false);
@@ -53,12 +47,12 @@ export function FriendsAddSheet({
     if (!open) return;
     setTarget("");
     setDisplayName("");
+    setShowQr(false);
   }, [open]);
 
   const canSend = useMemo(() => {
     const t = target.trim();
-    if (!t) return false;
-    if (disabled) return false;
+    if (!t || disabled) return false;
     const looksLikeEmail = /\S+@\S+\.\S+/.test(t);
     const looksLikeUid = t.length >= 6 && !t.includes(" ");
     return looksLikeEmail || looksLikeUid;
@@ -70,214 +64,122 @@ export function FriendsAddSheet({
     <Animated.View
       entering={FadeIn.duration(160)}
       exiting={FadeOut.duration(140)}
-      style={[
-        styles.overlay,
-        { backgroundColor: withAlpha(colors.text, isDark ? 0.45 : 0.18) },
-      ]}
+      style={[styles.overlay, { backgroundColor: withAlpha(colors.textPrimary, isDark ? 0.5 : 0.16) }]}
     >
       <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
-
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <Animated.View
-          entering={FadeInDown.duration(260)}
-          exiting={FadeOutDown.duration(220)}
-          style={styles.sheetWrap}
-        >
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <Animated.View entering={FadeInDown.duration(260)} exiting={FadeOutDown.duration(220)}>
           <View
             style={[
               styles.sheet,
               {
-                backgroundColor: colors.glass,
-                borderColor: colors.glassBorder,
+                backgroundColor: colors.surface2,
+                borderColor: colors.borderElevated,
+                shadowColor: colors.textPrimary,
+                shadowOpacity: isDark ? 0 : 0.08,
+                shadowRadius: isDark ? 0 : 18,
+                shadowOffset: { width: 0, height: 8 },
+                elevation: isDark ? 0 : 2,
               },
             ]}
           >
-            <BlurView
-              intensity={30}
-              tint={isDark ? "dark" : "light"}
-              style={StyleSheet.absoluteFillObject}
-            />
-
-            <View
-              style={[
-                styles.handle,
-                { backgroundColor: withAlpha(colors.text, 0.18) },
-              ]}
-            />
+            <View style={[styles.handle, { backgroundColor: colors.surface3 }]} />
 
             <View style={styles.headerRow}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.title, { color: colors.text }]}>
-                  Add friend
-                </Text>
-                <Text style={[styles.subtitle, { color: colors.muted }]}>
-                  {privacyNote || "Private by default."}
+                <Text style={[styles.title, { color: colors.textPrimary }]}>Add friend</Text>
+                <Text style={[styles.subtitle, { color: colors.textTertiary }]}>
+                  {privacyNote || "Requests are private. No public search directory."}
                 </Text>
               </View>
-
               <Pressable
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  onClose();
-                }}
-                style={({ pressed }) => [
-                  styles.closeBtn,
-                  {
-                    backgroundColor: withAlpha(colors.text, pressed ? 0.12 : 0.08),
-                    borderColor: colors.glassBorder,
-                  },
-                ]}
+                onPress={onClose}
+                style={[styles.closeButton, { backgroundColor: colors.surface3, borderColor: colors.border }]}
               >
-                <Ionicons name="close" size={18} color={colors.text} />
+                <Ionicons name="close" size={16} color={colors.textSecondary} />
               </Pressable>
             </View>
 
-            <View style={{ height: 12 }} />
-
-            <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={styles.utilityRow}>
               <Pressable
-                onPress={() => {
+                onPress={async () => {
                   if (!myUid) return;
-                  Clipboard.setStringAsync(myUid)
-                    .then(() => {
-                      Haptics.notificationAsync(
-                        Haptics.NotificationFeedbackType.Success
-                      );
-                      Alert.alert("Copied", "Your UID is ready to share.");
-                    })
-                    .catch(() => {
-                      Alert.alert("Couldn't copy", "Try again in a moment.");
-                    });
+                  await Clipboard.setStringAsync(myUid);
+                  Haptics.selectionAsync().catch(() => {});
                 }}
-                style={({ pressed }) => [
-                  styles.utilityBtn,
-                  {
-                    opacity: myUid ? 1 : 0.5,
-                    backgroundColor: withAlpha(colors.text, pressed ? 0.12 : 0.08),
-                    borderColor: colors.glassBorder,
-                  },
-                ]}
+                style={[styles.utilityButton, { backgroundColor: colors.surface2, borderColor: colors.border }]}
               >
-                <Ionicons name="copy-outline" size={16} color={colors.text} />
-                <Text style={[styles.utilityText, { color: colors.text }]}>Copy my UID</Text>
+                <Ionicons name="copy-outline" size={14} color={colors.textSecondary} />
+                <Text style={[styles.utilityText, { color: colors.textSecondary }]}>Copy my UID</Text>
               </Pressable>
               <Pressable
-                onPress={() => setShowQr((v) => !v)}
-                style={({ pressed }) => [
-                  styles.utilityBtn,
-                  {
-                    opacity: myUid ? 1 : 0.5,
-                    backgroundColor: withAlpha(colors.text, pressed ? 0.12 : 0.08),
-                    borderColor: colors.glassBorder,
-                  },
-                ]}
+                onPress={() => setShowQr((value) => !value)}
+                style={[styles.utilityButton, { backgroundColor: colors.surface2, borderColor: colors.border }]}
               >
-                <Ionicons name="qr-code-outline" size={16} color={colors.text} />
-                <Text style={[styles.utilityText, { color: colors.text }]}>Show my QR</Text>
+                <Ionicons name="qr-code-outline" size={14} color={colors.textSecondary} />
+                <Text style={[styles.utilityText, { color: colors.textSecondary }]}>Show my QR</Text>
               </Pressable>
             </View>
 
             {showQr && myUid ? (
-              <View style={[styles.qrWrap, { borderColor: colors.glassBorder, backgroundColor: colors.inputBg }]}>
-                <View style={styles.qrPanel}>
-                  <QRCode value={myUid} size={180} backgroundColor="#FFFFFF" color="#111111" />
-                </View>
-                <Text style={[styles.qrUid, { color: colors.muted }]} numberOfLines={1}>
+              <View style={[styles.qrWrap, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+                <QRCode value={myUid} size={156} backgroundColor={colors.surface1} color={colors.textPrimary} />
+                <Text style={[styles.qrUid, { color: colors.textTertiary }]} numberOfLines={1}>
                   {myUid}
                 </Text>
               </View>
             ) : null}
 
-            <View style={{ height: 12 }} />
-
-            <Text style={[styles.label, { color: colors.muted }]}>
-              Email or UID
-            </Text>
-            <View
-              style={[
-                styles.inputWrap,
-                {
-                  backgroundColor: colors.inputBg,
-                  borderColor: colors.inputBorder,
-                },
-              ]}
-            >
-              <Ionicons name="search-outline" size={16} color={colors.muted} />
+            <Text style={[styles.label, { color: colors.textTertiary }]}>EMAIL OR UID</Text>
+            <View style={[styles.inputWrap, { backgroundColor: colors.surface3, borderColor: colors.border }]}>
               <TextInput
                 value={target}
                 onChangeText={setTarget}
                 placeholder="name@email.com or user UID"
-                placeholderTextColor={withAlpha(colors.muted, 0.7)}
+                placeholderTextColor={colors.textTertiary}
                 autoCapitalize="none"
                 autoCorrect={false}
-                style={[styles.input, { color: colors.text }]}
+                style={[styles.input, { color: colors.textPrimary }]}
               />
             </View>
 
-            <View style={{ height: 10 }} />
-
-            <Text style={[styles.label, { color: colors.muted }]}>
-              Display name (optional)
-            </Text>
-            <View
-              style={[
-                styles.inputWrap,
-                {
-                  backgroundColor: colors.inputBg,
-                  borderColor: colors.inputBorder,
-                },
-              ]}
-            >
-              <Ionicons name="person-outline" size={16} color={colors.muted} />
+            <Text style={[styles.label, { color: colors.textTertiary }]}>DISPLAY NAME</Text>
+            <View style={[styles.inputWrap, { backgroundColor: colors.surface3, borderColor: colors.border }]}>
               <TextInput
                 value={displayName}
                 onChangeText={setDisplayName}
                 placeholder="Your nickname for them (only you see this)"
-                placeholderTextColor={withAlpha(colors.muted, 0.7)}
-                style={[styles.input, { color: colors.text }]}
+                placeholderTextColor={colors.textTertiary}
+                style={[styles.input, { color: colors.textPrimary }]}
               />
             </View>
-
-            <View style={{ height: 14 }} />
 
             <Pressable
               disabled={!canSend || sending}
               onPress={async () => {
-                Haptics.selectionAsync();
+                Haptics.selectionAsync().catch(() => {});
                 await onSend(target, displayName);
               }}
-              style={({ pressed }) => [
-                styles.sendBtn,
+              style={[
+                styles.sendButton,
                 {
-                  opacity: !canSend || sending ? 0.5 : 1,
-                  backgroundColor: withAlpha(
-                    colors.primary || "#6ee7ff",
-                    pressed ? 0.24 : 0.18
-                  ),
-                  borderColor: withAlpha(colors.primary || "#6ee7ff", 0.28),
+                  backgroundColor: canSend && !sending ? colors.accent : colors.surface3,
+                  borderColor: canSend && !sending ? colors.accent : colors.border,
                 },
               ]}
             >
-              <BlurView
-                intensity={18}
-                tint="dark"
-                style={StyleSheet.absoluteFillObject}
-              />
-              <Ionicons
-                name="paper-plane-outline"
-                size={16}
-                color={colors.text}
-              />
-              <Text style={[styles.sendText, { color: colors.text }]}>
+              <Text
+                style={[
+                  styles.sendText,
+                  { color: canSend && !sending ? colors.surface1 : colors.textTertiary },
+                ]}
+              >
                 {sending ? "Sending…" : "Send request"}
               </Text>
             </Pressable>
 
-            <Text style={[styles.privacyHint, { color: colors.muted }]}>
-              Tip: Share your UID privately with someone you trust. No public
-              directory.
+            <Text style={[styles.privacyHint, { color: colors.textTertiary }]}>
+              Tip: Share your UID privately with someone you trust.
             </Text>
           </View>
         </Animated.View>
@@ -291,88 +193,110 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: "flex-end",
     padding: 12,
-    backgroundColor: "rgba(0,0,0,0.35)",
-  },
-  sheetWrap: {
-    width: "100%",
   },
   sheet: {
-    borderRadius: 22,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: "hidden",
-    padding: 14,
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 16,
   },
   handle: {
     alignSelf: "center",
-    width: 44,
-    height: 5,
-    borderRadius: 99,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    marginBottom: 10,
-  },
-  headerRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  title: { fontSize: 18, fontWeight: "900", letterSpacing: -0.3 },
-  subtitle: { marginTop: 4, fontSize: 12.5, fontWeight: "600" },
-  closeBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  label: { fontSize: 12, fontWeight: "700", marginBottom: 6 },
-  inputWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  input: { flex: 1, fontSize: 14, fontWeight: "700" },
-  utilityBtn: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  utilityText: { fontSize: 12.5, fontWeight: "900" },
-  qrWrap: {
-    marginTop: 12,
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 12,
-    alignItems: "center",
-    gap: 10,
-  },
-  qrPanel: {
-    padding: 12,
-    borderRadius: 18,
-    backgroundColor: "#FFFFFF",
-  },
-  qrUid: { fontSize: 11.5, fontWeight: "700" },
-  sendBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 12,
+    width: 32,
+    height: 4,
     borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: "hidden",
+    marginBottom: 12,
   },
-  sendText: { fontSize: 13, fontWeight: "900", letterSpacing: -0.2 },
-  privacyHint: {
-    marginTop: 10,
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "500",
+  },
+  subtitle: {
+    marginTop: 4,
     fontSize: 12,
+    fontWeight: "300",
+  },
+  closeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  utilityRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  utilityButton: {
+    flex: 1,
+    minHeight: 36,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  utilityText: {
+    fontSize: 12,
+    fontWeight: "400",
+  },
+  qrWrap: {
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    gap: 12,
+  },
+  qrUid: {
+    fontSize: 11,
+    fontWeight: "300",
+    letterSpacing: 0.3,
+  },
+  label: {
+    marginBottom: 6,
+    fontSize: 11,
+    fontWeight: "500",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  inputWrap: {
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  input: {
+    fontSize: 14,
+    fontWeight: "400",
+  },
+  sendButton: {
+    minHeight: 44,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+  },
+  sendText: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  privacyHint: {
+    marginTop: 12,
     textAlign: "center",
-    lineHeight: 16,
-    fontWeight: "600",
+    fontSize: 12,
+    fontWeight: "300",
+    fontStyle: "italic",
   },
 });

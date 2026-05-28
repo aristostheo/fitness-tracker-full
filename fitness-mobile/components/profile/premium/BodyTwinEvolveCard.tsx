@@ -27,7 +27,7 @@ export function BodyTwinEvolveCard(props: {
   trendHint: number; // negative means trending down
   onPressCustomize: () => void;
 }) {
-  const { colors, isDark } = useTheme();
+  const { colors, isDark } = useTheme() as any;
 
   const energy = useMemo(() => {
     // a stable, not-too-reactive evolution scalar
@@ -61,7 +61,7 @@ export function BodyTwinEvolveCard(props: {
   return (
     <GlassCard>
       <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <Text style={{ color: colors.text, fontWeight: "900", fontSize: 14 }}>
+        <Text style={{ color: colors.textPrimary, fontWeight: "500", fontSize: 16 }}>
           Body Twin
         </Text>
 
@@ -74,22 +74,19 @@ export function BodyTwinEvolveCard(props: {
             styles.btn,
             {
               marginLeft: "auto",
-              backgroundColor: withAlpha(
-                colors.card,
-                isDark ? (pressed ? 0.22 : 0.18) : pressed ? 0.7 : 0.55
-              ),
-              borderColor: withAlpha(colors.border, 0.7),
+              backgroundColor: colors.surface3,
+              borderColor: colors.border,
             },
           ]}
           accessibilityRole="button"
           accessibilityLabel="Customize Body Twin"
         >
-          <Ionicons name="options-outline" size={16} color={colors.text} />
+          <Ionicons name="options-outline" size={16} color={colors.textTertiary} />
         </Pressable>
       </View>
 
-      <Text style={{ color: colors.muted, marginTop: 6 }}>{mood}</Text>
-      <Text style={{ color: colors.muted, marginTop: 6, fontSize: 12, fontWeight: "800" }}>
+      <Text style={{ color: colors.textTertiary, marginTop: 6, fontWeight: "300" }}>{mood}</Text>
+      <Text style={{ color: colors.textTertiary, marginTop: 6, fontSize: 12, fontWeight: "300", fontStyle: "italic" }}>
         Updates as you log — not a daily critic.
       </Text>
 
@@ -148,15 +145,12 @@ export function BodyTwinEvolveCard(props: {
                     width: 62 + energy * 16,
                     height: 62 + energy * 16,
                     borderRadius: 22 + energy * 6,
-                    backgroundColor: withAlpha(
-                      colors.text,
-                      isDark ? 0.08 : 0.06
-                    ),
+                    backgroundColor: colors.surface3,
                     borderColor: withAlpha(colors.border, 0.7),
                   },
                 ]}
               >
-                <Ionicons name="person-outline" size={22} color={colors.text} />
+                <Ionicons name="person-outline" size={22} color={colors.textPrimary} />
               </View>
             </View>
           </View>
@@ -178,18 +172,18 @@ export function BodyTwinEvolveCard(props: {
 }
 
 function Chip({ label, value, subLabel }: { label: string; value: string; subLabel?: string }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme() as any;
   return (
     <View style={styles.chip}>
-      <Text style={{ color: colors.muted, fontSize: 12 }}>{label}</Text>
+      <Text style={{ color: colors.textTertiary, fontSize: 11, fontWeight: "300" }}>{label}</Text>
       <Text
-        style={{ color: colors.text, fontWeight: "900", marginTop: 4 }}
+        style={{ color: colors.textPrimary, fontWeight: "500", marginTop: 4 }}
         numberOfLines={1}
       >
         {value}
       </Text>
       {subLabel ? (
-        <Text style={{ color: colors.muted, fontSize: 10.5, marginTop: 3, lineHeight: 13 }}>
+        <Text style={{ color: colors.textTertiary, fontSize: 10.5, marginTop: 3, lineHeight: 13, fontWeight: "300" }}>
           {subLabel}
         </Text>
       ) : null}
@@ -241,6 +235,5 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 16,
     padding: 10,
-    backgroundColor: "rgba(255,255,255,0.06)",
   },
 });

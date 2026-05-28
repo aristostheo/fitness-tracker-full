@@ -149,13 +149,13 @@ export function FriendActionsSheet({
                       backgroundColor: withAlpha(
                         a.destructive
                           ? colors.danger
-                          : colors.primary || "#6ee7ff",
+                          : colors.primary,
                         0.18
                       ),
                       borderColor: withAlpha(
                         a.destructive
                           ? colors.danger
-                          : colors.primary || "#6ee7ff",
+                          : colors.primary,
                         0.24
                       ),
                     },
@@ -207,7 +207,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: "flex-end",
     padding: 12,
-    backgroundColor: "rgba(0,0,0,0.35)",
   },
   sheetWrap: { width: "100%" },
   sheet: {
@@ -221,7 +220,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 5,
     borderRadius: 99,
-    backgroundColor: "rgba(255,255,255,0.18)",
     marginBottom: 10,
   },
   headerRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },

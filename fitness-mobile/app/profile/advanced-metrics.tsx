@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
 import { useAuth } from "@/content/AuthContext";
+import { useTheme } from "@/content/ThemeProvider";
 import {
   subscribeExerciseBetween,
   subscribeFoodsBetween,
@@ -58,21 +59,24 @@ type Goals = {
   workoutsPerWeek: number;
 };
 
-const C = {
-  bg: "#0D0D0F",
-  card: "#1A1A24",
-  card2: "#202033",
-  text: "#F6F7FF",
-  muted: "rgba(246,247,255,0.66)",
-  hairline: "rgba(255,255,255,0.10)",
-  purple: "#6C63FF",
-  blue: "#4DA3FF",
-  teal: "#22D3EE",
-  green: "#4CAF50",
-  amber: "#FFC107",
-  red: "#F44336",
-  gray: "#2A2A35",
-};
+function useC() {
+  const { colors } = (useTheme as any)();
+  return {
+    bg: colors.background as string,
+    card: colors.surface1 as string,
+    card2: colors.surface2 as string,
+    text: colors.textPrimary as string,
+    muted: colors.textTertiary as string,
+    hairline: colors.border as string,
+    purple: colors.accent as string,
+    blue: colors.accent as string,
+    teal: colors.accent as string,
+    green: colors.success as string,
+    amber: colors.warning as string,
+    red: colors.danger as string,
+    gray: colors.surface3 as string,
+  };
+}
 const RANGE_OPTIONS: RangeKey[] = [7, 30, 90];
 const MEALS: MealKey[] = ["breakfast", "lunch", "dinner", "snacks"];
 const W = 320;
@@ -159,6 +163,7 @@ function dayScore(d: DayRow, goals: Goals) {
 }
 
 export default function AdvancedMetricsScreen() {
+  const C = useC();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -332,7 +337,7 @@ export default function AdvancedMetricsScreen() {
 
         <MetricSection id="protein" title="Protein Analytics" open={open} setOpen={setOpen}>
           <ChartCard title="Protein distribution" onExpand={() => setExpanded("Protein distribution")}>
-            <StackedMealBars rows={rows} foods={foodsInRange} goal={goals.protein} nutrient="protein" colors={[C.purple, "#857DFF", "#A39EFF", "#C8C5FF"]} />
+            <StackedMealBars rows={rows} foods={foodsInRange} goal={goals.protein} nutrient="protein" colors={[C.purple, alpha(C.purple, 0.75), alpha(C.purple, 0.5), alpha(C.purple, 0.25)]} />
             <Insight text={`You hit protein goal ${proteinDays}/${rows.length} days. Dinner contributes ${Math.round(mealStats.dinnerProteinShare * 100)}% of daily protein.`} />
           </ChartCard>
           <ChartCard title="Protein per meal average" onExpand={() => setExpanded("Protein per meal average")}>
@@ -499,9 +504,10 @@ function buildMealStats(foods: FoodEntry[]) {
 }
 
 function Header({ title, subtitle, range, setRange, onBack }: { title: string; subtitle: string; range: RangeKey; setRange: (r: RangeKey) => void; onBack: () => void }) {
+  const C = useC();
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-      <Pressable onPress={onBack} style={iconBtn()} accessibilityRole="button" accessibilityLabel="Back">
+      <Pressable onPress={onBack} style={iconBtn(C)} accessibilityRole="button" accessibilityLabel="Back">
         <Ionicons name="chevron-back" size={20} color={C.text} />
       </Pressable>
       <View style={{ flex: 1 }}>
@@ -520,6 +526,7 @@ function Header({ title, subtitle, range, setRange, onBack }: { title: string; s
 }
 
 function InfoCard({ text }: { text: string }) {
+  const C = useC();
   return (
     <Card style={{ backgroundColor: alpha(C.purple, 0.14), borderColor: alpha(C.purple, 0.28) }}>
       <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
@@ -531,6 +538,7 @@ function InfoCard({ text }: { text: string }) {
 }
 
 function MetricSection({ id, title, open, setOpen, children }: { id: string; title: string; open: Record<string, boolean>; setOpen: React.Dispatch<React.SetStateAction<Record<string, boolean>>>; children: React.ReactNode }) {
+  const C = useC();
   const visible = open[id] !== false;
   return (
     <AnimatedIn>
@@ -554,10 +562,12 @@ function AnimatedIn({ children }: { children: React.ReactNode }) {
 }
 
 function Card({ children, style }: { children: React.ReactNode; style?: any }) {
+  const C = useC();
   return <View style={[{ borderRadius: 22, borderWidth: 1, borderColor: C.hairline, backgroundColor: C.card, padding: 14 }, style]}>{children}</View>;
 }
 
 function ChartCard({ title, children, onExpand }: { title: string; children: React.ReactNode; onExpand: () => void }) {
+  const C = useC();
   return (
     <Card style={{ gap: 10 }}>
       <Pressable onPress={onExpand} style={{ flexDirection: "row", alignItems: "center", gap: 10 }} accessibilityRole="button" accessibilityLabel={`Expand ${title}`}>
@@ -570,6 +580,7 @@ function ChartCard({ title, children, onExpand }: { title: string; children: Rea
 }
 
 function EmptyState({ text }: { text: string }) {
+  const C = useC();
   return (
     <Card style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
       <Ionicons name="analytics-outline" size={18} color={C.muted} />
@@ -579,10 +590,12 @@ function EmptyState({ text }: { text: string }) {
 }
 
 function Insight({ text }: { text: string }) {
+  const C = useC();
   return <Text style={{ color: C.muted, fontWeight: "800", lineHeight: 18 }}>{text}</Text>;
 }
 
 function DeltaBars({ values }: { values: number[] }) {
+  const C = useC();
   const max = Math.max(...values.map((v) => Math.abs(v)), 1);
   return (
     <Svg width="100%" height={150} viewBox={`0 0 ${W} 150`}>
@@ -597,6 +610,7 @@ function DeltaBars({ values }: { values: number[] }) {
 }
 
 function MealHeatmap({ stats }: { stats: Record<MealKey, number>[] }) {
+  const C = useC();
   const max = Math.max(...stats.flatMap((d) => MEALS.map((m) => d[m])), 1);
   return (
     <View style={{ gap: 7 }}>
@@ -611,6 +625,7 @@ function MealHeatmap({ stats }: { stats: Record<MealKey, number>[] }) {
 }
 
 function MealTimeline({ foods, rows }: { foods: FoodEntry[]; rows: DayRow[] }) {
+  const C = useC();
   const byDay = rows.map((r) => foods.filter((f) => String(f.date).slice(0, 10) === r.date));
   return (
     <View style={{ gap: 8 }}>
@@ -626,6 +641,7 @@ function MealTimeline({ foods, rows }: { foods: FoodEntry[]; rows: DayRow[] }) {
 }
 
 function StackedMealBars({ rows, foods, goal, nutrient, colors }: { rows: DayRow[]; foods: FoodEntry[]; goal: number; nutrient: "protein"; colors: string[] }) {
+  const C = useC();
   const max = Math.max(goal, ...rows.map((r) => r.protein), 1);
   return (
     <Svg width="100%" height={150} viewBox={`0 0 ${W} 150`}>
@@ -646,6 +662,7 @@ function StackedMealBars({ rows, foods, goal, nutrient, colors }: { rows: DayRow
 }
 
 function HorizontalMealBars({ values }: { values: Record<MealKey, number> }) {
+  const C = useC();
   const max = Math.max(...Object.values(values), 30, 1);
   return <View style={{ gap: 9 }}>{MEALS.map((m) => {
     const v = values[m];
@@ -655,12 +672,14 @@ function HorizontalMealBars({ values }: { values: Record<MealKey, number> }) {
 }
 
 function Gauge({ value, max, label }: { value: number; max: number; label: string; lowerBetter?: boolean }) {
+  const C = useC();
   const pct = clamp01(value / max);
   const c = 2 * Math.PI * 44;
   return <View style={{ alignItems: "center" }}><Svg width={140} height={140} viewBox="0 0 120 120"><Circle cx={60} cy={60} r={44} stroke={C.gray} strokeWidth={12} fill="none" /><Circle cx={60} cy={60} r={44} stroke={value <= 9 ? C.green : value <= 14 ? C.amber : C.red} strokeWidth={12} fill="none" strokeDasharray={`${c * pct} ${c}`} strokeLinecap="round" transform="rotate(-90 60 60)" /><SvgText x={60} y={64} fill={C.text} fontSize="17" fontWeight="900" textAnchor="middle">{label}</SvgText></Svg></View>;
 }
 
 function MacroBands({ rows }: { rows: DayRow[] }) {
+  const C = useC();
   return <View style={{ gap: 5 }}>{rows.map((r) => {
     const total = Math.max(1, r.protein * 4 + r.carbs * 4 + r.fat * 9);
     return <View key={r.date} style={{ height: 11, borderRadius: 999, overflow: "hidden", flexDirection: "row", backgroundColor: C.gray }}><View style={{ flex: (r.protein * 4) / total, backgroundColor: C.purple }} /><View style={{ flex: (r.carbs * 4) / total, backgroundColor: C.teal }} /><View style={{ flex: (r.fat * 9) / total, backgroundColor: C.amber }} /></View>;
@@ -668,6 +687,7 @@ function MacroBands({ rows }: { rows: DayRow[] }) {
 }
 
 function Radar({ values }: { values: number[] }) {
+  const C = useC();
   const center = 80;
   const r = 58;
   const pts = values.map((v, i) => {
@@ -682,11 +702,13 @@ function Radar({ values }: { values: number[] }) {
 }
 
 function ScoreRing({ score }: { score: number }) {
+  const C = useC();
   const c = 2 * Math.PI * 42;
   return <View style={{ alignItems: "center" }}><Svg width={132} height={132} viewBox="0 0 120 120"><Circle cx={60} cy={60} r={42} stroke={C.gray} strokeWidth={12} fill="none" /><Circle cx={60} cy={60} r={42} stroke={C.purple} strokeWidth={12} fill="none" strokeDasharray={`${c * clamp01(score / 100)} ${c}`} strokeLinecap="round" transform="rotate(-90 60 60)" /><SvgText x={60} y={66} fill={C.text} fontSize="28" fontWeight="900" textAnchor="middle">{score}</SvgText></Svg><Text style={{ color: C.muted, fontWeight: "800" }}>Higher = more consistent eating patterns</Text></View>;
 }
 
 function WeightNoise({ values }: { values: number[] }) {
+  const C = useC();
   const smooth = values.map((_, i) => avg(values.slice(Math.max(0, i - 6), i + 1)));
   return <Svg width="100%" height={160} viewBox={`0 0 ${W} 160`}>{values.map((v, i) => { const p = point(values, i, 160); return <Circle key={i} cx={p.x} cy={p.y} r={3} fill={alpha(C.text, 0.28)} />; })}<Path d={pathFor(smooth, W, 160)} stroke={C.purple} strokeWidth={3} fill="none" /><Path d={pathFor(regression(values), W, 160)} stroke={alpha(C.text, 0.75)} strokeWidth={1.5} strokeDasharray="5 5" fill="none" /></Svg>;
 }
@@ -697,12 +719,14 @@ function point(values: number[], i: number, height = H) {
 }
 
 function LineChart({ values, color, goal }: { values: number[]; color: string; goal?: number }) {
+  const C = useC();
   const max = Math.max(...values, goal || 0, 1);
   const gy = goal ? H - 14 - (goal / max) * (H - 28) : null;
   return <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`}>{gy != null ? <Line x1={14} x2={W - 14} y1={gy} y2={gy} stroke={alpha(C.text, 0.4)} strokeDasharray="5 5" /> : null}<Path d={pathFor(values, W, H)} stroke={color} strokeWidth={3} fill="none" /></Svg>;
 }
 
 function CompositionBars({ weight, bodyFat, target }: { weight: number; bodyFat: number; target: number }) {
+  const C = useC();
   const lean = weight * (1 - bodyFat / 100);
   const fat = weight - lean;
   const goalFat = Math.max(0, target - lean);
@@ -710,19 +734,23 @@ function CompositionBars({ weight, bodyFat, target }: { weight: number; bodyFat:
 }
 
 function DotCalendar({ dates, hits }: { dates: string[]; hits: Set<string> }) {
+  const C = useC();
   return <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 5 }}>{dates.map((d) => <View key={d} style={{ width: 10, height: 10, borderRadius: 999, backgroundColor: hits.has(d) ? C.purple : C.gray }} />)}</View>;
 }
 
 function Scatter({ rows, goals }: { rows: DayRow[]; goals: Goals }) {
+  const C = useC();
   const maxP = Math.max(...rows.map((r) => r.protein), goals.protein, 1);
   return <Svg width="100%" height={150} viewBox={`0 0 ${W} 150`}>{rows.map((r) => <Circle key={r.date} cx={18 + (r.protein / maxP) * (W - 36)} cy={Math.abs(r.calories - goals.calories) <= goals.calories * 0.1 ? 42 : 108} r={4} fill={r.protein >= goals.protein ? C.green : C.purple} opacity={0.8} />)}<Line x1={18} x2={W - 18} y1={112} y2={42} stroke={alpha(C.text, 0.42)} strokeDasharray="5 5" /></Svg>;
 }
 
 function DualLine({ a, b }: { a: number[]; b: number[] }) {
+  const C = useC();
   return <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`}><Path d={pathFor(a, W, H)} stroke={C.teal} strokeWidth={2.6} fill="none" /><Path d={pathFor(b, W, H)} stroke={C.amber} strokeWidth={2.6} fill="none" /></Svg>;
 }
 
 function DowScore({ rows, goals }: { rows: DayRow[]; goals: Goals }) {
+  const C = useC();
   const vals = Array.from({ length: 7 }, (_, i) => {
     const ds = rows.filter((r) => new Date(`${r.date}T12:00:00`).getDay() === (i + 1) % 7);
     return avg(ds.map((d) => dayScore(d, goals)));
@@ -737,46 +765,56 @@ function BeforeAfter({ rows, goals }: { rows: DayRow[]; goals: Goals }) {
 }
 
 function CompareColumns({ hydrated, dry, goals }: { hydrated: DayRow[]; dry: DayRow[]; goals: Goals }) {
+  const C = useC();
   return <View style={{ flexDirection: "row", gap: 12 }}><StatCol title="Hydrated days" rows={hydrated} goals={goals} /><View style={{ width: 1, backgroundColor: C.hairline }} /><StatCol title="Dry days" rows={dry} goals={goals} /></View>;
 }
 function StatCol({ title, rows, goals }: { title: string; rows: DayRow[]; goals: Goals }) {
+  const C = useC();
   return <View style={{ flex: 1, gap: 6 }}><Text style={{ color: C.text, fontWeight: "900" }}>{title}</Text><Text style={{ color: C.muted, fontWeight: "800" }}>Protein {Math.round(avg(rows.map((r) => (r.protein / goals.protein) * 100)) || 0)}%</Text><Text style={{ color: C.muted, fontWeight: "800" }}>Calories {Math.round(avg(rows.map((r) => (r.calories / goals.calories) * 100)) || 0)}%</Text><Text style={{ color: C.muted, fontWeight: "800" }}>Steps {Math.round(avg(rows.map((r) => r.steps)) || 0).toLocaleString()}</Text></View>;
 }
 
 function HydrationStreak({ rows, goal }: { rows: DayRow[]; goal: number }) {
+  const C = useC();
   let cur = 0, best = 0;
   rows.forEach((r) => { if (r.waterMl >= goal) { cur += 1; best = Math.max(best, cur); } else cur = 0; });
   return <View style={{ gap: 12 }}><Text style={{ color: C.text, fontWeight: "900", fontSize: 28 }}>{cur} days</Text><Text style={{ color: C.muted, fontWeight: "800" }}>Best hydration streak: {best} days</Text><DotCalendar dates={rows.slice(-14).map((r) => r.date)} hits={new Set(rows.filter((r) => r.waterMl >= goal).map((r) => r.date))} /></View>;
 }
 
 function WeeklyVolume({ rows, goal }: { rows: DayRow[]; goal: number }) {
+  const C = useC();
   const weeks: number[] = [];
   for (let i = 0; i < rows.length; i += 7) weeks.push(sum(rows.slice(i, i + 7).map((r) => r.workouts)));
   return <BarSimple values={weeks} labels={weeks.map((_, i) => `W${i + 1}`)} color={C.green} goal={goal} />;
 }
 function WorkoutHeatmap({ rows }: { rows: DayRow[] }) {
+  const C = useC();
   return <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 5 }}>{rows.map((r) => <View key={r.date} style={{ width: 11, height: 11, borderRadius: 3, backgroundColor: r.workouts ? C.teal : C.gray }} />)}</View>;
 }
 
 function ActivityDonut({ active, total }: { active: number; total: number }) {
+  const C = useC();
   const c = 2 * Math.PI * 42;
   const pct = total ? active / total : 0;
   return <View style={{ alignItems: "center" }}><Svg width={132} height={132} viewBox="0 0 120 120"><Circle cx={60} cy={60} r={42} stroke={C.gray} strokeWidth={14} fill="none" /><Circle cx={60} cy={60} r={42} stroke={C.teal} strokeWidth={14} fill="none" strokeDasharray={`${c * pct} ${c}`} transform="rotate(-90 60 60)" /><SvgText x={60} y={65} fill={C.text} fontSize="22" fontWeight="900" textAnchor="middle">{active}/{total}</SvgText></Svg></View>;
 }
 
 function BarSimple({ values, labels, color, goal }: { values: number[]; labels: string[]; color: string; goal?: number }) {
+  const C = useC();
   const max = Math.max(...values, goal || 0, 1);
   return <View style={{ height: 142, flexDirection: "row", alignItems: "flex-end", gap: 8 }}>{values.map((v, i) => <View key={i} style={{ flex: 1, alignItems: "center", gap: 5 }}><View style={{ width: "100%", height: Math.max(6, (v / max) * 108), borderRadius: 9, backgroundColor: color }} /><Text style={{ color: C.muted, fontSize: 10, fontWeight: "900" }}>{labels[i]}</Text></View>)}</View>;
 }
 function CompareBars({ left, right, leftLabel, rightLabel }: { left: number; right: number; leftLabel: string; rightLabel: string }) {
+  const C = useC();
   const max = Math.max(left, right, 1);
   return <View style={{ gap: 10 }}><BarLine label={leftLabel} value={left} max={max} color={C.green} /><BarLine label={rightLabel} value={right} max={max} color={C.amber} /></View>;
 }
 function BarLine({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
+  const C = useC();
   return <View style={{ gap: 5 }}><View style={{ flexDirection: "row" }}><Text style={{ color: C.text, fontWeight: "900", flex: 1 }}>{label}</Text><Text style={{ color, fontWeight: "900" }}>{value}g</Text></View><View style={{ height: 9, borderRadius: 999, backgroundColor: C.gray }}><View style={{ width: `${(value / max) * 100}%`, height: "100%", borderRadius: 999, backgroundColor: color }} /></View></View>;
 }
 
 function ProjectionCard({ rows, profile, onAdjust }: { rows: DayRow[]; profile: Profile | null; onAdjust: () => void }) {
+  const C = useC();
   const current = Math.round((avg(rows.map((r) => r.calories)) - n((profile as any)?.calorieGoal ?? 2400)) / 500 * 10) / 10;
   const targetDate = (weeks: number) => new Date(Date.now() + weeks * 7 * 86400000).toLocaleDateString(undefined, { month: "short", year: "numeric" });
   const scenarios = [
@@ -814,11 +852,12 @@ function ProjectionCard({ rows, profile, onAdjust }: { rows: DayRow[]; profile: 
 }
 
 function ExpandedModal({ title, onClose }: { title: string | null; onClose: () => void }) {
+  const C = useC();
   if (!title) return null;
   return <Modal visible transparent animationType="slide"><View style={{ flex: 1, backgroundColor: C.bg, justifyContent: "center", padding: 18 }}><Card style={{ gap: 12 }}><View style={{ flexDirection: "row", alignItems: "center" }}><Text style={{ color: C.text, fontWeight: "900", fontSize: 22, flex: 1 }}>{title}</Text><Pressable onPress={onClose}><Ionicons name="close" size={24} color={C.text} /></Pressable></View><Text style={{ color: C.muted, fontWeight: "800", lineHeight: 20 }}>Fullscreen detail view. The same metric is expanded here for closer inspection.</Text></Card></View></Modal>;
 }
 
-function iconBtn() {
+function iconBtn(C: ReturnType<typeof useC>) {
   return { width: 42, height: 42, borderRadius: 15, alignItems: "center" as const, justifyContent: "center" as const, borderWidth: 1, borderColor: C.hairline, backgroundColor: C.card };
 }
 

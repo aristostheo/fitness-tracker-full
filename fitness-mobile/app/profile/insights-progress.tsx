@@ -9,7 +9,6 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { MotiView } from "moti";
 import Svg, {
   Circle,
@@ -23,6 +22,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 
 import { useAuth } from "@/content/AuthContext";
+import { useTheme } from "@/content/ThemeProvider";
 import {
   subscribeFoodsBetween,
   subscribeExerciseBetween,
@@ -53,21 +53,25 @@ type DayRow = {
   steps: number;
 };
 
-const C = {
-  bg: "#0D0D0F",
-  card: "#1A1A24",
-  card2: "#202033",
-  text: "#F6F7FF",
-  muted: "rgba(246,247,255,0.66)",
-  hairline: "rgba(255,255,255,0.10)",
-  purple: "#6C63FF",
-  blue: "#4DA3FF",
-  teal: "#22D3EE",
-  green: "#4CAF50",
-  amber: "#FFC107",
-  red: "#F44336",
-  whiteSoft: "rgba(255,255,255,0.74)",
-};
+function useC() {
+  const { colors } = (useTheme as any)();
+  return {
+    bg: colors.background as string,
+    card: colors.surface1 as string,
+    card2: colors.surface2 as string,
+    text: colors.textPrimary as string,
+    muted: colors.textTertiary as string,
+    hairline: colors.border as string,
+    purple: colors.accent as string,
+    blue: colors.accent as string,
+    teal: colors.accent as string,
+    green: colors.success as string,
+    amber: colors.warning as string,
+    red: colors.danger as string,
+    gray: colors.surface3 as string,
+    whiteSoft: colors.textPrimary as string,
+  };
+}
 
 const RANGE_OPTIONS: RangeKey[] = [7, 30, 90];
 const W = 320;
@@ -171,7 +175,7 @@ function dayScore(day: DayRow, goals: Goals) {
   return Math.max(...parts.map(clamp01));
 }
 
-function reportTone(hit: number, total: number) {
+function reportTone(hit: number, total: number, C: ReturnType<typeof useC>) {
   const pct = total ? hit / total : 0;
   if (pct >= 0.7) return C.green;
   if (pct >= 0.4) return C.amber;
@@ -254,6 +258,7 @@ type Goals = {
 };
 
 export default function InsightsProgressScreen() {
+  const C = useC();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -552,9 +557,9 @@ export default function InsightsProgressScreen() {
 
         <Section title="Weekly Report Card">
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-            <ReportTile label="Calories" value={`${calorieHits}/${totalDays}`} sub="days on goal" color={caloriesTracked ? reportTone(calorieHits, totalDays) : C.muted} neutral={!caloriesTracked} />
-            <ReportTile label="Protein" value={`${proteinHits}/${totalDays}`} sub="days hit" color={proteinTracked ? reportTone(proteinHits, totalDays) : C.muted} neutral={!proteinTracked} />
-            <ReportTile label="Hydration" value={hydrationTracked ? `${hydrationHits}/${totalDays}` : "—"} sub={hydrationTracked ? "days hit" : "Not tracked"} color={hydrationTracked ? reportTone(hydrationHits, totalDays) : C.muted} neutral={!hydrationTracked} />
+            <ReportTile label="Calories" value={`${calorieHits}/${totalDays}`} sub="days on goal" color={caloriesTracked ? reportTone(calorieHits, totalDays, C) : C.muted} neutral={!caloriesTracked} />
+            <ReportTile label="Protein" value={`${proteinHits}/${totalDays}`} sub="days hit" color={proteinTracked ? reportTone(proteinHits, totalDays, C) : C.muted} neutral={!proteinTracked} />
+            <ReportTile label="Hydration" value={hydrationTracked ? `${hydrationHits}/${totalDays}` : "—"} sub={hydrationTracked ? "days hit" : "Not tracked"} color={hydrationTracked ? reportTone(hydrationHits, totalDays, C) : C.muted} neutral={!hydrationTracked} />
             <ReportTile label="Workouts" value={workoutsTracked ? `${workoutSessions}` : "—"} sub={workoutsTracked ? "sessions logged" : "Not tracked"} color={workoutsTracked ? (workoutSessions >= 3 ? C.green : C.amber) : C.muted} neutral={!workoutsTracked} />
           </View>
         </Section>
@@ -756,6 +761,7 @@ export default function InsightsProgressScreen() {
 }
 
 function AdvancedMetricsEntry({ onPress }: { onPress: () => void }) {
+  const C = useC();
   return (
     <Pressable
       onPress={onPress}
@@ -763,14 +769,12 @@ function AdvancedMetricsEntry({ onPress }: { onPress: () => void }) {
       accessibilityLabel="Open Advanced Metrics"
       style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}
     >
-      <LinearGradient
-        colors={[withAlpha(C.purple, 0.26), withAlpha(C.blue, 0.1), withAlpha(C.purple, 0.14)]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+      <View
         style={{
           borderRadius: 24,
           borderWidth: 1,
           borderColor: withAlpha(C.purple, 0.38),
+          backgroundColor: withAlpha(C.purple, 0.14),
           padding: 16,
           flexDirection: "row",
           alignItems: "center",
@@ -797,7 +801,7 @@ function AdvancedMetricsEntry({ onPress }: { onPress: () => void }) {
             Deep dive into your patterns
           </Text>
         </View>
-      </LinearGradient>
+      </View>
     </Pressable>
   );
 }
@@ -813,6 +817,7 @@ function Header({
   titleRange: string;
   onBack: () => void;
 }) {
+  const C = useC();
   return (
     <View style={{ gap: 14 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
@@ -888,6 +893,7 @@ function AnimatedIn({ children, delay = 0 }: { children: React.ReactNode; delay?
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  const C = useC();
   return (
     <AnimatedIn delay={50}>
       <View style={{ gap: 10 }}>
@@ -909,6 +915,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function Card({ children, style }: { children: React.ReactNode; style?: any }) {
+  const C = useC();
   return (
     <View
       style={[
@@ -928,6 +935,7 @@ function Card({ children, style }: { children: React.ReactNode; style?: any }) {
 }
 
 function InfoCard({ icon, text }: { icon: any; text: string }) {
+  const C = useC();
   return (
     <Card
       style={{
@@ -946,6 +954,7 @@ function InfoCard({ icon, text }: { icon: any; text: string }) {
 }
 
 function InfoLine({ text }: { text: string }) {
+  const C = useC();
   return (
     <Text style={{ color: C.muted, fontWeight: "800", lineHeight: 18 }}>{text}</Text>
   );
@@ -964,6 +973,7 @@ function ReportTile({
   color: string;
   neutral?: boolean;
 }) {
+  const C = useC();
   return (
     <View
       style={{
@@ -971,7 +981,7 @@ function ReportTile({
         borderRadius: 18,
         borderWidth: 1,
         borderColor: neutral ? C.hairline : withAlpha(color, 0.32),
-        backgroundColor: neutral ? withAlpha("#2A2A35", 0.72) : withAlpha(color, 0.12),
+        backgroundColor: neutral ? withAlpha(C.gray, 0.72) : withAlpha(color, 0.12),
         padding: 14,
       }}
     >
@@ -983,6 +993,7 @@ function ReportTile({
 }
 
 function Pill({ text, color }: { text: string; color: string }) {
+  const C = useC();
   return (
     <View
       style={{
@@ -1001,6 +1012,7 @@ function Pill({ text, color }: { text: string; color: string }) {
 }
 
 function StreakPill({ streak }: { streak: number }) {
+  const C = useC();
   const active = streak >= 1;
   const glow = streak >= 7;
   return (
@@ -1011,8 +1023,8 @@ function StreakPill({ streak }: { streak: number }) {
         paddingHorizontal: 11,
         paddingVertical: 7,
         borderWidth: 1,
-        borderColor: withAlpha(active ? C.green : "#2A2A35", active ? 0.34 : 1),
-        backgroundColor: active ? withAlpha(C.green, 0.12) : withAlpha("#2A2A35", 0.82),
+        borderColor: withAlpha(active ? C.green : C.gray, active ? 0.34 : 1),
+        backgroundColor: active ? withAlpha(C.green, 0.12) : withAlpha(C.gray, 0.82),
         shadowColor: C.green,
         shadowOpacity: glow ? 0.44 : 0,
         shadowRadius: glow ? 14 : 0,
@@ -1026,6 +1038,7 @@ function StreakPill({ streak }: { streak: number }) {
 }
 
 function Heatmap({ rows, goals }: { rows: DayRow[]; goals: Goals }) {
+  const C = useC();
   const ref = useRef<ScrollView>(null);
   const [showHint, setShowHint] = useState(true);
   const byMonth: Record<string, number> = {};
@@ -1073,7 +1086,7 @@ function Heatmap({ rows, goals }: { rows: DayRow[]; goals: Goals }) {
               const logged = hasLogged(d);
               const color =
                 !logged
-                  ? "#2A2A35"
+                  ? C.gray
                   : score >= 0.9
                   ? C.green
                   : score >= 0.5
@@ -1121,6 +1134,7 @@ function LineChart({
   weight?: boolean;
   height?: number;
 }) {
+  const C = useC();
   const clean = values.length ? values : [0, 0];
   const max = Math.max(...clean, goal || 0, 1);
   const goalY = goal ? height - 14 - (goal / max) * (height - 28) : null;
@@ -1189,6 +1203,7 @@ function ChartRow({
   kind: ChartKind;
   footer?: React.ReactNode;
 }) {
+  const C = useC();
   const hasData = values.some((v) => v > 0);
   return (
     <Card style={{ gap: 10 }}>
@@ -1227,6 +1242,7 @@ function EmptyCard({
   cta: string;
   onPress?: () => void;
 }) {
+  const C = useC();
   return (
     <Card style={{ alignItems: "center", gap: 10 }}>
       <Text style={{ color: C.text, fontWeight: "900" }}>{title}</Text>
@@ -1256,6 +1272,7 @@ function Segment({
   value: "calories" | "protein";
   onChange: (v: "calories" | "protein") => void;
 }) {
+  const C = useC();
   return (
     <View style={{ flexDirection: "row", backgroundColor: C.card, padding: 3, borderRadius: 999, alignSelf: "flex-start" }}>
       {(["calories", "protein"] as const).map((x) => (
@@ -1279,6 +1296,7 @@ function Segment({
 }
 
 function DowBars({ rows, mode }: { rows: { label: string; value: number; pct: number }[]; mode: string }) {
+  const C = useC();
   return (
     <Card>
       <View style={{ height: 132, flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
@@ -1317,6 +1335,7 @@ function MacroDonut({
   fat: number;
   calories: number;
 }) {
+  const C = useC();
   const total = Math.max(1, protein * 4 + carbs * 4 + fat * 9);
   const c = 2 * Math.PI * 46;
   const pLen = (protein * 4 / total) * c;
@@ -1351,6 +1370,7 @@ function MacroGoalPill({
   goal: number;
   color: string;
 }) {
+  const C = useC();
   const pct = clamp01(goal ? avg / goal : 0);
   return (
     <View
@@ -1370,7 +1390,7 @@ function MacroGoalPill({
         </Text>
         <Text style={{ color, fontWeight: "900", fontSize: 12 }}>{Math.round(pct * 100)}%</Text>
       </View>
-      <View style={{ height: 6, borderRadius: 999, overflow: "hidden", backgroundColor: withAlpha("#FFFFFF", 0.08) }}>
+      <View style={{ height: 6, borderRadius: 999, overflow: "hidden", backgroundColor: C.hairline }}>
         <View style={{ width: `${Math.min(100, Math.round(pct * 100))}%`, height: "100%", backgroundColor: color, borderRadius: 999 }} />
       </View>
     </View>
@@ -1385,6 +1405,7 @@ function RecordCard(props: {
   date: string;
   color: string;
 }) {
+  const C = useC();
   return (
     <View
       style={{
@@ -1414,6 +1435,7 @@ function BadgeCell({
   unlocked: boolean;
   onPress: () => void;
 }) {
+  const C = useC();
   return (
     <Pressable
       onPress={onPress}
@@ -1431,8 +1453,8 @@ function BadgeCell({
           alignItems: "center",
           justifyContent: "center",
           borderWidth: 1,
-          borderColor: withAlpha(unlocked ? badge.accent : "#7A7A86", 0.28),
-          backgroundColor: withAlpha(unlocked ? badge.accent : "#7A7A86", unlocked ? 0.12 : 0.08),
+          borderColor: withAlpha(unlocked ? badge.accent : C.gray, 0.28),
+          backgroundColor: withAlpha(unlocked ? badge.accent : C.gray, unlocked ? 0.12 : 0.08),
         }}
       >
         <Ionicons
@@ -1467,6 +1489,7 @@ function ExpandedChart({
   goal?: number;
   onClose: () => void;
 }) {
+  const C = useC();
   if (!kind) return null;
   const color = kind === "protein" ? C.purple : kind === "weight" ? C.green : C.blue;
   return (
@@ -1497,6 +1520,7 @@ function BadgePopover({
   unlocks: UnlockMap;
   onClose: () => void;
 }) {
+  const C = useC();
   if (!id) return null;
   const badge = BADGE_BY_ID[id];
   if (!badge) return null;
@@ -1539,6 +1563,7 @@ function ShareCardModal({
   proteinHits: number;
   totalDays: number;
 }) {
+  const C = useC();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable
@@ -1589,8 +1614,8 @@ function ShareCardModal({
           </View>
 
           <View style={{ flexDirection: "row", gap: 10 }}>
-            <InfoStat label="Calories" value={`${calorieHits}/${totalDays}`} color={reportTone(calorieHits, totalDays)} />
-            <InfoStat label="Protein" value={`${proteinHits}/${totalDays}`} color={reportTone(proteinHits, totalDays)} />
+            <InfoStat label="Calories" value={`${calorieHits}/${totalDays}`} color={reportTone(calorieHits, totalDays, C)} />
+            <InfoStat label="Protein" value={`${proteinHits}/${totalDays}`} color={reportTone(proteinHits, totalDays, C)} />
           </View>
 
           <View style={{ gap: 10 }}>
@@ -1611,6 +1636,7 @@ function ShareCardModal({
 }
 
 function InfoStat({ label, value, color }: { label: string; value: string; color: string }) {
+  const C = useC();
   return (
     <View
       style={{

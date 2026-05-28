@@ -4,6 +4,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useTheme } from "@/content/ThemeProvider";
+
 import {
   clearSyncHistory,
   formatLastSync,
@@ -13,18 +15,21 @@ import {
   type IntegrationSnapshot,
 } from "@/services/integrations";
 
-const C = {
-  bg: "#0D0D0F",
-  card: "#1A1A24",
-  card2: "#202033",
-  text: "#F6F7FF",
-  muted: "rgba(246,247,255,0.66)",
-  hairline: "rgba(255,255,255,0.10)",
-  purple: "#6C63FF",
-  green: "#4CAF50",
-  amber: "#FFC107",
-  red: "#F44336",
-};
+function useC() {
+  const { colors } = (useTheme as any)();
+  return {
+    bg: colors.background as string,
+    card: colors.surface1 as string,
+    card2: colors.surface2 as string,
+    text: colors.textPrimary as string,
+    muted: colors.textTertiary as string,
+    hairline: colors.border as string,
+    purple: colors.accent as string,
+    green: colors.success as string,
+    amber: colors.warning as string,
+    red: colors.danger as string,
+  };
+}
 
 function alpha(hex: string, a: number) {
   const h = hex.replace("#", "");
@@ -35,6 +40,7 @@ function alpha(hex: string, a: number) {
 }
 
 export default function SyncHistoryScreen() {
+  const C = useC();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [snapshot, setSnapshot] = useState<IntegrationSnapshot | null>(null);
@@ -183,6 +189,7 @@ function Pill({
   text: string;
   tone: "neutral" | "success" | "error";
 }) {
+  const C = useC();
   const color = tone === "success" ? C.green : tone === "error" ? C.red : C.amber;
   return (
     <View

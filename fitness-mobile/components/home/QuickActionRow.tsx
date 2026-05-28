@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 export type QuickAction = {
@@ -14,6 +14,7 @@ export type QuickAction = {
 export function QuickActionRow({
   tokens,
   actions,
+  maxWidth,
 }: {
   tokens: {
     text: string;
@@ -27,11 +28,15 @@ export function QuickActionRow({
   reduceMotion: boolean;
   maxWidth: number;
 }) {
+  const gap = 8;
+  const cardWidth = Math.max(96, Math.floor((maxWidth - 32 - gap * 2) / 3));
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ gap: 12, paddingRight: 16 }}
+    <View
+      style={{
+        flexDirection: "row",
+        flexWrap: "wrap",
+        gap,
+      }}
     >
       {actions.map((a) => (
         <Pressable
@@ -48,15 +53,15 @@ export function QuickActionRow({
         >
           <View
             style={{
-              width: 112,
-              minHeight: 108,
-              borderRadius: 20,
-              paddingHorizontal: 16,
-              paddingVertical: 18,
+              width: cardWidth,
+              minHeight: 96,
+              borderRadius: 16,
+              paddingHorizontal: 14,
+              paddingVertical: 14,
               borderWidth: 1,
               borderColor: tokens.hairline,
               backgroundColor: tokens.card,
-              gap: 16,
+              gap: 12,
             }}
           >
             <View
@@ -75,7 +80,7 @@ export function QuickActionRow({
             </View>
 
             <Text
-              style={{ color: tokens.text, fontWeight: "500", fontSize: 14 }}
+              style={{ color: tokens.text, fontWeight: "500", fontSize: 13 }}
               numberOfLines={2}
             >
               {a.label}
@@ -83,6 +88,6 @@ export function QuickActionRow({
           </View>
         </Pressable>
       ))}
-    </ScrollView>
+    </View>
   );
 }

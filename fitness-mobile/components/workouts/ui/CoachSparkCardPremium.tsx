@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import Animated, {
@@ -78,8 +77,8 @@ export function CoachSparkCardPremium({
 }: Props) {
   const { colors, isDark } = useTheme();
 
-  const accent = colors.primary ?? "#68D7FF";
-  const accent2 = "#8B7CFF";
+  const accent = colors.primary;
+  const accent2 = colors.chartSecondary || colors.info;
 
   const [focus, setFocus] = useState<Focus>(initial?.focus ?? "Strength");
   const [duration, setDuration] = useState<Duration>(initial?.duration ?? 45);
@@ -103,33 +102,29 @@ export function CoachSparkCardPremium({
     return { opacity: o + breathe.value * (isDark ? 0.1 : 0.08) };
   });
 
-  const cardBg = isDark
-    ? withAlpha("#FFFFFF", 0.06)
-    : withAlpha("#FFFFFF", 0.9);
-  const cardBorder = isDark
-    ? withAlpha("#FFFFFF", 0.14)
-    : withAlpha(colors.text, 0.1);
+  const cardBg = withAlpha(accent, isDark ? 0.08 : 0.06);
+  const cardBorder = withAlpha(accent, isDark ? 0.24 : 0.2);
 
   const tStrong = isDark
-    ? withAlpha("#FFFFFF", 0.94)
-    : withAlpha(colors.text, 0.94);
+    ? withAlpha(colors.textPrimary, 0.94)
+    : withAlpha(colors.textPrimary, 0.94);
   const tMid = isDark
-    ? withAlpha("#FFFFFF", 0.7)
-    : withAlpha(colors.text, 0.72);
+    ? withAlpha(colors.textSecondary, 0.9)
+    : withAlpha(colors.textSecondary, 0.9);
   const tMuted = isDark
-    ? withAlpha("#FFFFFF", 0.56)
-    : withAlpha(colors.text, 0.6);
+    ? withAlpha(colors.textTertiary, 0.9)
+    : withAlpha(colors.textTertiary, 0.9);
 
   const pillBg = isDark
-    ? withAlpha("#FFFFFF", 0.06)
-    : withAlpha("#FFFFFF", 0.84);
+    ? withAlpha(colors.surface1, 0.4)
+    : withAlpha(colors.surface1, 0.84);
   const pillBorder = isDark
-    ? withAlpha("#FFFFFF", 0.14)
-    : withAlpha(colors.text, 0.1);
+    ? colors.borderElevated
+    : colors.borderElevated;
 
   const trustLine = hasHistorySignal
-    ? "Preview first — tuned from your recent training."
-    : "Preview first — balanced defaults, always editable.";
+    ? "Curated generator · Preview before starting."
+    : "Curated defaults · Preview before starting.";
 
   const preview = useMemo(() => {
     const focusLabel =
@@ -166,36 +161,11 @@ export function CoachSparkCardPremium({
 
   return (
     <View style={style}>
-      <Pressable
-        onPress={() => {
-          // Tap anywhere: open full panel if provided (still calm)
-          // (Does not replace primary Generate button)
-          onOpen?.();
-        }}
-        style={({ pressed }) => [
-          styles.cardWrap,
-          { backgroundColor: cardBg, borderColor: cardBorder },
-          pressed && { opacity: 0.94 },
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel="Coach Spark"
-        accessibilityHint="Choose focus, duration, and style. Then generate a workout."
+      <View
+        style={[styles.cardWrap, { backgroundColor: cardBg, borderColor: cardBorder }]}
       >
-        {/* Sheen */}
         <LinearGradient
-          colors={
-            isDark
-              ? [
-                  withAlpha("#FFFFFF", 0.1),
-                  withAlpha("#FFFFFF", 0.04),
-                  withAlpha("#000000", 0.1),
-                ]
-              : [
-                  withAlpha(accent, 0.1),
-                  withAlpha("#FFFFFF", 0.92),
-                  withAlpha("#FFFFFF", 0.88),
-                ]
-          }
+          colors={[withAlpha(accent, 0.12), "transparent"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
@@ -214,18 +184,12 @@ export function CoachSparkCardPremium({
         {/* Top row */}
         <View style={styles.topRow}>
           <View style={styles.iconWrap}>
-            <BlurView
-              intensity={isDark ? 22 : 16}
-              tint={isDark ? "dark" : "light"}
+            <View
               style={[
                 styles.iconBlur,
                 {
-                  backgroundColor: isDark
-                    ? withAlpha("#FFFFFF", 0.06)
-                    : withAlpha("#FFFFFF", 0.72),
-                  borderColor: isDark
-                    ? withAlpha("#FFFFFF", 0.14)
-                    : withAlpha(colors.text, 0.1),
+                  backgroundColor: colors.surface2,
+                  borderColor: colors.border,
                 },
               ]}
             >
@@ -234,7 +198,7 @@ export function CoachSparkCardPremium({
                 size={18}
                 color={withAlpha(accent, 0.95)}
               />
-            </BlurView>
+            </View>
           </View>
 
           <View style={{ flex: 1 }}>
@@ -242,7 +206,7 @@ export function CoachSparkCardPremium({
               Generate a structured workout
             </Text>
             <Text style={[styles.sub, { color: tMid }]} numberOfLines={2}>
-              Curated generator • {trustLine}
+              {trustLine}
             </Text>
           </View>
 
@@ -255,9 +219,12 @@ export function CoachSparkCardPremium({
               },
             ]}
           >
-            <Text style={[styles.sparkChipText, { color: tStrong }]}>
-              ⚡ Spark
-            </Text>
+            <Ionicons
+              name="flash-outline"
+              size={12}
+              color={withAlpha(accent2, 0.95)}
+            />
+            <Text style={[styles.sparkChipText, { color: tStrong }]}>Spark</Text>
           </View>
 
           {/* Primary action */}
@@ -268,8 +235,8 @@ export function CoachSparkCardPremium({
               styles.generateBtn,
               {
                 borderColor: isDark
-                  ? withAlpha("#FFFFFF", 0.16)
-                  : withAlpha(colors.text, 0.12),
+                  ? colors.borderElevated
+                  : colors.borderElevated,
               },
               pressed &&
                 !loading && { transform: [{ scale: 0.985 }], opacity: 0.95 },
@@ -281,7 +248,7 @@ export function CoachSparkCardPremium({
             <LinearGradient
               colors={
                 isDark
-                  ? [withAlpha(accent, 0.28), withAlpha("#FFFFFF", 0.08)]
+                  ? [withAlpha(accent, 0.28), withAlpha(colors.surface1, 0.08)]
                   : [withAlpha(accent, 0.95), withAlpha(accent, 0.78)]
               }
               start={{ x: 0, y: 0 }}
@@ -292,21 +259,21 @@ export function CoachSparkCardPremium({
                 <>
                   <ActivityIndicator
                     size="small"
-                    color={isDark ? "#fff" : "#fff"}
+                    color={colors.buttonText}
                   />
-                  <Text style={[styles.generateText, { color: "#fff" }]}>
+                  <Text style={[styles.generateText, { color: colors.buttonText }]}>
                     Generating
                   </Text>
                 </>
               ) : (
                 <>
-                  <Text style={[styles.generateText, { color: "#fff" }]}>
+                  <Text style={[styles.generateText, { color: colors.buttonText }]}>
                     Generate
                   </Text>
                   <Ionicons
                     name="chevron-forward"
                     size={16}
-                    color={withAlpha("#FFFFFF", 0.92)}
+                    color={withAlpha(colors.buttonText, 0.92)}
                   />
                 </>
               )}
@@ -367,11 +334,11 @@ export function CoachSparkCardPremium({
             styles.previewBox,
             {
               backgroundColor: isDark
-                ? withAlpha("#FFFFFF", 0.05)
-                : withAlpha("#FFFFFF", 0.72),
+                ? withAlpha(colors.surface1, 0.05)
+                : withAlpha(colors.surface1, 0.72),
               borderColor: isDark
-                ? withAlpha("#FFFFFF", 0.12)
-                : withAlpha(colors.text, 0.1),
+                ? colors.borderElevated
+                : colors.borderElevated,
             },
           ]}
         >
@@ -385,15 +352,15 @@ export function CoachSparkCardPremium({
                 style={[
                   styles.errorPill,
                   {
-                    backgroundColor: withAlpha("#FF5A5F", isDark ? 0.14 : 0.1),
-                    borderColor: withAlpha("#FF5A5F", isDark ? 0.28 : 0.18),
+                    backgroundColor: withAlpha(colors.danger, isDark ? 0.14 : 0.1),
+                    borderColor: withAlpha(colors.danger, isDark ? 0.28 : 0.18),
                   },
                 ]}
               >
                 <Text
                   style={[
                     styles.errorText,
-                    { color: withAlpha("#FF5A5F", 0.95) },
+                    { color: withAlpha(colors.danger, 0.95) },
                   ]}
                 >
                   {errorText}
@@ -412,10 +379,10 @@ export function CoachSparkCardPremium({
             style={[styles.previewLine2, { color: tMid }]}
             numberOfLines={2}
           >
-            {preview.line2}
+            ~6 exercises · editable before starting
           </Text>
         </View>
-      </Pressable>
+      </View>
     </View>
   );
 }

@@ -1,6 +1,7 @@
 import React from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
+
 import { useTheme } from "@/content/ThemeProvider";
 import { withAlpha } from "@/lib/color";
 
@@ -17,7 +18,7 @@ export function PremiumSegmented({
 }) {
   const { colors } = useTheme();
 
-  const items: { key: FriendsTabKey; label: string }[] = [
+  const items: Array<{ key: FriendsTabKey; label: string }> = [
     { key: "friends", label: "Friends" },
     { key: "requests", label: "Requests" },
     { key: "sent", label: "Sent" },
@@ -28,8 +29,8 @@ export function PremiumSegmented({
       style={[
         styles.wrap,
         {
-          backgroundColor: "#1A1A24",
-          borderColor: withAlpha(colors.text, 0.08),
+          backgroundColor: colors.surface1,
+          borderBottomColor: colors.border,
         },
       ]}
     >
@@ -39,29 +40,27 @@ export function PremiumSegmented({
           <Pressable
             key={item.key}
             onPress={() => {
-              Haptics.selectionAsync();
+              Haptics.selectionAsync().catch(() => {});
               onChange(item.key);
             }}
-            style={({ pressed }) => [
-              styles.item,
-              pressed && !active
-                ? { backgroundColor: withAlpha(colors.text, 0.04) }
-                : null,
-            ]}
+            style={styles.item}
           >
             <View style={styles.labelRow}>
               <Text
                 style={[
                   styles.label,
-                  { color: active ? colors.text : colors.muted },
+                  { color: active ? colors.textPrimary : colors.textTertiary },
                 ]}
               >
                 {item.label}
               </Text>
               {item.key === "requests" && requestCount > 0 ? (
-                <View style={styles.badgeDot}>
-                  <Text style={styles.badgeText}>{requestCount}</Text>
-                </View>
+                <View
+                  style={[
+                    styles.badgeDot,
+                    { backgroundColor: colors.danger },
+                  ]}
+                />
               ) : null}
             </View>
             <View
@@ -69,7 +68,7 @@ export function PremiumSegmented({
                 styles.underline,
                 {
                   opacity: active ? 1 : 0,
-                  backgroundColor: "#6C63FF",
+                  backgroundColor: colors.primary,
                 },
               ]}
             />
@@ -83,50 +82,33 @@ export function PremiumSegmented({
 const styles = StyleSheet.create({
   wrap: {
     flexDirection: "row",
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 8,
-    paddingTop: 6,
-    paddingBottom: 4,
-    minHeight: 58,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    minHeight: 52,
   },
   item: {
     flex: 1,
     alignItems: "center",
     justifyContent: "space-between",
-    borderRadius: 14,
-    paddingTop: 8,
-    paddingBottom: 0,
+    paddingTop: 12,
   },
   labelRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    minHeight: 24,
+    minHeight: 22,
   },
   label: {
-    fontSize: 14,
-    fontWeight: "900",
-    letterSpacing: -0.2,
+    fontSize: 12,
+    fontWeight: "500",
   },
   underline: {
-    marginTop: 8,
     width: 28,
-    height: 3,
+    height: 2,
     borderRadius: 999,
   },
   badgeDot: {
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: 5,
+    width: 8,
+    height: 8,
     borderRadius: 999,
-    backgroundColor: "#F44336",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  badgeText: {
-    color: "#FFFFFF",
-    fontWeight: "900",
-    fontSize: 10,
   },
 });

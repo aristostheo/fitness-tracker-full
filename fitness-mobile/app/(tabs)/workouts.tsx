@@ -26,6 +26,7 @@ import {
   Modal,
   ActivityIndicator,
   Alert as RNAlert,
+  TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
@@ -49,7 +50,10 @@ import * as Haptics from "expo-haptics";
 import { useAuth } from "@/content/AuthContext";
 import { useTheme } from "@/content/ThemeProvider";
 import { subscribeProfile, type Profile } from "@/services/profile";
-import { inferPrimaryMuscle } from "@/services/workoutMuscles";
+import {
+  inferPrimaryMuscle,
+  PRIMARY_MUSCLE_OPTIONS,
+} from "@/services/workoutMuscles";
 import {
   subscribeWorkouts,
   deleteWorkout,
@@ -320,25 +324,25 @@ function ScalePressable({
 function useSurfaceTokens() {
   const { colors, isDark } = useTheme();
 
-  const t1 = isDark ? withAlpha("#FFFFFF", 0.94) : withAlpha(colors.text, 0.94);
-  const t2 = isDark ? withAlpha("#FFFFFF", 0.52) : withAlpha(colors.text, 0.56);
-  const t3 = isDark ? withAlpha("#FFFFFF", 0.72) : withAlpha(colors.text, 0.72);
+  const t1 = colors.textPrimary;
+  const t2 = colors.textSecondary;
+  const t3 = colors.textTertiary;
 
-  const cardBorder = withAlpha("#FFFFFF", 0.08);
-  const cardFill = isDark ? "#0F0F1A" : withAlpha("#FFFFFF", 0.78);
-  const chipFill = isDark ? "#141422" : withAlpha("#FFFFFF", 0.7);
-  const chipBorder = withAlpha("#FFFFFF", 0.08);
-  const hairline = withAlpha("#FFFFFF", 0.08);
+  const cardBorder = colors.border;
+  const cardFill = colors.surface1;
+  const chipFill = colors.surface2;
+  const chipBorder = colors.border;
+  const hairline = colors.border;
 
-  const icon = isDark ? withAlpha("#FFFFFF", 0.72) : withAlpha(colors.text, 0.72);
-  const iconBright = isDark ? withAlpha("#FFFFFF", 0.90) : withAlpha(colors.text, 0.90);
-  const chevron = isDark ? withAlpha("#FFFFFF", 0.28) : withAlpha(colors.text, 0.28);
+  const icon = colors.textSecondary;
+  const iconBright = colors.textPrimary;
+  const chevron = colors.textTertiary;
 
-  const tTitleSoft = isDark ? withAlpha("#FFFFFF", 0.72) : withAlpha(colors.text, 0.72);
-  const tMetaStrong = isDark ? withAlpha("#FFFFFF", 0.60) : withAlpha(colors.text, 0.60);
+  const tTitleSoft = colors.textSecondary;
+  const tMetaStrong = colors.textSecondary;
 
-  const ghostFill = isDark ? "#141422" : withAlpha("#FFFFFF", 0.72);
-  const ghostBorder = withAlpha("#FFFFFF", 0.08);
+  const ghostFill = colors.surface2;
+  const ghostBorder = colors.borderElevated;
 
   return {
     colors,
@@ -430,7 +434,7 @@ function Ring({
   label,
   value,
   sub,
-  accent = "#7B6FFF",
+  accent,
   onPress,
 }: {
   label: string;
@@ -440,6 +444,7 @@ function Ring({
   onPress?: () => void;
 }) {
   const s = useSurfaceTokens();
+  const ringAccent = accent || s.colors.primary;
   return (
     <ScalePressable
       onPress={onPress}
@@ -452,7 +457,7 @@ function Ring({
           <View
             style={[
               styles.ringDot,
-              { backgroundColor: withAlpha(accent, 0.9) },
+              { backgroundColor: withAlpha(ringAccent, 0.9) },
             ]}
           />
           <Text style={[styles.ringLabel, { color: s.t2 }]}>{label}</Text>
@@ -658,8 +663,8 @@ function WorkoutCard({
                 styles.bestSetPill,
                 {
                   backgroundColor: s.isDark
-                    ? withAlpha("#FFFFFF", 0.06)
-                    : withAlpha("#FFFFFF", 0.72),
+                    ? withAlpha(s.colors.surface1, 0.06)
+                    : withAlpha(s.colors.surface1, 0.72),
                   borderColor: s.hairline,
                 },
               ]}
@@ -671,8 +676,16 @@ function WorkoutCard({
                 </Text>
               </View>
               {w.pr ? (
-                <View style={styles.bestSetTag}>
-                  <Text style={styles.bestSetTagText}>PR</Text>
+                <View
+                  style={[
+                    styles.bestSetTag,
+                    {
+                      backgroundColor: withAlpha(s.colors.warning, 0.18),
+                      borderColor: withAlpha(s.colors.warning, 0.35),
+                    },
+                  ]}
+                >
+                  <Text style={[styles.bestSetTagText, { color: s.colors.warning }]}>PR</Text>
                 </View>
               ) : null}
               <Text
@@ -703,10 +716,10 @@ function WorkoutCard({
                   styles.actionBtnPrimary,
                   {
                     backgroundColor: s.isDark
-                      ? withAlpha("#FFFFFF", 0.08)
-                      : withAlpha("#FFFFFF", 0.82),
+                      ? withAlpha(s.colors.surface1, 0.08)
+                      : withAlpha(s.colors.surface1, 0.82),
                     borderColor: s.isDark
-                      ? withAlpha("#FFFFFF", 0.16)
+                      ? withAlpha(s.colors.surface1, 0.16)
                       : withAlpha(s.colors.text, 0.14),
                   },
                   pressed && { opacity: 0.75 },
@@ -727,8 +740,8 @@ function WorkoutCard({
                   styles.actionBtn,
                   {
                     backgroundColor: s.isDark
-                      ? withAlpha("#FFFFFF", 0.05)
-                      : withAlpha("#FFFFFF", 0.74),
+                      ? withAlpha(s.colors.surface1, 0.05)
+                      : withAlpha(s.colors.surface1, 0.74),
                     borderColor: s.hairline,
                   },
                   pressed && { opacity: 0.75 },
@@ -835,15 +848,21 @@ function TemplateChip({ t, onPress }: { t: TemplateVM; onPress?: () => void }) {
                 style={[
                   styles.templateBadge,
                   isUser
-                    ? styles.templateBadgeUser
+                    ? [
+                        styles.templateBadgeUser,
+                        {
+                          backgroundColor: withAlpha(s.colors.primary, 0.16),
+                          borderColor: withAlpha(s.colors.primary, 0.35),
+                        },
+                      ]
                     : [
                         styles.templateBadgeAuto,
                         {
                           backgroundColor: s.isDark
-                            ? withAlpha("#FFFFFF", 0.07)
-                            : withAlpha("#FFFFFF", 0.8),
+                            ? withAlpha(s.colors.surface1, 0.07)
+                            : withAlpha(s.colors.surface1, 0.8),
                           borderColor: s.isDark
-                            ? withAlpha("#FFFFFF", 0.14)
+                            ? withAlpha(s.colors.surface1, 0.14)
                             : withAlpha(s.colors.text, 0.14),
                         },
                       ],
@@ -853,7 +872,7 @@ function TemplateChip({ t, onPress }: { t: TemplateVM; onPress?: () => void }) {
                   style={[
                     styles.templateBadgeText,
                     {
-                      color: isUser ? styles.templateBadgeTextUser.color : s.t2,
+                      color: isUser ? s.colors.primary : s.t2,
                     },
                   ]}
                 >
@@ -903,8 +922,8 @@ function SheetShell({
           styles.sheetBackdrop,
           {
             backgroundColor: s.isDark
-              ? "rgba(0,0,0,0.35)"
-              : "rgba(10,14,28,0.12)",
+              ? withAlpha(s.colors.textPrimary, 0.35)
+              : withAlpha(s.colors.textPrimary, 0.12),
           },
         ]}
       >
@@ -967,8 +986,8 @@ function SheetRow({
           styles.sheetRow,
           {
             backgroundColor: s.isDark
-              ? withAlpha("#FFFFFF", 0.05)
-              : withAlpha("#FFFFFF", 0.78),
+              ? withAlpha(s.colors.surface1, 0.05)
+              : withAlpha(s.colors.surface1, 0.78),
             borderColor: s.hairline,
           },
         ]}
@@ -1066,7 +1085,7 @@ export default function WorkoutsPage() {
   const [templateKeepUntil, setTemplateKeepUntil] = useState<Record<string, number>>({});
   const [profile, setProfile] = useState<Profile | null>(null);
 
-  const accent = "#7B6FFF";
+  const accent = s.colors.primary;
   const scrollY = useSharedValue(0);
   const [headerH, setHeaderH] = useState(0);
 
@@ -1570,6 +1589,13 @@ function fmtTime(ms: number) {
 
   const [startOpen, setStartOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [configTitle, setConfigTitle] = useState("");
+  const [configMuscle, setConfigMuscle] = useState("");
+  const [configDuration, setConfigDuration] = useState("45");
+  const [surpriseOpen, setSurpriseOpen] = useState(false);
+  const [surpriseTemplate, setSurpriseTemplate] = useState<TemplateVM | null>(
+    null
+  );
   const [toast, setToast] = useState<{
     text: string;
     undo?: () => void;
@@ -1584,11 +1610,24 @@ function fmtTime(ms: number) {
     toastTimer.current = setTimeout(() => setToast(null), 3200);
   }
 
+  const referenceSeedKey = (u: string) => `workout:referenceSeed:${u}`;
+
   const onStart = async () => {
     const reduceMotion = await AccessibilityInfo.isReduceMotionEnabled().catch(
       () => false
     );
     if (!reduceMotion) await haptic("light");
+    await openSession({ freshStart: "1" });
+  };
+
+  const onOptions = async () => {
+    const reduceMotion = await AccessibilityInfo.isReduceMotionEnabled().catch(
+      () => false
+    );
+    if (!reduceMotion) await haptic("light");
+    setConfigTitle("");
+    setConfigMuscle("");
+    setConfigDuration("45");
     setStartOpen(true);
   };
 
@@ -1674,6 +1713,122 @@ function fmtTime(ms: number) {
     setTemplatesOpen(true);
   };
 
+  async function seedReferenceSession(session: SessionBucket) {
+    if (!uid) return;
+    const grouped = new Map<
+      string,
+      {
+        exercise: string;
+        primaryMuscle?: string;
+        sets: Array<{ reps: number; weightKg: number; note?: string }>;
+      }
+    >();
+    for (const row of session.rows) {
+      const exercise = String((row as any).exercise || "").trim();
+      if (!exercise) continue;
+      const key = exercise.toLowerCase();
+      const current =
+        grouped.get(key) ||
+        {
+          exercise,
+          primaryMuscle:
+            inferPrimaryMuscle(
+              exercise,
+              String((row as any).primaryMuscle || "")
+            ) || "",
+          sets: [],
+        };
+      current.sets.push({
+        reps: Number((row as any).reps || 0),
+        weightKg: Number((row as any).weight || 0),
+        note: String((row as any).notes || "").trim() || undefined,
+      });
+      grouped.set(key, current);
+    }
+    const seed = {
+      title: (session.title || "Workout").trim() || "Workout",
+      groups: [...grouped.values()],
+    };
+    await AsyncStorage.setItem(referenceSeedKey(uid), JSON.stringify(seed));
+  }
+
+  async function startFromSession(session: SessionBucket) {
+    if (!uid) return;
+    await seedReferenceSession(session);
+    await openSession({
+      freshStart: "1",
+      configTitle: (session.title || "Workout").trim() || "Workout",
+      resumeReference: "1",
+    });
+  }
+
+  function templatePrimaryGroup(template: TemplateVM) {
+    const text = `${template.name} ${template.items
+      .map((item) => item.exercise)
+      .join(" ")}`.toLowerCase();
+    if (/push|bench|chest|shoulder|tricep|press/.test(text)) return "push";
+    if (/pull|row|lat|bicep|curl|rear delt/.test(text)) return "pull";
+    if (/leg|quad|hamstring|glute|calf|squat|rdl/.test(text)) return "legs";
+    if (/cardio|run|bike|zone 2|conditioning/.test(text)) return "cardio";
+    return "full";
+  }
+
+  function pickSmartTemplate() {
+    const candidates = templatesMerged.filter(
+      (template) => template.source === "user" && !template.archived
+    );
+    if (!candidates.length) return null;
+
+    const cutoff = Date.now() - 3 * 86400000;
+    const recentGroups = new Set<string>();
+    const { sessions } = buildSessionBuckets(workoutRows);
+    for (const session of sessions) {
+      const stamp = Number(session.latestAt || session.startedAt || 0);
+      if (!stamp || stamp < cutoff) continue;
+        recentGroups.add(
+          classifyWorkoutGroup(
+            session.title || "Workout",
+            session.rows.map((row) => String((row as any).exercise || ""))
+          ) || "full"
+        );
+    }
+
+    const scored = candidates.map((template) => {
+      const group = templatePrimaryGroup(template);
+      const rawLastUsed =
+        (template.lastUsedAt as any)?.toMillis?.() ||
+        (template.updatedAt as any)?.toMillis?.() ||
+        (template.createdAt as any)?.toMillis?.() ||
+        0;
+      const recentlyTrainedPenalty = recentGroups.has(group) ? 0 : 1000;
+      return {
+        template,
+        group,
+        score: recentlyTrainedPenalty - rawLastUsed,
+        lastUsed: rawLastUsed,
+      };
+    });
+
+    const bestScore = Math.max(...scored.map((item) => item.score));
+    const best = scored.filter((item) => item.score === bestScore);
+    if (best.length === 1) return best[0].template;
+
+    best.sort((a, b) => a.lastUsed - b.lastUsed);
+    return best[0]?.template || candidates[0];
+  }
+
+  function rerollSurpriseTemplate() {
+    const next = pickSmartTemplate();
+    setSurpriseTemplate(next);
+    setSurpriseOpen(true);
+  }
+
+  const onSurprise = () => {
+    const next = pickSmartTemplate();
+    setSurpriseTemplate(next);
+    setSurpriseOpen(true);
+  };
+
   const onCreateTemplate = () => {
     setStartOpen(false);
     router.push("/(modals)/create-template");
@@ -1704,8 +1859,14 @@ function fmtTime(ms: number) {
     }
   };
 
-  const duplicateRecent = (w: WorkoutSummary) => {
-    openSession({ repeatWorkoutId: w.id, repeatTitle: w.title });
+  const duplicateRecent = async (w: WorkoutSummary) => {
+    const { sessions } = buildSessionBuckets(workoutRows);
+    const session = sessions.find((entry) => entry.key === w.id);
+    if (!session) {
+      await openSession({ freshStart: "1", configTitle: w.title || "Workout" });
+      return;
+    }
+    await startFromSession(session);
   };
   async function handleCreateActivity(e: CardioEntry) {
     if (!uid) return;
@@ -1837,7 +1998,7 @@ function fmtTime(ms: number) {
   const weeklyHoursLabel = `${Math.floor(weeklyMinutes / 60)}h ${String(weeklyMinutes % 60).padStart(2, "0")}m`;
   const weeklySubtitle =
     weeklyWorkoutCount === 0
-      ? "Let's get this week started 💪"
+      ? "Let's get this week started"
       : `This week: ${weeklyWorkoutCount} workouts · ${weeklyHoursLabel}${
           volumeDeltaPct == null ? "" : ` · ${volumeDeltaPct >= 0 ? "+" : ""}${volumeDeltaPct}% volume`
         }`;
@@ -1909,6 +2070,7 @@ function fmtTime(ms: number) {
   }, [splitCounts, weeklyWorkoutCount]);
 
   const nextWorkoutSuggestion = useMemo(() => {
+    if (weeklyWorkoutCount < 1) return "";
     const entries = [
       { key: "push", count: splitCounts.push, label: "Push day" },
       { key: "pull", count: splitCounts.pull, label: "Pull day" },
@@ -1916,7 +2078,7 @@ function fmtTime(ms: number) {
     ].sort((a, b) => a.count - b.count);
     const target = entries[0]?.label || "Full body";
     return `Based on your split, next up: ${target} · ~45 min`;
-  }, [splitCounts]);
+  }, [splitCounts, weeklyWorkoutCount]);
 
   const recentPRs = useMemo(() => {
     const sorted = (workoutRows || [])
@@ -2157,8 +2319,16 @@ function fmtTime(ms: number) {
   return (
     <View style={[styles.root, { backgroundColor: s.colors.bg }]}>
       {isDeletingSession ? (
-        <View style={styles.deleteOverlay}>
-          <View style={styles.deleteCard}>
+        <View style={[styles.deleteOverlay, { backgroundColor: withAlpha(s.colors.textPrimary, 0.35) }]}>
+          <View
+            style={[
+              styles.deleteCard,
+              {
+                borderColor: withAlpha(s.colors.surface1, 0.18),
+                backgroundColor: withAlpha(s.colors.surface2, 0.88),
+              },
+            ]}
+          >
             <ActivityIndicator size="small" color={withAlpha(s.t1, 0.9)} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.deleteTitle, { color: s.t1 }]}>
@@ -2184,9 +2354,9 @@ function fmtTime(ms: number) {
           style={[
             styles.headerBlur,
             {
-              backgroundColor: "#08080F",
+              backgroundColor: s.colors.background,
               borderBottomWidth: StyleSheet.hairlineWidth,
-              borderBottomColor: withAlpha("#FFFFFF", 0.08),
+              borderBottomColor: s.colors.border,
             },
           ]}
         >
@@ -2210,16 +2380,16 @@ function fmtTime(ms: number) {
             <ScalePressable
               onPress={onStart}
               accessibilityLabel="Start workout"
-              accessibilityHint="Opens workout start options"
+              accessibilityHint="Starts a new workout"
             >
               <View
                 style={[
                   styles.startBtn,
-                  { backgroundColor: "#7B6FFF", borderColor: withAlpha("#7B6FFF", 0.5) },
+                  { backgroundColor: "transparent", borderColor: withAlpha(s.colors.primary, 0.5) },
                 ]}
               >
-                <Ionicons name="add" size={18} color="#fff" />
-                <Text style={[styles.startBtnText, { color: "#fff" }]}>New</Text>
+                <Ionicons name="add" size={18} color={s.colors.primary} />
+                <Text style={[styles.startBtnText, { color: s.colors.primary }]}>+ New</Text>
               </View>
             </ScalePressable>
           </View>
@@ -2243,40 +2413,34 @@ function fmtTime(ms: number) {
           <View>
             <StartWorkoutCard
               onStart={onStart}
-              onOptions={onStart}
+              onOptions={onOptions}
               onResumeLast={
                 recentWorkout
-                  ? () =>
-                      openSession({
-                        repeatWorkoutId: recentWorkout.id,
-                        repeatTitle: recentWorkout.title,
-                      })
+                  ? async () => {
+                      const { sessions } = buildSessionBuckets(workoutRows);
+                      const session = sessions.find(
+                        (entry) => entry.key === recentWorkout.id
+                      );
+                      if (!session) return;
+                      await startFromSession(session);
+                    }
                   : undefined
               }
               resumeLabel={recentTemplate}
-              onSurprise={() =>
-                router.push({
-                  pathname: "/(modals)/coach-spark",
-                  params: {
-                    focus: ["Balanced", "Upper", "Lower", "Full Body", "Cardio"][
-                      Math.floor(Math.random() * 5)
-                    ],
-                    duration: "45",
-                    style: "Balanced",
-                  },
-                } as any)
-              }
+              onSurprise={onSurprise}
             />
 
-            <NextWorkoutSuggestionChip
-              text={nextWorkoutSuggestion}
-              onPress={() =>
-                router.push({
-                  pathname: "/(modals)/coach-spark",
-                  params: { focus: nextWorkoutSuggestion.includes("Pull") ? "Upper" : nextWorkoutSuggestion.includes("Leg") ? "Lower" : "Balanced", duration: "45", style: "Balanced" },
-                } as any)
-              }
-            />
+            {nextWorkoutSuggestion ? (
+              <NextWorkoutSuggestionChip
+                text={nextWorkoutSuggestion}
+                onPress={() =>
+                  router.push({
+                    pathname: "/(modals)/coach-spark",
+                    params: { focus: nextWorkoutSuggestion.includes("Pull") ? "Upper" : nextWorkoutSuggestion.includes("Leg") ? "Lower" : "Balanced", duration: "45", style: "Balanced" },
+                  } as any)
+                }
+              />
+            ) : null}
 
             <SmallCapsHeader title="Weekly Stats" />
             <ScrollView
@@ -2353,7 +2517,7 @@ function fmtTime(ms: number) {
               muscleVolumes={muscleVolumes}
               undertrained={undertrainedMuscles}
               lastTrainedMap={muscleLastTrained}
-              sex={profile?.sex || "male"}
+              sex={profile?.sex === "female" ? "female" : "male"}
             />
             <View style={{ marginTop: 10 }}>
               <SectionHeader title="Activity" />
@@ -2411,52 +2575,235 @@ function fmtTime(ms: number) {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* Start options sheet */}
+      {/* Workout options sheet */}
       <SheetShell
         open={startOpen}
         onClose={() => setStartOpen(false)}
-        title="Start workout"
-        subtitle="Pick a flow that feels effortless."
+        title="Workout options"
+        subtitle="Set the session up before you start."
       >
-        <View style={{ marginTop: 6 }}>
-          <SheetRow
-            icon="flash-outline"
-            title={hasDraftSession ? "Continue draft" : "Quick start"}
-            subtitle={
-              hasDraftSession
-                ? "Jump back in where you left off."
-                : "Start empty. Add exercises as you go."
-            }
-            onPress={() => {
+        <View style={{ marginTop: 6, gap: 12 }}>
+          <View>
+            <Text style={[styles.sheetFieldLabel, { color: s.t2 }]}>
+              Workout name
+            </Text>
+            <TextInput
+              value={configTitle}
+              onChangeText={setConfigTitle}
+              placeholder="Workout"
+              placeholderTextColor={s.t3}
+              style={[
+                styles.sheetTextInput,
+                {
+                  color: s.t1,
+                  backgroundColor: s.colors.surface2,
+                  borderColor: s.hairline,
+                },
+              ]}
+            />
+          </View>
+
+          <View>
+            <Text style={[styles.sheetFieldLabel, { color: s.t2 }]}>
+              Target muscle group
+            </Text>
+            <View style={styles.sheetChipRow}>
+              <Pressable
+                onPress={() => setConfigMuscle("")}
+                style={[
+                  styles.sheetChip,
+                  {
+                    backgroundColor: !configMuscle
+                      ? withAlpha(s.colors.primary, 0.14)
+                      : s.colors.surface2,
+                    borderColor: !configMuscle
+                      ? withAlpha(s.colors.primary, 0.3)
+                      : s.hairline,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.sheetChipText,
+                    { color: !configMuscle ? s.colors.primary : s.t2 },
+                  ]}
+                >
+                  Auto
+                </Text>
+              </Pressable>
+              {PRIMARY_MUSCLE_OPTIONS.slice(0, 6).map((option) => (
+                <Pressable
+                  key={option.key}
+                  onPress={() => setConfigMuscle(option.key)}
+                  style={[
+                    styles.sheetChip,
+                    {
+                      backgroundColor:
+                        configMuscle === option.key
+                          ? withAlpha(s.colors.primary, 0.14)
+                          : s.colors.surface2,
+                      borderColor:
+                        configMuscle === option.key
+                          ? withAlpha(s.colors.primary, 0.3)
+                          : s.hairline,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.sheetChipText,
+                      {
+                        color:
+                          configMuscle === option.key
+                            ? s.colors.primary
+                            : s.t2,
+                      },
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          <View>
+            <Text style={[styles.sheetFieldLabel, { color: s.t2 }]}>
+              Estimated duration
+            </Text>
+            <View style={styles.sheetChipRow}>
+              {["30", "45", "60", "75"].map((duration) => (
+                <Pressable
+                  key={duration}
+                  onPress={() => setConfigDuration(duration)}
+                  style={[
+                    styles.sheetChip,
+                    {
+                      backgroundColor:
+                        configDuration === duration
+                          ? withAlpha(s.colors.primary, 0.14)
+                          : s.colors.surface2,
+                      borderColor:
+                        configDuration === duration
+                          ? withAlpha(s.colors.primary, 0.3)
+                          : s.hairline,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.sheetChipText,
+                      {
+                        color:
+                          configDuration === duration
+                            ? s.colors.primary
+                            : s.t2,
+                      },
+                    ]}
+                  >
+                    {duration} min
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          <Pressable
+            onPress={async () => {
               setStartOpen(false);
-              openSession({});
+              await openSession({
+                freshStart: "1",
+                configTitle: (configTitle || "Workout").trim() || "Workout",
+                configMuscle,
+                configDuration,
+              });
             }}
-          />
-          <SheetRow
-            icon="barbell-outline"
-            title="Add exercise first"
-            subtitle="Open the exercise picker, then drop into the session."
-            onPress={() => {
-              setStartOpen(false);
-              router.push("/(modals)/add-exercise");
-            }}
-          />
-          <SheetRow
-            icon="albums-outline"
-            title="From template"
-            subtitle="Start structured. Save time. Stay consistent."
-            onPress={onFromTemplate}
-          />
-          <SheetRow
-            icon="copy-outline"
-            title="Repeat last workout"
-            subtitle="Clone your last session and adjust as needed."
-            onPress={() => {
-              setStartOpen(false);
-              openSession({ repeatLast: "1" });
-            }}
-          />
+            style={({ pressed }) => [
+              styles.sheetPrimaryBtn,
+              { backgroundColor: s.colors.primary },
+              pressed && { opacity: 0.88 },
+            ]}
+          >
+            <Text style={[styles.sheetPrimaryBtnText, { color: s.colors.buttonText }]}>
+              Start configured workout →
+            </Text>
+          </Pressable>
         </View>
+      </SheetShell>
+
+      <SheetShell
+        open={surpriseOpen}
+        onClose={() => setSurpriseOpen(false)}
+        title={surpriseTemplate ? surpriseTemplate.name : "No templates yet"}
+        subtitle={
+          surpriseTemplate
+            ? "A smart pick from your saved templates."
+            : "Create one first to use Surprise me."
+        }
+      >
+        {surpriseTemplate ? (
+          <View style={{ marginTop: 6, gap: 12 }}>
+            <View
+              style={[
+                styles.sheetPreviewCard,
+                { backgroundColor: s.colors.surface2, borderColor: s.hairline },
+              ]}
+            >
+              {(surpriseTemplate.items || []).slice(0, 4).map((item, index) => (
+                <Text
+                  key={`${surpriseTemplate.id}-${item.exercise}-${index}`}
+                  style={[styles.sheetPreviewText, { color: s.t2 }]}
+                >
+                  {item.exercise}
+                </Text>
+              ))}
+            </View>
+            <Pressable
+              onPress={async () => {
+                setSurpriseOpen(false);
+                await startFromTemplate(surpriseTemplate);
+              }}
+              style={({ pressed }) => [
+                styles.sheetPrimaryBtn,
+                { backgroundColor: s.colors.primary },
+                pressed && { opacity: 0.88 },
+              ]}
+            >
+              <Text style={[styles.sheetPrimaryBtnText, { color: s.colors.buttonText }]}>
+                Let&apos;s go →
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={rerollSurpriseTemplate}
+              style={({ pressed }) => [pressed && { opacity: 0.8 }]}
+            >
+              <Text style={[styles.sheetTextLink, { color: s.colors.primary }]}>
+                Pick another →
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={{ marginTop: 6, gap: 12 }}>
+            <Text style={[styles.sheetPreviewText, { color: s.t2 }]}>
+              No templates yet · Create one first
+            </Text>
+            <Pressable
+              onPress={() => {
+                setSurpriseOpen(false);
+                onCreateTemplate();
+              }}
+              style={({ pressed }) => [
+                styles.sheetPrimaryBtn,
+                { backgroundColor: s.colors.primary },
+                pressed && { opacity: 0.88 },
+              ]}
+            >
+              <Text style={[styles.sheetPrimaryBtnText, { color: s.colors.buttonText }]}>
+                Create template
+              </Text>
+            </Pressable>
+          </View>
+        )}
       </SheetShell>
 
       {/* Templates sheet */}
@@ -2496,7 +2843,7 @@ function fmtTime(ms: number) {
               }}
               style={({ pressed }) => [
                 styles.sheetPrimaryBtn,
-                { backgroundColor: "#7B6FFF" },
+                { backgroundColor: s.colors.primary },
                 pressed && { opacity: 0.88 },
               ]}
             >
@@ -2541,8 +2888,8 @@ function fmtTime(ms: number) {
             styles.modalBackdrop,
             {
               backgroundColor: s.isDark
-                ? "rgba(0,0,0,0.55)"
-                : "rgba(10,14,28,0.18)",
+                ? withAlpha(s.colors.textPrimary, 0.55)
+                : withAlpha(s.colors.textPrimary, 0.18),
             },
           ]}
         >
@@ -2552,8 +2899,8 @@ function fmtTime(ms: number) {
               styles.modalCard,
               {
                 backgroundColor: s.isDark
-                  ? withAlpha("#08080F", 0.98)
-                  : withAlpha("#FFFFFF", 0.9),
+                  ? withAlpha(s.colors.background, 0.98)
+                  : withAlpha(s.colors.surface1, 0.9),
                 borderColor: s.hairline,
               },
             ]}
@@ -2578,10 +2925,10 @@ function fmtTime(ms: number) {
                 styles.modalPrimary,
                 {
                   backgroundColor: s.isDark
-                    ? withAlpha("#7B6FFF", 0.22)
+                    ? withAlpha(s.colors.primary, 0.22)
                     : withAlpha(s.colors.primary, 0.12),
                   borderColor: s.isDark
-                    ? withAlpha("#7B6FFF", 0.35)
+                    ? withAlpha(s.colors.primary, 0.35)
                     : withAlpha(s.colors.primary, 0.25),
                 },
               ]}
@@ -2603,8 +2950,8 @@ function fmtTime(ms: number) {
                   {
                     borderColor: s.hairline,
                     backgroundColor: s.isDark
-                      ? withAlpha("#FFFFFF", 0.04)
-                      : withAlpha("#FFFFFF", 0.72),
+                      ? withAlpha(s.colors.surface1, 0.04)
+                      : withAlpha(s.colors.surface1, 0.72),
                   },
                 ]}
               >
@@ -2624,17 +2971,17 @@ function fmtTime(ms: number) {
                 style={[
                   styles.modalSecondary,
                   {
-                    borderColor: withAlpha("#FFC107", 0.25),
+                    borderColor: withAlpha(s.colors.warning, 0.25),
                     backgroundColor: s.isDark
-                      ? withAlpha("#FFFFFF", 0.04)
-                      : withAlpha("#FFFFFF", 0.72),
+                      ? withAlpha(s.colors.surface1, 0.04)
+                      : withAlpha(s.colors.surface1, 0.72),
                   },
                 ]}
               >
                 <Text
                   style={[
                     styles.modalSecondaryText,
-                    { color: withAlpha("#FFC107", 0.95) },
+                    { color: withAlpha(s.colors.warning, 0.95) },
                   ]}
                 >
                   Archive template
@@ -2669,17 +3016,17 @@ function fmtTime(ms: number) {
               style={[
                 styles.modalSecondary,
                 {
-                  borderColor: "rgba(255,92,106,0.25)",
+                  borderColor: withAlpha(s.colors.danger, 0.25),
                   backgroundColor: s.isDark
-                    ? withAlpha("#FFFFFF", 0.04)
-                    : withAlpha("#FFFFFF", 0.72),
+                    ? withAlpha(s.colors.surface1, 0.04)
+                    : withAlpha(s.colors.surface1, 0.72),
                 },
               ]}
             >
               <Text
                 style={[
                   styles.modalSecondaryText,
-                  { color: "rgba(255,92,106,0.95)" },
+                  { color: withAlpha(s.colors.danger, 0.95) },
                 ]}
               >
                 Delete template
@@ -2720,7 +3067,7 @@ function StatTile({
     <View
       style={[
         styles.flatStatTile,
-        { backgroundColor: "#0F0F1A", borderColor: s.hairline },
+        { backgroundColor: s.colors.surface1, borderColor: s.hairline },
       ]}
     >
       <Text style={[styles.flatStatTitle, { color: s.t2 }]}>{title}</Text>
@@ -2752,12 +3099,11 @@ function StartWorkoutCard({
     <View
       style={[
         styles.startWorkoutCard,
-        { backgroundColor: "#0F0F1A", borderColor: s.hairline },
+        { backgroundColor: s.colors.surface1, borderColor: s.hairline },
       ]}
     >
       <View style={styles.startWorkoutHeader}>
-        <View style={[styles.readyChip, { borderWidth: 1, borderColor: withAlpha("#7B6FFF", 0.35), backgroundColor: withAlpha("#7B6FFF", 0.08) }]}>
-          <View style={[styles.readyChipDot, { backgroundColor: "#7B6FFF" }]} />
+        <View style={[styles.readyChip, { borderWidth: 1, borderColor: withAlpha(s.colors.primary, 0.35), backgroundColor: withAlpha(s.colors.primary, 0.08) }]}>
           <Text style={[styles.readyChipText, { color: s.t2 }]}>
             Ready when you are
           </Text>
@@ -2765,8 +3111,8 @@ function StartWorkoutCard({
         <Text style={[styles.startWorkoutTitle, { color: s.t1 }]}>
           Start a workout
         </Text>
-        <Text style={[styles.startWorkoutSub, { color: s.t2 }]}>
-          Pick up where you left off or spin up a fresh session fast.
+        <Text style={[styles.startWorkoutSub, { color: s.t2 }]} numberOfLines={1}>
+          Pick up where you left off or start fresh.
         </Text>
       </View>
 
@@ -2774,18 +3120,18 @@ function StartWorkoutCard({
         onPress={onStart}
         style={({ pressed }) => [
           styles.primaryWideButton,
-          { backgroundColor: "#7B6FFF", opacity: pressed ? 0.88 : 1 },
+          { backgroundColor: s.colors.primary, opacity: pressed ? 0.88 : 1 },
         ]}
       >
-        <Ionicons name="add" size={16} color="#FFFFFF" />
-        <Text style={styles.primaryWideButtonText}>Start</Text>
+        <Ionicons name="add" size={16} color={s.colors.buttonText} />
+        <Text style={[styles.primaryWideButtonText, { color: s.colors.buttonText }]}>+ Start</Text>
       </Pressable>
 
       <Pressable
         onPress={onOptions}
         style={({ pressed }) => [
           styles.secondaryButton,
-          { backgroundColor: "#141422", borderColor: s.hairline, opacity: pressed ? 0.8 : 1 },
+          { backgroundColor: s.colors.surface2, borderColor: s.hairline, opacity: pressed ? 0.8 : 1 },
         ]}
       >
         <Text style={[styles.secondaryButtonText, { color: s.t1 }]}>
@@ -2799,14 +3145,14 @@ function StartWorkoutCard({
             onPress={onResumeLast}
             style={({ pressed }) => [
               styles.quickStartChip,
-              { backgroundColor: "#141422", borderColor: s.hairline },
+              { backgroundColor: s.colors.surface2, borderColor: s.hairline },
               pressed && { opacity: 0.8 },
             ]}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <Ionicons name="play" size={12} color={s.t2} />
               <Text style={[styles.quickStartChipText, { color: s.t1 }]} numberOfLines={1}>
-                {resumeLabel || "Last workout"}
+                {`Resume last: ${resumeLabel || "Last workout"}`}
               </Text>
             </View>
           </Pressable>
@@ -2815,7 +3161,7 @@ function StartWorkoutCard({
           onPress={onSurprise}
           style={({ pressed }) => [
             styles.quickStartChip,
-            { backgroundColor: "#141422", borderColor: s.hairline },
+            { backgroundColor: s.colors.surface2, borderColor: s.hairline },
             pressed && { opacity: 0.8 },
           ]}
         >
@@ -2844,7 +3190,7 @@ function NextWorkoutSuggestionChip({
       onPress={onPress}
       style={({ pressed }) => [
         styles.nextSuggestionChip,
-        { backgroundColor: withAlpha(s.colors.primary || "#7B6FFF", 0.14), borderColor: withAlpha(s.colors.primary || "#7B6FFF", 0.3) },
+        { backgroundColor: withAlpha(s.colors.primary, 0.14), borderColor: withAlpha(s.colors.primary, 0.3) },
         pressed && { opacity: 0.85 },
       ]}
     >
@@ -2862,28 +3208,33 @@ function WeeklySplitVisualizer({
   insight: string;
 }) {
   const s = useSurfaceTokens();
-  const toneForGroup = (group?: string) => {
-    switch (group) {
-      case "push":
-        return "#7B6FFF";
-      case "pull":
-        return "#9B8FFF";
-      case "legs":
-        return "#7B6FFF";
-      case "full":
-        return "#9B8FFF";
-      case "cardio":
-      case "recovery":
-        return "#5A5A7A";
-      default:
-        return "#141422";
-    }
-  };
+  const toneForGroup = (group?: string) =>
+    group === "push"
+      ? s.colors.primary
+      : group === "pull"
+        ? s.colors.info
+        : group === "legs"
+          ? s.colors.success
+          : group === "full"
+            ? s.colors.warning
+            : s.colors.textTertiary;
+  const shortForGroup = (group?: string) =>
+    group === "push"
+      ? "P"
+      : group === "pull"
+        ? "PL"
+        : group === "legs"
+          ? "L"
+          : group === "full"
+            ? "FB"
+            : group === "cardio" || group === "recovery"
+              ? "R"
+              : "—";
   return (
     <View
       style={[
         styles.splitCard,
-        { backgroundColor: "#0F0F1A", borderColor: s.hairline },
+        { backgroundColor: s.colors.surface1, borderColor: s.hairline },
       ]}
     >
       <View style={styles.splitHeaderRow}>
@@ -2892,31 +3243,48 @@ function WeeklySplitVisualizer({
       <View style={styles.splitPillRow}>
         {days.map((day) => (
           <View key={day.label} style={styles.splitDayWrap}>
+            <Text style={[styles.splitDayMeta, { color: s.t2 }]}>
+              {day.label.slice(0, 3)}
+            </Text>
             <View
               style={[
                 styles.splitDayPill,
                 {
                   backgroundColor: day.group
-                    ? withAlpha(toneForGroup(day.group), day.group === "full" ? 0.28 : 0.22)
-                    : "transparent",
+                    ? withAlpha(toneForGroup(day.group), day.group === "full" ? 0.16 : 0.12)
+                    : s.colors.surface3,
                   borderColor: day.isToday
-                    ? "#7B6FFF"
+                    ? s.colors.primary
                     : day.group
-                    ? withAlpha(toneForGroup(day.group), 0.34)
-                    : withAlpha("#FFFFFF", 0.12),
+                      ? withAlpha(toneForGroup(day.group), 0.34)
+                      : s.hairline,
                   borderWidth: day.isToday ? 1.5 : StyleSheet.hairlineWidth,
                 },
               ]}
             >
-              <Text style={[styles.splitDayLabel, { color: s.t1 }]}>{day.label}</Text>
+              <Text
+                style={[
+                  styles.splitDayLabel,
+                  { color: day.group ? toneForGroup(day.group) : s.t2 },
+                ]}
+              >
+                {shortForGroup(day.group)}
+              </Text>
             </View>
-            <Text style={[styles.splitDayDetail, { color: s.t2 }]} numberOfLines={1}>
-              {day.detail || ""}
-            </Text>
           </View>
         ))}
       </View>
-      <Text style={[styles.splitInsight, { color: s.t2 }]}>{insight}</Text>
+      <Text
+        style={[
+          styles.splitInsight,
+          {
+            color: s.t2,
+            fontStyle: insight.includes("No workouts") ? "italic" : "normal",
+          },
+        ]}
+      >
+        {insight}
+      </Text>
     </View>
   );
 }
@@ -2930,7 +3298,13 @@ function RecoveryCoachCard({ onPress }: { onPress?: () => void }) {
   const recovery = useMemo(() => getRecoveryMetrics(integrations), [integrations]);
   const score = recovery?.recoveryScore ?? null;
   const tone =
-    score == null ? "#FFC107" : score < 40 ? "#FFC107" : score > 80 ? "#4CAF50" : "#7B6FFF";
+    score == null
+      ? s.colors.warning
+      : score < 40
+        ? s.colors.warning
+        : score > 80
+          ? s.colors.success
+          : s.colors.primary;
   const badge =
     score == null ? "Fatigued" : score < 40 ? "Low recovery" : score > 80 ? "Recovered" : "Ready";
   const body =
@@ -2953,7 +3327,7 @@ function RecoveryCoachCard({ onPress }: { onPress?: () => void }) {
     <View
       style={[
         styles.recoveryCard,
-        { backgroundColor: "#0F0F1A", borderColor: s.hairline },
+        { backgroundColor: s.colors.surface1, borderColor: s.hairline },
       ]}
     >
       <View style={styles.recoveryTopRow}>
@@ -2969,7 +3343,7 @@ function RecoveryCoachCard({ onPress }: { onPress?: () => void }) {
         onPress={onPress}
         style={({ pressed }) => [
           styles.recoveryAction,
-          { borderColor: s.hairline, backgroundColor: withAlpha("#FFFFFF", 0.04) },
+          { borderColor: s.hairline, backgroundColor: withAlpha(s.colors.surface1, 0.04) },
           pressed && { opacity: 0.8 },
         ]}
       >
@@ -3009,13 +3383,13 @@ function TemplatesOverview({
             onPress={() => onUseTemplate?.(template.id)}
             style={({ pressed }) => [
               styles.templateOverviewCard,
-              { backgroundColor: "#0F0F1A", borderColor: s.hairline },
+              { backgroundColor: s.colors.surface1, borderColor: s.hairline },
               pressed && { opacity: 0.92 },
             ]}
           >
             <View style={styles.templateOverviewTop}>
-              <View style={[styles.templateOverviewIcon, { backgroundColor: withAlpha(s.colors.primary || "#7B6FFF", 0.18) }]}>
-                <Text style={styles.templateOverviewIconText}>
+              <View style={[styles.templateOverviewIcon, { backgroundColor: s.colors.surface3 }]}>
+                <Text style={[styles.templateOverviewIconText, { color: s.t1 }]}>
                   {(template.name || "W").slice(0, 2).toUpperCase()}
                 </Text>
               </View>
@@ -3035,22 +3409,22 @@ function TemplatesOverview({
               </Pressable>
             </View>
             {template.stale ? (
-              <View style={[styles.staleChip, { backgroundColor: withAlpha("#FFC107", 0.12), borderColor: withAlpha("#FFC107", 0.24) }]}>
-                <Text style={styles.staleChipText}>
+              <View style={[styles.staleChip, { backgroundColor: withAlpha(s.colors.warning, 0.12), borderColor: withAlpha(s.colors.warning, 0.24) }]}>
+                <Text style={[styles.staleChipText, { color: s.colors.warning }]}>
                   Haven&apos;t used in a while — still relevant?
                 </Text>
                 <View style={styles.staleActionsRow}>
                   <Pressable
                     onPress={() => onKeepTemplate?.(template.id)}
-                    style={[styles.staleActionBtn, { borderColor: withAlpha("#4CAF50", 0.3) }]}
+                    style={[styles.staleActionBtn, { borderColor: withAlpha(s.colors.success, 0.3) }]}
                   >
-                    <Text style={[styles.staleActionText, { color: "#4CAF50" }]}>Keep ✓</Text>
+                    <Text style={[styles.staleActionText, { color: s.colors.success }]}>Keep ✓</Text>
                   </Pressable>
                   <Pressable
                     onPress={() => onArchiveTemplate?.(template.id)}
-                    style={[styles.staleActionBtn, { borderColor: withAlpha("#F44336", 0.3) }]}
+                    style={[styles.staleActionBtn, { borderColor: withAlpha(s.colors.danger, 0.3) }]}
                   >
-                    <Text style={[styles.staleActionText, { color: "#F44336" }]}>Archive ✗</Text>
+                    <Text style={[styles.staleActionText, { color: s.colors.danger }]}>Archive ✗</Text>
                   </Pressable>
                 </View>
               </View>
@@ -3059,7 +3433,7 @@ function TemplatesOverview({
               {(template.displayTags || template.tags || []).slice(0, 3).map((tag: string) => (
                 <View
                   key={`${template.id}-${tag}`}
-                  style={[styles.templateTagChip, { backgroundColor: withAlpha("#FFFFFF", 0.04), borderColor: s.hairline }]}
+                  style={[styles.templateTagChip, { backgroundColor: s.colors.surface2, borderColor: s.hairline }]}
                 >
                   <Text style={[styles.templateTagChipText, { color: s.t2 }]}>{tag}</Text>
                 </View>
@@ -3073,11 +3447,11 @@ function TemplatesOverview({
           style={({ pressed }) => [
             styles.templateOverviewCard,
             styles.templateCreateCard,
-            { backgroundColor: "#0F0F1A", borderColor: withAlpha(s.colors.primary || "#7B6FFF", 0.36) },
+            { backgroundColor: s.colors.surface1, borderColor: withAlpha(s.colors.primary, 0.36) },
             pressed && { opacity: 0.92 },
           ]}
         >
-          <Ionicons name="add" size={20} color={s.colors.primary || "#7B6FFF"} />
+          <Ionicons name="add" size={20} color={s.colors.primary} />
           <Text style={[styles.templateCreateText, { color: s.t1 }]}>Create new</Text>
         </Pressable>
       </View>
@@ -3103,9 +3477,9 @@ function PRFeed({ prs }: { prs: any[] }) {
             {prs.map((pr) => (
               <View
                 key={pr.id}
-                style={[styles.prFeedRow, { backgroundColor: "#0F0F1A", borderColor: s.hairline }]}
+                style={[styles.prFeedRow, { backgroundColor: s.colors.surface1, borderColor: s.hairline }]}
               >
-                <Ionicons name="trophy" size={14} color="#7B6FFF" />
+                <Ionicons name="trophy" size={14} color={s.colors.warning} />
                 <Text style={[styles.prFeedText, { color: s.t1 }]} numberOfLines={2}>
                   {pr.exercise} · {pr.text}{pr.when ? ` · ${pr.when}` : ""}
                 </Text>
@@ -3114,7 +3488,7 @@ function PRFeed({ prs }: { prs: any[] }) {
             ))}
           </View>
         ) : (
-          <View style={[styles.prFeedEmpty, { backgroundColor: "#0F0F1A", borderColor: s.hairline }]}>
+          <View style={[styles.prFeedEmpty, { backgroundColor: s.colors.surface1, borderColor: s.hairline }]}>
             <Text style={[styles.prFeedEmptyText, { color: s.t2 }]}>
               No PRs yet this month — push a little harder next session
             </Text>
@@ -3139,9 +3513,9 @@ function MuscleHeatmapCard({
   const s = useSurfaceTokens();
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const legend = [
-    { label: "Light", color: "rgba(123,111,255,0.35)" },
-    { label: "Moderate", color: "rgba(123,111,255,0.65)" },
-    { label: "Heavy", color: "#7B6FFF" },
+    { label: "Light", color: withAlpha(s.colors.primary, 0.35) },
+    { label: "Moderate", color: withAlpha(s.colors.primary, 0.65) },
+    { label: "Heavy", color: s.colors.primary },
   ];
   const regionLabels: Record<string, string> = {
     chest: "Chest",
@@ -3211,7 +3585,7 @@ function MuscleHeatmapCard({
           styles:
             activeKey === key
               ? {
-                  stroke: withAlpha("#FFFFFF", 0.3),
+                  stroke: withAlpha(s.colors.textPrimary, 0.3),
                   strokeWidth: 1.5,
                 }
               : undefined,
@@ -3231,7 +3605,7 @@ function MuscleHeatmapCard({
     <View
       style={[
         styles.heatmapCard,
-        { backgroundColor: "#0F0F1A", borderColor: s.hairline },
+        { backgroundColor: s.colors.surface1, borderColor: s.hairline },
       ]}
     >
       <SectionHeader title="Muscle Heatmap" />
@@ -3243,8 +3617,8 @@ function MuscleHeatmapCard({
             side="front"
             scale={0.92}
             border="none"
-            defaultFill="#141422"
-            colors={["rgba(123,111,255,0.35)", "rgba(123,111,255,0.65)", "#7B6FFF"]}
+            defaultFill={s.colors.surface3}
+            colors={[withAlpha(s.colors.primary, 0.35), withAlpha(s.colors.primary, 0.65), s.colors.primary]}
             onBodyPartPress={(part) => {
               const key = slugToKeys[part.slug as BodySlug]?.[0];
               if (key) setActiveKey(key);
@@ -3259,8 +3633,8 @@ function MuscleHeatmapCard({
             side="back"
             scale={0.92}
             border="none"
-            defaultFill="#141422"
-            colors={["rgba(123,111,255,0.35)", "rgba(123,111,255,0.65)", "#7B6FFF"]}
+            defaultFill={s.colors.surface3}
+            colors={[withAlpha(s.colors.primary, 0.35), withAlpha(s.colors.primary, 0.65), s.colors.primary]}
             onBodyPartPress={(part) => {
               const key = slugToKeys[part.slug as BodySlug]?.[0];
               if (key) setActiveKey(key);
@@ -3290,7 +3664,7 @@ function MuscleHeatmapCard({
               .map((m) => m.replace(/([A-Z])/g, " $1"))
               .map((m) => m[0].toUpperCase() + m.slice(1))
               .join(" and ")} haven't been trained this week`
-          : "Your weekly muscle balance looks covered"}
+          : "Your weekly muscle balance looks good"}
       </Text>
     </View>
   );
@@ -3352,14 +3726,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 7,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    height: 32,
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
-    overflow: "hidden",
   },
   startBtnText: {
-    fontSize: 14,
-    fontWeight: "400",
+    fontSize: 13,
+    fontWeight: "500",
     letterSpacing: 0.2,
   },
 
@@ -3511,8 +3884,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   templateBadgeUser: {
-    backgroundColor: withAlpha("#7B6FFF", 0.16),
-    borderColor: withAlpha("#7B6FFF", 0.35),
   },
   templateBadgeAuto: {},
 
@@ -3561,11 +3932,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 3,
     borderRadius: 999,
-    backgroundColor: withAlpha("#FFD45A", 0.18),
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFD45A", 0.35),
   },
-  bestSetTagText: { fontSize: 10, fontWeight: "500", color: "#FFD45A" },
+  bestSetTagText: { fontSize: 10, fontWeight: "500" },
 
   cardActionsCompact: {
     marginTop: 8,
@@ -3582,8 +3951,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   templateBadgeText: { fontSize: 10, fontWeight: "500", letterSpacing: 0.6 },
-  templateBadgeTextUser: { color: "#7B6FFF" },
-  templateBadgeTextAuto: { color: withAlpha("#FFFFFF", 0.78) },
+  templateBadgeTextUser: {},
+  templateBadgeTextAuto: {},
 
   workoutCard: { borderRadius: 22 },
   workoutHeaderRow: { flexDirection: "row", alignItems: "center", gap: 10 },
@@ -3742,6 +4111,53 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sheetGhostBtnText: { fontWeight: "500" },
+  sheetFieldLabel: {
+    marginBottom: 6,
+    fontSize: 11,
+    fontWeight: "500",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  sheetTextInput: {
+    height: 44,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    fontWeight: "400",
+  },
+  sheetChipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  sheetChip: {
+    minHeight: 34,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sheetChipText: {
+    fontSize: 12,
+    fontWeight: "400",
+  },
+  sheetPreviewCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    padding: 12,
+    gap: 6,
+  },
+  sheetPreviewText: {
+    fontSize: 12,
+    fontWeight: "300",
+    lineHeight: 18,
+  },
+  sheetTextLink: {
+    fontSize: 12,
+    fontWeight: "400",
+  },
 
   /* Toast */
   toastWrap: { position: "absolute", left: 14, right: 14, bottom: 98 },
@@ -3765,7 +4181,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.35)",
     zIndex: 30,
   },
   deleteCard: {
@@ -3774,8 +4189,6 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 18,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: withAlpha("#FFFFFF", 0.18),
-    backgroundColor: "rgba(15,18,28,0.88)",
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
@@ -3870,9 +4283,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   flatStatTile: {
-    width: 140,
+    minWidth: 140,
     minHeight: 108,
-    borderRadius: 18,
+    borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 14,
     justifyContent: "space-between",
@@ -3889,7 +4302,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
   },
   flatStatSub: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "300",
   },
   startWorkoutCard: {
@@ -3909,9 +4322,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.04)",
   },
-  readyChipDot: { width: 8, height: 8, borderRadius: 999 },
   readyChipText: { fontSize: 11, fontWeight: "400" },
   startWorkoutTitle: { fontSize: 20, fontWeight: "500", letterSpacing: -0.3 },
   startWorkoutSub: { fontSize: 13, lineHeight: 18, fontWeight: "300" },
@@ -3925,7 +4336,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   primaryWideButtonText: {
-    color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "500",
   },
@@ -3943,10 +4353,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   quickStartChip: {
-    borderRadius: 14,
+    minHeight: 36,
+    borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 12,
-    paddingVertical: 11,
+    justifyContent: "center",
   },
   quickStartChipText: { fontSize: 13, fontWeight: "400" },
   nextSuggestionChip: {
@@ -3980,13 +4391,20 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   splitDayWrap: { flex: 1, alignItems: "center", gap: 6 },
+  splitDayMeta: {
+    fontSize: 9,
+    fontWeight: "500",
+    letterSpacing: 0.9,
+    textTransform: "uppercase",
+  },
   splitDayPill: {
-    minWidth: 40,
+    minWidth: 36,
     width: "100%",
-    borderRadius: 12,
+    minHeight: 44,
+    borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 10,
     alignItems: "center",
+    justifyContent: "center",
   },
   splitDayLabel: { fontSize: 12, fontWeight: "500" },
   splitDayDetail: { fontSize: 10, fontWeight: "300" },
@@ -4038,7 +4456,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   templateOverviewIconText: {
-    color: "#FFFFFF",
     fontWeight: "500",
     fontSize: 13,
   },
@@ -4052,7 +4469,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  staleChipText: { color: "#FFC107", fontSize: 11, fontWeight: "400" },
+  staleChipText: { fontSize: 11, fontWeight: "400" },
   staleActionsRow: {
     marginTop: 8,
     flexDirection: "row",
@@ -4063,7 +4480,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
-    backgroundColor: "rgba(255,255,255,0.04)",
   },
   staleActionText: { fontSize: 11, fontWeight: "400" },
   templateTagRow: {
@@ -4134,7 +4550,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    backgroundColor: "rgba(255,255,255,0.04)",
     paddingHorizontal: 12,
     paddingVertical: 10,
   },

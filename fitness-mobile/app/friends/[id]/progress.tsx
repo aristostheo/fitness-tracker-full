@@ -31,7 +31,7 @@ export default function FriendProgressPage() {
   const trend = friendTrendLabel(profile);
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#0D0D0F" }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 24, gap: 14 }}>
         <Pressable onPress={() => router.back()} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <Ionicons name="chevron-back" size={18} color={colors.muted} />
@@ -39,7 +39,7 @@ export default function FriendProgressPage() {
         </Pressable>
         <Text style={{ color: colors.text, fontWeight: "900", fontSize: 28 }}>Progress</Text>
         {!enabled ? (
-          <View style={{ borderRadius: 22, borderWidth: 1, borderColor: withAlpha(colors.text, 0.08), backgroundColor: "#1A1A24", padding: 18, alignItems: "center", gap: 8 }}>
+          <View style={{ borderRadius: 22, borderWidth: 1, borderColor: withAlpha(colors.text, 0.08), backgroundColor: colors.surface1, padding: 18, alignItems: "center", gap: 8 }}>
             <Ionicons name="lock-closed-outline" size={28} color={colors.muted} />
             <Text style={{ color: colors.text, fontWeight: "900" }}>{name} hasn't shared progress</Text>
             <Text style={{ color: colors.muted, textAlign: "center", lineHeight: 18 }}>
@@ -48,7 +48,7 @@ export default function FriendProgressPage() {
           </View>
         ) : (
           <>
-            <View style={{ borderRadius: 22, borderWidth: 1, borderColor: withAlpha(colors.text, 0.08), backgroundColor: "#1A1A24", padding: 16, gap: 10 }}>
+            <View style={{ borderRadius: 22, borderWidth: 1, borderColor: withAlpha(colors.text, 0.08), backgroundColor: colors.surface1, padding: 16, gap: 10 }}>
               <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "900", letterSpacing: 0.8, textTransform: "uppercase" }}>Overview</Text>
               {visibility.progress?.consistencyStreak ? <Text style={{ color: colors.text, fontWeight: "800" }}>Consistency streak visible</Text> : null}
               {visibility.progress?.badgeCollection ? <Text style={{ color: colors.text, fontWeight: "800" }}>Badge collection visible</Text> : null}

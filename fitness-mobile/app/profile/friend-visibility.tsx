@@ -134,7 +134,7 @@ export default function FriendVisibilityPage() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#0D0D0F" }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 24, gap: 14, paddingBottom: 32 }}>
         <Pressable onPress={() => router.back()} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <Ionicons name="chevron-back" size={18} color={colors.muted} />
@@ -154,7 +154,7 @@ export default function FriendVisibilityPage() {
           </View>
         ) : null}
 
-        <View style={{ borderRadius: 22, borderWidth: 1, borderColor: withAlpha(colors.text, 0.08), backgroundColor: "#1A1A24", padding: 16, gap: 12 }}>
+        <View style={{ borderRadius: 22, borderWidth: 1, borderColor: withAlpha(colors.text, 0.08), backgroundColor: colors.surface1, padding: 16, gap: 12 }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <View style={{ flex: 1 }}>
               <Text style={{ color: colors.text, fontWeight: "900", fontSize: 15 }}>Share activity with friends</Text>
@@ -174,7 +174,7 @@ export default function FriendVisibilityPage() {
         </View>
 
         {GROUPS.map((group) => (
-          <View key={group.title} style={{ borderRadius: 22, borderWidth: 1, borderColor: withAlpha(colors.text, 0.08), backgroundColor: "#1A1A24", padding: 16, gap: 12 }}>
+          <View key={group.title} style={{ borderRadius: 22, borderWidth: 1, borderColor: withAlpha(colors.text, 0.08), backgroundColor: colors.surface1, padding: 16, gap: 12 }}>
             <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "900", letterSpacing: 0.8, textTransform: "uppercase" }}>
               {group.title}
             </Text>
@@ -219,7 +219,7 @@ export default function FriendVisibilityPage() {
             onPress={() => savePatch({ friendVisibility: DEFAULT_FRIEND_VISIBILITY })}
             style={{ alignSelf: "center", paddingVertical: 8, paddingHorizontal: 12 }}
           >
-            <Text style={{ color: "#F87171", fontWeight: "800" }}>Reset to defaults →</Text>
+            <Text style={{ color: colors.danger, fontWeight: "800" }}>Reset to defaults →</Text>
           </Pressable>
         </View>
       </ScrollView>

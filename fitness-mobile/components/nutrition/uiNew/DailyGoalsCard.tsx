@@ -62,6 +62,7 @@ export function DailyGoalsCard({
   goals,
   totals,
   onPressLog,
+  onPressSuggest,
   forecast,
   reduceMotion = false,
 }: {
@@ -70,6 +71,7 @@ export function DailyGoalsCard({
   goals: DailyGoals;
   totals: DailyTotals;
   onPressLog: () => void;
+  onPressSuggest?: () => void;
   forecast?: { enabled?: boolean };
   reduceMotion?: boolean;
 }) {
@@ -83,9 +85,11 @@ export function DailyGoalsCard({
   const projection = useMemo(() => {
     if (!forecast?.enabled) return null;
     const now = new Date();
-    const hours = Math.max(1, now.getHours() + now.getMinutes() / 60 - 7);
-    const pace = clamp01(hours / 16);
-    const projected = Math.round(kcalNow / Math.max(0.1, pace));
+    const hoursElapsed = now.getHours() + now.getMinutes() / 60;
+    if (kcalNow <= 0 || hoursElapsed <= 0 || now.getHours() < 8) return null;
+    const rawProjected = Math.round((kcalNow / hoursElapsed) * 24);
+    if (rawProjected < 500 || rawProjected > 6000) return null;
+    const projected = rawProjected;
     const diff = Math.abs(projected - kcalGoal);
     const direction = projected > kcalGoal ? "over" : "under";
     return { projected, diff, direction };
@@ -203,13 +207,13 @@ export function DailyGoalsCard({
       {projection ? (
         <View style={{ borderLeftWidth: 2, borderLeftColor: accent, paddingLeft: 8 }}>
           <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "300" }} numberOfLines={1}>
-            {`Projected ${projection.projected.toLocaleString()} kcal · ~${projection.diff.toLocaleString()} ${projection.direction} goal`}
+            {`Projected: ${projection.projected.toLocaleString()} kcal · ~${projection.diff.toLocaleString()} ${projection.direction} goal`}
           </Text>
         </View>
       ) : null}
 
       <Pressable
-        onPress={onPressLog}
+        onPress={onPressSuggest || onPressLog}
         style={({ pressed }) => ({
           height: 44,
           borderRadius: 100,

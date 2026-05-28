@@ -14,12 +14,12 @@ export function FriendsPreviewCard(props: {
   streakPings?: number;
   previewFriends?: Array<{ name?: string | null; email?: string | null }>;
 }) {
-  const { colors, isDark } = useTheme();
+  const { colors, isDark } = useTheme() as any;
 
   const friends = props.friendsCount ?? 0;
   const pings = props.streakPings ?? 0;
   const previewFriends = props.previewFriends ?? [];
-  const hues = ["#6C63FF", "#22D3EE", "#FFC107", "#4CAF50", "#F44336"];
+  const hues = [colors.accent, colors.info, colors.warning, colors.success, colors.danger];
 
   const subtitle = useMemo(() => {
     if (friends <= 0) return "Add supportive friends";
@@ -31,7 +31,7 @@ export function FriendsPreviewCard(props: {
   return (
     <GlassCard>
       <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <Text style={{ color: colors.text, fontWeight: "900", fontSize: 14 }}>
+        <Text style={{ color: colors.textPrimary, fontWeight: "500", fontSize: 16 }}>
           Friends
         </Text>
 
@@ -44,11 +44,8 @@ export function FriendsPreviewCard(props: {
             styles.btn,
             {
               marginLeft: "auto",
-              backgroundColor: withAlpha(
-                colors.card,
-                isDark ? (pressed ? 0.22 : 0.18) : pressed ? 0.7 : 0.55
-              ),
-              borderColor: withAlpha(colors.border, 0.7),
+              backgroundColor: colors.surface3,
+              borderColor: colors.border,
             },
           ]}
           accessibilityRole="button"
@@ -57,12 +54,12 @@ export function FriendsPreviewCard(props: {
           <Ionicons
             name="chevron-forward-outline"
             size={16}
-            color={colors.text}
+            color={colors.textTertiary}
           />
         </Pressable>
       </View>
 
-      <Text style={{ color: colors.muted, marginTop: 6 }}>{subtitle}</Text>
+      <Text style={{ color: colors.textTertiary, marginTop: 6, fontWeight: "300" }}>{subtitle}</Text>
 
       <View style={{ height: 12 }} />
 
@@ -72,7 +69,7 @@ export function FriendsPreviewCard(props: {
           { backgroundColor: withAlpha(colors.border, isDark ? 0.12 : 0.2) },
         ]}
       >
-        {friends > 0 ? (
+          {friends > 0 ? (
           <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
             {(previewFriends.length
               ? previewFriends
@@ -103,7 +100,7 @@ export function FriendsPreviewCard(props: {
                 ]}
               >
                 {initials.trim() ? (
-                  <Text style={{ color: colors.text, fontWeight: "900" }}>
+                  <Text style={{ color: colors.surface1, fontWeight: "500" }}>
                     {initials}
                   </Text>
                 ) : (
@@ -127,14 +124,14 @@ export function FriendsPreviewCard(props: {
                 borderRadius: 999,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: withAlpha(colors.primary, pressed ? 0.2 : 0.14),
+                backgroundColor: colors.surface2,
                 borderWidth: 1,
-                borderColor: withAlpha(colors.primary, 0.3),
+                borderColor: colors.border,
               })}
               accessibilityRole="button"
               accessibilityLabel="Invite a friend"
             >
-              <Text style={{ color: colors.text, fontWeight: "900", fontSize: 12 }}>
+              <Text style={{ color: colors.textSecondary, fontWeight: "400", fontSize: 12 }}>
                 + Invite
               </Text>
             </Pressable>
@@ -144,16 +141,16 @@ export function FriendsPreviewCard(props: {
             style={{ alignItems: "center", justifyContent: "center", gap: 8 }}
           >
             <Ionicons name="people-outline" size={18} color={colors.muted} />
-            <Text style={{ color: colors.muted, fontSize: 12 }}>
+            <Text style={{ color: colors.textTertiary, fontSize: 12, fontWeight: "300" }}>
               No friends yet
             </Text>
           </View>
         )}
       </View>
 
-      <Text style={{ color: colors.muted, fontSize: 12, marginTop: 12 }}>
+      <Text style={{ color: colors.textTertiary, fontSize: 12, marginTop: 12, fontWeight: "300" }}>
         Friends:{" "}
-        <Text style={{ color: colors.text, fontWeight: "900" }}>{friends}</Text>
+        <Text style={{ color: colors.textPrimary, fontWeight: "500" }}>{friends}</Text>
       </Text>
     </GlassCard>
   );

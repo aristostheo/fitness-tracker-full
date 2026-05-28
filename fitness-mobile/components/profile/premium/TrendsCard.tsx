@@ -308,10 +308,10 @@ function MiniSparkBars({
                   width: 8,
                   borderRadius: 999,
                   backgroundColor: withAlpha(
-                    colors.accent ?? "#d6b36a",
+                    colors.accent,
                     isRecent ? 0.82 : 0.55
                   ),
-                  shadowColor: colors.accent ?? "#d6b36a",
+                  shadowColor: colors.accent,
                   shadowOpacity: isRecent ? 0.16 : 0.06,
                   shadowRadius: isRecent ? 10 : 6,
                   shadowOffset: { width: 0, height: 6 },
@@ -326,7 +326,7 @@ function MiniSparkBars({
         pointerEvents="none"
         colors={[
           "transparent",
-          withAlpha("#000000", Platform.OS === "ios" ? 0.18 : 0.26),
+          Platform.OS === "ios" ? "rgba(0,0,0,0.18)" : "rgba(0,0,0,0.26)",
         ]}
         style={styles.sparkFade}
       />

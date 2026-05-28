@@ -185,7 +185,7 @@ export default function ControlCenterModal() {
     const card = withAlpha(colors.card, isDark ? 0.72 : 0.82);
     const sub = withAlpha(colors.text, isDark ? 0.65 : 0.7);
     const hairline = withAlpha(colors.text, isDark ? 0.1 : 0.12);
-    const danger = "#ff4d4d";
+    const danger = colors.danger;
     const chip = withAlpha(colors.text, isDark ? 0.08 : 0.06);
     return { border, card, sub, hairline, danger, chip };
   }, [colors, isDark]);
@@ -607,7 +607,7 @@ export default function ControlCenterModal() {
       {/* Calm premium backdrop */}
       <LinearGradient
         colors={[
-          isDark ? "#05070c" : "#eef2f8",
+          colors.background,
           isDark ? "rgba(139,92,246,0.14)" : "rgba(59,130,246,0.12)",
           "transparent",
         ]}
@@ -692,7 +692,7 @@ export default function ControlCenterModal() {
                     styles.avatar,
                     {
                       backgroundColor: withAlpha(
-                        colors.accent ?? "#7c5cff",
+                        colors.accent,
                         isDark ? 0.22 : 0.16
                       ),
                       borderColor: withAlpha(colors.text, isDark ? 0.1 : 0.12),
@@ -792,9 +792,9 @@ export default function ControlCenterModal() {
                     styles.verifyBanner,
                     {
                       backgroundColor: pressed
-                        ? withAlpha(colors.accent ?? "#7c5cff", 0.18)
-                        : withAlpha(colors.accent ?? "#7c5cff", 0.14),
-                      borderColor: withAlpha(colors.accent ?? "#7c5cff", 0.25),
+                        ? withAlpha(colors.accent, 0.18)
+                        : withAlpha(colors.accent, 0.14),
+                      borderColor: withAlpha(colors.accent, 0.25),
                     },
                   ]}
                 >
@@ -995,9 +995,9 @@ export default function ControlCenterModal() {
                   onValueChange={(v) => onTogglePrivacy({ shareWorkouts: v })}
                   trackColor={{
                     false: withAlpha(colors.text, 0.18),
-                    true: withAlpha(colors.accent ?? "#7c5cff", 0.55),
+                    true: withAlpha(colors.accent, 0.55),
                   }}
-                  thumbColor={Platform.OS === "android" ? undefined : "#fff"}
+                  thumbColor={Platform.OS === "android" ? undefined : "white"}
                 />
               }
             />
@@ -1013,9 +1013,9 @@ export default function ControlCenterModal() {
                   onValueChange={(v) => onTogglePrivacy({ shareNutrition: v })}
                   trackColor={{
                     false: withAlpha(colors.text, 0.18),
-                    true: withAlpha(colors.accent ?? "#7c5cff", 0.55),
+                    true: withAlpha(colors.accent, 0.55),
                   }}
-                  thumbColor={Platform.OS === "android" ? undefined : "#fff"}
+                  thumbColor={Platform.OS === "android" ? undefined : "white"}
                 />
               }
             />
@@ -1031,9 +1031,9 @@ export default function ControlCenterModal() {
                   onValueChange={(v) => onTogglePrivacy({ shareStreaks: v })}
                   trackColor={{
                     false: withAlpha(colors.text, 0.18),
-                    true: withAlpha(colors.accent ?? "#7c5cff", 0.55),
+                    true: withAlpha(colors.accent, 0.55),
                   }}
-                  thumbColor={Platform.OS === "android" ? undefined : "#fff"}
+                  thumbColor={Platform.OS === "android" ? undefined : "white"}
                 />
               }
             />
@@ -1097,9 +1097,9 @@ export default function ControlCenterModal() {
                   }}
                   trackColor={{
                     false: withAlpha(colors.text, 0.18),
-                    true: withAlpha(colors.accent ?? "#7c5cff", 0.55),
+                    true: withAlpha(colors.accent, 0.55),
                   }}
-                  thumbColor={Platform.OS === "android" ? undefined : "#fff"}
+                  thumbColor={Platform.OS === "android" ? undefined : "white"}
                 />
               }
             />
@@ -1118,9 +1118,9 @@ export default function ControlCenterModal() {
                   }}
                   trackColor={{
                     false: withAlpha(colors.text, 0.18),
-                    true: withAlpha(colors.accent ?? "#7c5cff", 0.55),
+                    true: withAlpha(colors.accent, 0.55),
                   }}
-                  thumbColor={Platform.OS === "android" ? undefined : "#fff"}
+                  thumbColor={Platform.OS === "android" ? undefined : "white"}
                 />
               }
             />
@@ -1143,9 +1143,9 @@ export default function ControlCenterModal() {
                   }}
                   trackColor={{
                     false: withAlpha(colors.text, 0.18),
-                    true: withAlpha(colors.accent ?? "#7c5cff", 0.55),
+                    true: withAlpha(colors.accent, 0.55),
                   }}
-                  thumbColor={Platform.OS === "android" ? undefined : "#fff"}
+                  thumbColor={Platform.OS === "android" ? undefined : "white"}
                 />
               }
             />
@@ -1286,9 +1286,9 @@ export default function ControlCenterModal() {
                   }}
                   trackColor={{
                     false: withAlpha(colors.text, 0.18),
-                    true: withAlpha(colors.accent ?? "#7c5cff", 0.55),
+                    true: withAlpha(colors.accent, 0.55),
                   }}
-                  thumbColor={Platform.OS === "android" ? undefined : "#fff"}
+                  thumbColor={Platform.OS === "android" ? undefined : "white"}
                 />
               }
             />

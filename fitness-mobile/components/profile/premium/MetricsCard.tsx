@@ -19,7 +19,7 @@ export function MetricsCard(props: {
   lastUpdatedAt?: number;
   onPressAdd: () => void;
 }) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   const bmi = useMemo(() => {
     if (!props.weightKg || !props.heightCm) return null;
@@ -45,7 +45,7 @@ export function MetricsCard(props: {
   return (
     <GlassCard>
       <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <Text style={{ color: colors.text, fontWeight: "900", fontSize: 14 }}>
+        <Text style={{ color: colors.textPrimary, fontWeight: "500", fontSize: 16 }}>
           Body metrics
         </Text>
 
@@ -58,17 +58,14 @@ export function MetricsCard(props: {
             styles.addBtn,
             {
               marginLeft: "auto",
-              backgroundColor: withAlpha(
-                colors.card,
-                isDark ? (pressed ? 0.22 : 0.18) : pressed ? 0.7 : 0.55
-              ),
-              borderColor: withAlpha(colors.border, 0.7),
+              backgroundColor: colors.surface3,
+              borderColor: colors.border,
             },
           ]}
           accessibilityRole="button"
           accessibilityLabel="Add or edit measurements"
         >
-          <Ionicons name="add-outline" size={16} color={colors.text} />
+          <Ionicons name="add-outline" size={16} color={colors.textTertiary} />
         </Pressable>
       </View>
 
@@ -77,7 +74,7 @@ export function MetricsCard(props: {
       <View style={{ gap: 10 }}>
         <Row label="Weight" value={weightLabel} />
         {props.lastUpdatedVia && props.lastUpdatedAt ? (
-          <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "800", marginTop: -5 }}>
+          <Text style={{ color: colors.textTertiary, fontSize: 11, fontWeight: "300", marginTop: -5 }}>
             Last updated via {props.lastUpdatedVia}: {new Date(props.lastUpdatedAt).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" })}
           </Text>
         ) : null}
@@ -141,7 +138,7 @@ export function MetricsCard(props: {
         accessibilityRole="button"
         accessibilityLabel="Add measurement"
       >
-        <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "900" }}>
+        <Text style={{ color: colors.accent, fontSize: 12, fontWeight: "400" }}>
           + Add measurement
         </Text>
       </Pressable>
@@ -153,13 +150,13 @@ function Row(props: { label: string; value: string; subtleNote?: string }) {
   const { colors } = useTheme();
   return (
     <View style={styles.row}>
-      <Text style={{ color: colors.muted }}>{props.label}</Text>
+      <Text style={{ color: colors.textTertiary, fontSize: 12, fontWeight: "300" }}>{props.label}</Text>
       <View style={{ marginLeft: "auto", alignItems: "flex-end" }}>
-        <Text style={{ color: colors.text, fontWeight: "900" }}>
+        <Text style={{ color: colors.textPrimary, fontWeight: "500" }}>
           {props.value}
         </Text>
         {props.subtleNote ? (
-          <Text style={{ color: colors.muted, fontSize: 11, marginTop: 2 }}>
+          <Text style={{ color: colors.textTertiary, fontSize: 11, marginTop: 2, fontWeight: "300" }}>
             {props.subtleNote}
           </Text>
         ) : null}

@@ -25,6 +25,9 @@ export function MetricRing({
   tokens,
   style,
   onPress,
+  size = 88,
+  minHeight = 160,
+  valueFontSize = 24,
 }: {
   tone: MetricTone;
   label: string;
@@ -48,13 +51,15 @@ export function MetricRing({
   };
   style?: ViewStyle;
   onPress?: () => void;
+  size?: number;
+  minHeight?: number;
+  valueFontSize?: number;
 }) {
   const pct = useMemo(
     () => clamp01(goal <= 0 ? 0 : value / goal),
     [goal, value]
   );
-  const size = 104;
-  const stroke = 6;
+  const stroke = 5;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const progress = useSharedValue(reduceMotion ? pct : 0);
@@ -82,13 +87,13 @@ export function MetricRing({
       <View
         style={[
           {
-            borderRadius: 20,
-            paddingHorizontal: 20,
-            paddingVertical: 18,
+            borderRadius: 16,
+            paddingHorizontal: 16,
+            paddingVertical: 14,
             borderWidth: 1,
             borderColor: tokens.hairline,
             backgroundColor: tokens.card,
-            minHeight: 176,
+            minHeight,
             justifyContent: "space-between",
           },
           style,
@@ -97,11 +102,10 @@ export function MetricRing({
         <Text
           style={{
             color: tokens.muted,
-            fontSize: 11,
+            fontSize: 10,
             fontWeight: "500",
             letterSpacing: 1,
           }}
-          numberOfLines={1}
         >
           {label.toUpperCase()}
         </Text>
@@ -112,7 +116,7 @@ export function MetricRing({
               cx={size / 2}
               cy={size / 2}
               r={r}
-              stroke={tokens.ringTrack ?? "#1C1C2E"}
+              stroke={tokens.ringTrack ?? tokens.hairline}
               strokeWidth={stroke}
               fill="transparent"
             />
@@ -134,9 +138,11 @@ export function MetricRing({
               <Text
                 style={{
                   color: tokens.text,
-                  fontSize: 34,
-                  fontWeight: "300",
-                  letterSpacing: -1.2,
+                  fontSize: valueFontSize,
+                  fontWeight: "200",
+                  letterSpacing: -0.8,
+                  fontVariant: ["tabular-nums"],
+                  textAlign: "center",
                 }}
               >
                 {Math.round(value).toLocaleString()}
@@ -148,7 +154,7 @@ export function MetricRing({
                     fontSize: 11,
                     fontWeight: "300",
                     letterSpacing: 0.3,
-                    marginBottom: 8,
+                    marginBottom: 5,
                   }}
                 >
                   {unit}
@@ -158,7 +164,7 @@ export function MetricRing({
             <Text
               style={{
                 color: tokens.muted,
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: "300",
                 letterSpacing: 0.3,
               }}
@@ -174,8 +180,8 @@ export function MetricRing({
             fontSize: 11,
             fontWeight: "300",
             letterSpacing: 0.3,
+            lineHeight: 15,
           }}
-          numberOfLines={1}
         >
           {sublabel || "Goal progress"}
         </Text>

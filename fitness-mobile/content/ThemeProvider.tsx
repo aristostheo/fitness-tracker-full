@@ -35,13 +35,20 @@ export type ThemeColors = {
   bg: string;
   surface: string;
   surface2: string;
+  surface1: string;
+  surface3: string;
   glass: string;
   glassBorder: string;
   shadow: string;
   success: string;
   warning: string;
   danger: string;
+  info: string;
   ringTrack: string;
+  borderElevated: string;
+  textPrimary: string;
+  textSecondary: string;
+  textTertiary: string;
 };
 
 type ThemeAccents = {
@@ -351,14 +358,21 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
         bg: background,
         surface: "#0F0F1A",
+        surface1: "#0F0F1A",
         surface2: "#141422",
+        surface3: "#1C1C2E",
         glass: "rgba(15,15,26,0.85)",
         glassBorder: "#FFFFFF08",
         shadow: "#000",
         success: "#4ADE80",
         warning: "#F59E0B",
         danger: "#F87171",
+        info: "#06B6D4",
         ringTrack: "#1C1C2E",
+        borderElevated: "#FFFFFF12",
+        textPrimary: "#F0F0FF",
+        textSecondary: "#8888AA",
+        textTertiary: "#444466",
       };
     }
 
@@ -385,14 +399,21 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
       bg: background,
       surface: "#FFFFFF",
+      surface1: "#FFFFFF",
       surface2: "#F2F2F8",
+      surface3: "#EAEAF2",
       glass: "rgba(255,255,255,0.85)",
       glassBorder: "#00000008",
       shadow: "rgba(0,0,0,0.25)",
       success: "#22C55E",
       warning: "#D97706",
       danger: "#E65C5C",
+      info: "#0891B2",
       ringTrack: "#E8E8F0",
+      borderElevated: "#00000012",
+      textPrimary: "#0A0A1A",
+      textSecondary: "#444460",
+      textTertiary: "#9090AA",
     };
   }, [isDark, primary, accent]);
 

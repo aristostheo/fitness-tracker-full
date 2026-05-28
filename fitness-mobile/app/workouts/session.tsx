@@ -102,6 +102,12 @@ type EditSetState = {
   done: boolean;
 };
 
+type ReferenceGroup = {
+  exercise: string;
+  primaryMuscle?: string;
+  sets: Array<{ reps: number; weightKg: number; note?: string }>;
+};
+
 type Palette = {
   bg: string;
   bg2: string;
@@ -285,15 +291,27 @@ function makeStyles(p: Palette, isDark: boolean) {
     inProgress: {
       color: withAlpha(p.text, 0.6),
       fontSize: 11,
-      fontWeight: "900",
-      letterSpacing: 0.9,
+      fontWeight: "500",
+      letterSpacing: 1,
     },
     headerTitle: {
       color: withAlpha(p.text, 0.94),
-      fontSize: 16,
-      fontWeight: "900",
+      fontSize: 20,
+      fontWeight: "500",
       letterSpacing: -0.2,
       maxWidth: 240,
+    },
+    liveTimer: {
+      fontSize: 28,
+      fontWeight: "200",
+      letterSpacing: -0.4,
+      textShadowColor: withAlpha("#7B6FFF", 0.38),
+      textShadowRadius: 8,
+    },
+    headerMeta: {
+      color: withAlpha(p.text, 0.55),
+      fontSize: 12,
+      fontWeight: "300",
     },
 
     cardWrap: { borderRadius: 18, overflow: "hidden" },
@@ -327,8 +345,8 @@ function makeStyles(p: Palette, isDark: boolean) {
 
     sectionTitle: {
       color: withAlpha(p.text, 0.92),
-      fontWeight: "900",
-      fontSize: 14,
+      fontWeight: "500",
+      fontSize: 16,
     },
     sectionSub: {
       marginTop: 4,
@@ -349,15 +367,15 @@ function makeStyles(p: Palette, isDark: boolean) {
     },
     statLabel: {
       color: withAlpha(p.text, 0.55),
-      fontWeight: "900",
+      fontWeight: "500",
       fontSize: 11,
-      letterSpacing: 0.6,
+      letterSpacing: 1,
     },
     statValue: {
       marginTop: 6,
       color: withAlpha(p.text, 0.92),
-      fontWeight: "900",
-      fontSize: 18,
+      fontWeight: "200",
+      fontSize: 28,
       fontVariant: ["tabular-nums"],
     },
     tip: {
@@ -386,20 +404,26 @@ function makeStyles(p: Palette, isDark: boolean) {
 
     inputLabel: {
       color: withAlpha(p.text, 0.6),
-      fontWeight: "900",
+      fontWeight: "500",
       fontSize: 11,
-      letterSpacing: 0.6,
+      letterSpacing: 1,
       marginBottom: 6,
     },
     input: {
-      borderRadius: 14,
+      borderRadius: 12,
       paddingHorizontal: 12,
       paddingVertical: 10,
       borderWidth: hair,
-      borderColor: withAlpha(p.text, isDark ? 0.14 : 0.12),
-      backgroundColor: withAlpha(p.text, isDark ? 0.06 : 0.05),
+      borderColor: withAlpha(p.text, isDark ? 0.1 : 0.08),
+      backgroundColor: "#1C1C2E",
       color: withAlpha(p.text, 0.92),
-      fontWeight: "800",
+      fontWeight: "300",
+    },
+    lastUsedMeta: {
+      marginTop: 6,
+      color: withAlpha(p.text, 0.5),
+      fontSize: 12,
+      fontWeight: "300",
     },
     muscleChipWrap: {
       flexDirection: "row",
@@ -520,6 +544,17 @@ function makeStyles(p: Palette, isDark: boolean) {
       backgroundColor: withAlpha(p.text, isDark ? 0.05 : 0.045),
       borderWidth: hair,
       borderColor: withAlpha(p.text, isDark ? 0.12 : 0.1),
+    },
+    referenceRow: {
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 14,
+      borderWidth: hair,
+    },
+    referenceText: {
+      color: withAlpha(p.text, 0.45),
+      fontSize: 12,
+      fontWeight: "300",
     },
     donePill: {
       width: 34,
@@ -774,10 +809,12 @@ export default function WorkoutSessionScreen() {
 
   // ---- persisted draft ----
   const [draft, setDraft] = useState<WorkoutSessionDraft | null>(null);
+  const [referenceGroups, setReferenceGroups] = useState<ReferenceGroup[]>([]);
   const [titleOpen, setTitleOpen] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const draftRef = useRef<WorkoutSessionDraft | null>(null);
   const itemsRef = useRef<SetDraftItem[]>([]);
+  const launchHandledRef = useRef("");
 
   useEffect(() => {
     draftRef.current = draft;
@@ -959,10 +996,68 @@ export default function WorkoutSessionScreen() {
       };
 
       persist(next);
+      setReferenceGroups([]);
       setTitleDraft(next.title || "Workout");
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     })();
   }, [uidUser, draft?.id, params?.templateLaunch, todayISO]);
+
+  useEffect(() => {
+    if (!uidUser || !draft) return;
+
+    const freshStart = String(params?.freshStart || "") === "1";
+    const configTitle =
+      String(params?.configTitle || "").trim() || "Workout";
+    const configMuscle = String(params?.configMuscle || "").trim();
+    const resumeReference = String(params?.resumeReference || "") === "1";
+    const launchKey = JSON.stringify({
+      freshStart,
+      configTitle,
+      configMuscle,
+      resumeReference,
+    });
+    if (launchHandledRef.current === launchKey) return;
+    launchHandledRef.current = launchKey;
+
+    (async () => {
+      const referenceKey = `workout:referenceSeed:${uidUser}`;
+      const rawReference = await AsyncStorage.getItem(referenceKey);
+
+      if (freshStart) {
+        const fresh = newSessionDraft({
+          dateISO: draft.dateISO || todayISO,
+          title: configTitle,
+        });
+        persist(fresh);
+        setTitleDraft(fresh.title || "Workout");
+      }
+
+      if (configMuscle) setQuickPrimaryMuscle(configMuscle);
+      else if (freshStart) setQuickPrimaryMuscle("");
+
+      if (rawReference && resumeReference) {
+        await AsyncStorage.removeItem(referenceKey);
+        const parsed = JSON.parse(rawReference) as {
+          title?: string;
+          groups?: ReferenceGroup[];
+        };
+        setReferenceGroups(Array.isArray(parsed.groups) ? parsed.groups : []);
+        if (parsed.title) setTitleDraft(parsed.title);
+      } else if (freshStart) {
+        if (rawReference) await AsyncStorage.removeItem(referenceKey);
+        setReferenceGroups([]);
+      }
+    })();
+  }, [
+    uidUser,
+    draft?.id,
+    draft?.dateISO,
+    params?.freshStart,
+    params?.configTitle,
+    params?.configMuscle,
+    params?.resumeReference,
+    todayISO,
+  ]);
   useFocusEffect(
     React.useCallback(() => {
       let alive = true;
@@ -1097,15 +1192,45 @@ export default function WorkoutSessionScreen() {
   const groups = useMemo(() => {
     const map = new Map<
       string,
-      { name: string; items: SetDraftItem[]; lastAt: number }
+      {
+        name: string;
+        items: SetDraftItem[];
+        lastAt: number;
+        referenceItems: ReferenceGroup["sets"];
+        primaryMuscle?: string;
+      }
     >();
     for (const it of items) {
       const key = (it.exercise || "").trim() || "Exercise";
       const prev = map.get(key);
-      if (!prev) map.set(key, { name: key, items: [it], lastAt: it.createdAt });
+      if (!prev)
+        map.set(key, {
+          name: key,
+          items: [it],
+          lastAt: it.createdAt,
+          referenceItems: [],
+          primaryMuscle: it.primaryMuscle,
+        });
       else {
         prev.items.push(it);
         prev.lastAt = Math.max(prev.lastAt, it.createdAt);
+        prev.primaryMuscle = prev.primaryMuscle || it.primaryMuscle;
+      }
+    }
+    for (const ref of referenceGroups) {
+      const key = (ref.exercise || "").trim() || "Exercise";
+      const prev = map.get(key);
+      if (!prev) {
+        map.set(key, {
+          name: key,
+          items: [],
+          lastAt: 0,
+          referenceItems: ref.sets || [],
+          primaryMuscle: ref.primaryMuscle,
+        });
+      } else {
+        prev.referenceItems = ref.sets || [];
+        prev.primaryMuscle = prev.primaryMuscle || ref.primaryMuscle;
       }
     }
     return [...map.values()]
@@ -1114,7 +1239,7 @@ export default function WorkoutSessionScreen() {
         items: g.items.sort((a, b) => b.createdAt - a.createdAt), // newest set on top
       }))
       .sort((a, b) => b.lastAt - a.lastAt);
-  }, [items]);
+  }, [items, referenceGroups]);
 
   function toggleExpanded(exName: string, defaultOpen: boolean) {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -1600,32 +1725,15 @@ export default function WorkoutSessionScreen() {
               style={{ flex: 1, alignItems: "center", gap: 4 }}
             >
               <Text style={styles.inProgress}>IN PROGRESS</Text>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-              >
-                <Text style={styles.headerTitle} numberOfLines={1}>
-                  {draft.title || "Workout"}
-                </Text>
-                <Ionicons
-                  name="pencil"
-                  size={14}
-                  color={withAlpha(p.text, 0.55)}
-                />
-              </View>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                <Chip
-                  styles={styles}
-                  p={p}
-                  icon="list-outline"
-                  label={`${stats.exCount} ex`}
-                />
-                <Chip
-                  styles={styles}
-                  p={p}
-                  icon="time-outline"
-                  label={elapsedLabel}
-                />
-              </View>
+              <Text style={styles.headerTitle} numberOfLines={1}>
+                {draft.title || "Workout"}
+              </Text>
+              <Text style={[styles.liveTimer, { color: "#7B6FFF" }]}>
+                {elapsedLabel}
+              </Text>
+              <Text style={styles.headerMeta}>
+                {stats.exCount > 0 ? `${stats.exCount} exercises` : "— exercises"}
+              </Text>
             </Pressable>
 
             <Pressable
@@ -1666,34 +1774,29 @@ export default function WorkoutSessionScreen() {
           <Animated.View entering={FadeInDown.duration(380)}>
             <GlassCard styles={styles} isDark={isDark} p={p} intensity={26}>
               <Text style={styles.sectionTitle}>Session stats</Text>
-              <Text style={styles.sectionSub}>
-                Sets, reps, and total volume (updates live)
-              </Text>
 
               <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
                 <View style={styles.statPill}>
                   <Text style={styles.statLabel}>SETS</Text>
                   <Text style={styles.statValue}>
-                    {String(stats.totalSets)}
+                    {stats.totalSets > 0 ? String(stats.totalSets) : "—"}
                   </Text>
                 </View>
                 <View style={styles.statPill}>
                   <Text style={styles.statLabel}>REPS</Text>
                   <Text style={styles.statValue}>
-                    {String(stats.totalReps)}
+                    {stats.totalReps > 0 ? String(stats.totalReps) : "—"}
                   </Text>
                 </View>
                 <View style={styles.statPill}>
                   <Text
                     style={styles.statLabel}
                   >{`VOL (${unit.toUpperCase()})`}</Text>
-                  <Text style={styles.statValue}>{volumeDisplay}</Text>
+                  <Text style={styles.statValue}>
+                    {Number(stats.totalVolumeKg || 0) > 0 ? volumeDisplay : "—"}
+                  </Text>
                 </View>
               </View>
-
-              <Text style={styles.tip}>
-                Tip: tap a set to edit it. Mark sets done for a satisfying flow.
-              </Text>
             </GlassCard>
           </Animated.View>
 
@@ -1744,6 +1847,9 @@ export default function WorkoutSessionScreen() {
                     style={styles.input}
                     returnKeyType="next"
                   />
+                  <Text style={styles.lastUsedMeta}>
+                    {quickExercise ? `Last: ${quickReps || "10"} × ${quickWeight || "0"}${unit}` : "Last: —"}
+                  </Text>
                 </View>
               </View>
 
@@ -1873,16 +1979,23 @@ export default function WorkoutSessionScreen() {
             <View style={{ gap: 12 }}>
               {groups.map((g) => {
                 const isOpen = expanded[g.name] ?? g.items.length <= 2;
-                const totalSets = g.items.length;
-
+                const totalSets = g.items.length || g.referenceItems.length;
                 const last = g.items[0];
+                const referenceLast = g.referenceItems?.[0];
+                const summarySource = last || referenceLast;
                 const lastW =
                   unit === "lb"
-                    ? kgToLb(Number(last.weightKg || 0))
-                    : Number(last.weightKg || 0);
+                    ? kgToLb(
+                        Number(
+                          (last?.weightKg ?? referenceLast?.weightKg ?? 0) || 0
+                        )
+                      )
+                    : Number(
+                        (last?.weightKg ?? referenceLast?.weightKg ?? 0) || 0
+                      );
 
                 const lastLine = `${Math.round(lastW * 100) / 100} ${unit} × ${
-                  last.reps
+                  Number((last?.reps ?? referenceLast?.reps ?? 0) || 0)
                 } reps`;
                 const doneCount = g.items.filter((x) => x.done).length;
 
@@ -1908,7 +2021,7 @@ export default function WorkoutSessionScreen() {
                             {g.name}
                           </Text>
                           <Text style={styles.exerciseMeta} numberOfLines={1}>
-                            {doneCount}/{totalSets} done • {primaryMuscleLabel(last.primaryMuscle || inferPrimaryMuscle(g.name)) || "Auto"} • Last: {lastLine}
+                            {doneCount}/{totalSets} done • {primaryMuscleLabel(g.primaryMuscle || inferPrimaryMuscle(g.name)) || "Auto"}{summarySource ? ` • Last: ${lastLine}` : ""}
                           </Text>
                         </View>
 
@@ -1956,6 +2069,50 @@ export default function WorkoutSessionScreen() {
                       {/* Sets list */}
                       {isOpen ? (
                         <View style={{ padding: 12, paddingTop: 6, gap: 10 }}>
+                          {Object.entries(
+                            (g.referenceItems || []).reduce(
+                              (acc, ref) => {
+                                const key = `${ref.reps}-${ref.weightKg}`;
+                                acc[key] = acc[key]
+                                  ? { ...acc[key], count: acc[key].count + 1 }
+                                  : { ...ref, count: 1 };
+                                return acc;
+                              },
+                              {} as Record<
+                                string,
+                                {
+                                  reps: number;
+                                  weightKg: number;
+                                  count: number;
+                                  note?: string;
+                                }
+                              >
+                            )
+                          ).map(([key, ref]) => {
+                            const refWeight =
+                              unit === "lb"
+                                ? kgToLb(Number(ref.weightKg || 0))
+                                : Number(ref.weightKg || 0);
+                            return (
+                              <View
+                                key={`reference-${g.name}-${key}`}
+                                style={[
+                                  styles.referenceRow,
+                                  {
+                                    borderColor: withAlpha(p.text, 0.1),
+                                    backgroundColor: withAlpha(
+                                      p.text,
+                                      isDark ? 0.04 : 0.03
+                                    ),
+                                  },
+                                ]}
+                              >
+                                <Text style={styles.referenceText}>
+                                  {`Last time: ${ref.count}×${ref.reps} @ ${Math.round(refWeight * 100) / 100}${unit}`}
+                                </Text>
+                              </View>
+                            );
+                          })}
                           {g.items.map((it, idx) => {
                             const w =
                               unit === "lb"

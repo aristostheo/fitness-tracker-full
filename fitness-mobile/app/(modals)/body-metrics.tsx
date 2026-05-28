@@ -1,7 +1,10 @@
 // app/(modals)/body-metrics.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
+  Animated,
+  Dimensions,
+  Modal,
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,18 +16,27 @@ import { Stack, useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useAuth } from "@/content/AuthContext";
-import { updateProfile } from "@/services/profile";
+import {
+  subscribeProfile,
+  updateProfile,
+  type Profile,
+} from "@/services/profile";
+import {
+  buildGoalInputsFromProfile,
+  buildGoalProfilePatch,
+  shouldRecalculate,
+} from "@/services/macroCalculator";
 
 import { useTheme } from "@/content/ThemeProvider";
 import BodyMetricRow from "@/components/profile/premium/bodyMetrics/BodyMetricRow";
 import MetricPickerSheet from "@/components/profile/premium/bodyMetrics/MetricPickerSheet";
 import TrendMini from "@/components/profile/premium/bodyMetrics/TrendMini";
+import { withAlpha } from "@/components/profile/premium/ui";
 
 import {
   appendBodyMetricsHistory,
   loadBodyMetrics,
   loadBodyMetricsHistory,
-  saveBodyMetrics,
   type BodyMetrics,
 } from "@/services/profile/bodyMetrics";
 
@@ -69,6 +81,15 @@ export default function BodyMetricsEditorScreen() {
   const [history, setHistory] = useState<
     { t: number; weightLb?: number; waistCm?: number; bodyFatPct?: number }[]
   >([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const [recalcOpen, setRecalcOpen] = useState(false);
+  const [goalsUpdatedToast, setGoalsUpdatedToast] = useState(false);
+  const [pendingRecalc, setPendingRecalc] = useState<{
+    previousWeightKg: number;
+    newWeightKg: number;
+    nextTargetKg?: number;
+  } | null>(null);
 
   const params = useLocalSearchParams<{
     unit?: "lb" | "kg";
@@ -78,6 +99,11 @@ export default function BodyMetricsEditorScreen() {
     bodyFatPct?: string;
     waistCm?: string;
   }>();
+  useEffect(() => {
+    if (!user?.uid) return;
+    return subscribeProfile(user.uid, setProfile);
+  }, [user?.uid]);
+
   useEffect(() => {
     // apply params once (when page opens from card)
     const unit = params.unit === "kg" ? "kg" : "lb";
@@ -94,7 +120,7 @@ export default function BodyMetricsEditorScreen() {
       weightLb: Number.isFinite(wKg) ? kgToLb(wKg) : d.weightLb,
       targetWeightLb: Number.isFinite(tKg) ? kgToLb(tKg) : d.targetWeightLb,
       heightCm: Number.isFinite(hCm) ? hCm : d.heightCm,
-      bodyFatPct: Number.isFinite(bf) ? bf : d.bodyFatPct,
+      bodyFatPct: Number.isFinite(bf) && bf > 0 ? bf : d.bodyFatPct,
       waistCm: Number.isFinite(waist) ? waist : d.waistCm,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -151,8 +177,15 @@ export default function BodyMetricsEditorScreen() {
 
   const bodyFatLabel = useMemo(() => {
     const v = draft.bodyFatPct;
-    if (v == null) return "—";
+    if (v == null || v <= 0) return "—";
     return `${round1(v)}%`;
+  }, [draft.bodyFatPct]);
+
+  const bodyFatError = useMemo(() => {
+    const v = draft.bodyFatPct;
+    if (v == null || v <= 0) return null;
+    if (v < 3 || v > 50) return "Body fat must be between 3% and 50%";
+    return null;
   }, [draft.bodyFatPct]);
 
   const waistLabel = useMemo(() => {
@@ -209,14 +242,12 @@ export default function BodyMetricsEditorScreen() {
 
   const confirmBack = () => {
     if (!dirty) return router.back();
-    Alert.alert("Discard changes?", "You have unsaved updates.", [
-      { text: "Keep editing", style: "cancel" },
-      { text: "Discard", style: "destructive", onPress: () => router.back() },
-    ]);
+    setDiscardOpen(true);
   };
 
   const onSave = async () => {
     if (!user?.uid) return;
+    if (bodyFatError) return;
 
     try {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -231,25 +262,94 @@ export default function BodyMetricsEditorScreen() {
         ? round1(lbToKg(draft.targetWeightLb))
         : undefined;
 
-    await updateProfile(user.uid, {
+    const basePatch = {
       weightKg: nextWeightKg, // number | undefined
       targetWeightKg: nextTargetKg, // number | undefined
       heightCm: draft.heightCm ?? undefined, // number | undefined
-      bodyFatPct: draft.bodyFatPct ?? undefined,
+      bodyFatPct:
+        draft.bodyFatPct != null && draft.bodyFatPct > 0
+          ? draft.bodyFatPct
+          : null,
       waistCm: draft.waistCm ?? undefined,
       weightUnit: unitMode, // optional but nice
-    });
+    };
+
+    const previousWeightKg = Number(profile?.weightKg ?? NaN);
+    const shouldPrompt =
+      Number.isFinite(previousWeightKg) &&
+      nextWeightKg != null &&
+      profile?.goalInputs &&
+      shouldRecalculate(previousWeightKg, nextWeightKg);
+
+    await updateProfile(user.uid, basePatch as any);
 
     // optional: if you still want history, keep it local
     await appendBodyMetricsHistory({
       t: Date.now(),
       weightLb: draft.weightLb,
       waistCm: draft.waistCm,
-      bodyFatPct: draft.bodyFatPct,
+      bodyFatPct:
+        draft.bodyFatPct != null && draft.bodyFatPct > 0
+          ? draft.bodyFatPct
+          : undefined,
     });
+
+    setOriginal({
+      weightLb: draft.weightLb,
+      targetWeightLb: draft.targetWeightLb,
+      heightCm: draft.heightCm,
+      bodyFatPct:
+        draft.bodyFatPct != null && draft.bodyFatPct > 0
+          ? draft.bodyFatPct
+          : undefined,
+      waistCm: draft.waistCm,
+    });
+
+    if (shouldPrompt) {
+      setPendingRecalc({
+        previousWeightKg,
+        newWeightKg: nextWeightKg!,
+        nextTargetKg,
+      });
+      setRecalcOpen(true);
+      return;
+    }
 
     router.back(); // close modal -> profile subscription should re-render
   };
+
+  const handleKeepCurrentGoals = () => {
+    setRecalcOpen(false);
+    setPendingRecalc(null);
+    router.back();
+  };
+
+  const handleRecalculateGoals = async () => {
+    if (!user?.uid || !pendingRecalc) return;
+    const nextInputs = buildGoalInputsFromProfile({
+      ...(profile ?? {}),
+      weightKg: pendingRecalc.newWeightKg,
+      targetWeightKg: pendingRecalc.nextTargetKg ?? profile?.targetWeightKg,
+      heightCm: draft.heightCm ?? profile?.heightCm,
+      bodyFatPct:
+        draft.bodyFatPct != null && draft.bodyFatPct > 0
+          ? draft.bodyFatPct
+          : profile?.bodyFatPct,
+    });
+    await updateProfile(user.uid, buildGoalProfilePatch(nextInputs) as any);
+    setGoalsUpdatedToast(true);
+    setRecalcOpen(false);
+    setPendingRecalc(null);
+    setTimeout(() => {
+      setGoalsUpdatedToast(false);
+      router.back();
+    }, 700);
+  };
+
+  const formatWeightValue = (kg: number) =>
+    unitMode === "lb"
+      ? `${Math.round(kgToLb(kg))} lb`
+      : `${round1(kg)} kg`;
 
   // picker arrays
   const weightValuesLb = useMemo(() => {
@@ -327,12 +427,12 @@ export default function BodyMetricsEditorScreen() {
           </View>
 
           <Pressable
-            disabled={!dirty}
+            disabled={!dirty || !!bodyFatError}
             onPress={onSave}
             style={({ pressed }) => [
               styles.saveBtn,
               {
-                opacity: dirty ? 1 : 0.5,
+                opacity: dirty && !bodyFatError ? 1 : 0.5,
                 backgroundColor: pressed
                   ? isDark
                     ? "rgba(255,255,255,0.12)"
@@ -451,9 +551,21 @@ export default function BodyMetricsEditorScreen() {
             <BodyMetricRow
               label="Body fat"
               value={bodyFatLabel}
-              hint="Optional • you can leave this blank"
+              hint={bodyFatLabel === "—" ? "Optional • Not set" : "Optional • you can leave this blank"}
               onPress={() => setSheet("bodyfat")}
             />
+            {bodyFatError ? (
+              <Text
+                style={{
+                  color: colors.danger,
+                  fontSize: 12,
+                  paddingHorizontal: 6,
+                  marginTop: -2,
+                }}
+              >
+                {bodyFatError}
+              </Text>
+            ) : null}
             <BodyMetricRow
               label="Waist"
               value={waistLabel}
@@ -593,7 +705,7 @@ export default function BodyMetricsEditorScreen() {
           onChange={(v) => {
             if (v == null)
               return setDraft((d) => ({ ...d, bodyFatPct: undefined }));
-            setDraft((d) => ({ ...d, bodyFatPct: v }));
+            setDraft((d) => ({ ...d, bodyFatPct: v <= 0 ? undefined : v }));
           }}
           onClose={() => setSheet(null)}
         />
@@ -618,8 +730,334 @@ export default function BodyMetricsEditorScreen() {
           }}
           onClose={() => setSheet(null)}
         />
+
+        <LuxuryPromptSheet
+          visible={discardOpen}
+          title="Discard changes?"
+          icon="close-circle-outline"
+          subtitle="You have unsaved updates in this screen."
+          colors={colors}
+          onClose={() => setDiscardOpen(false)}
+          primaryLabel="Discard changes"
+          primaryTone="danger"
+          onPrimary={() => {
+            setDiscardOpen(false);
+            router.back();
+          }}
+          secondaryLabel="Keep editing"
+          onSecondary={() => setDiscardOpen(false)}
+        />
+
+        <LuxuryPromptSheet
+          visible={recalcOpen}
+          title="Your weight changed"
+          icon="scale-outline"
+          subtitle={
+            pendingRecalc
+              ? `You logged ${formatWeightValue(
+                  pendingRecalc.newWeightKg
+                )}. Your goals were set at ${formatWeightValue(
+                  pendingRecalc.previousWeightKg
+                )}. Recalculate your macros to stay on track?`
+              : ""
+          }
+          colors={colors}
+          onClose={handleKeepCurrentGoals}
+          primaryLabel="Recalculate my goals →"
+          onPrimary={handleRecalculateGoals}
+          secondaryLabel="Keep current goals"
+          onSecondary={handleKeepCurrentGoals}
+          customContent={
+            pendingRecalc ? (
+              <>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    marginTop: 8,
+                  }}
+                >
+                  <StatChip
+                    colors={colors}
+                    label={`${formatWeightValue(
+                      pendingRecalc.previousWeightKg
+                    )} · Previous`}
+                  />
+                  <Ionicons
+                    name="arrow-forward"
+                    size={14}
+                    color={colors.textTertiary}
+                  />
+                  <StatChip
+                    colors={colors}
+                    label={`${formatWeightValue(
+                      pendingRecalc.newWeightKg
+                    )} · New`}
+                  />
+                </View>
+                <Text
+                  style={{
+                    color: colors.textTertiary,
+                    fontSize: 12,
+                    textAlign: "center",
+                    fontStyle: "italic",
+                    marginTop: 12,
+                  }}
+                >
+                  Your pace will be adjusted automatically to keep you on track.
+                </Text>
+              </>
+            ) : null
+          }
+        />
+
+        {goalsUpdatedToast ? (
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              left: 16,
+              right: 16,
+              bottom: 24,
+              alignItems: "center",
+            }}
+          >
+            <View
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                borderRadius: 999,
+                backgroundColor: colors.surface2,
+                borderWidth: 1,
+                borderColor: colors.border,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={14}
+                color={colors.success}
+              />
+              <Text style={{ color: colors.textPrimary, fontSize: 12 }}>
+                Goals updated
+              </Text>
+            </View>
+          </View>
+        ) : null}
       </View>
     </>
+  );
+}
+
+function StatChip({
+  colors,
+  label,
+}: {
+  colors: any;
+  label: string;
+}) {
+  return (
+    <View
+      style={{
+        paddingHorizontal: 12,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: colors.surface3,
+        borderWidth: 1,
+        borderColor: colors.border,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{label}</Text>
+    </View>
+  );
+}
+
+function LuxuryPromptSheet({
+  visible,
+  title,
+  subtitle,
+  icon,
+  colors,
+  onClose,
+  primaryLabel,
+  onPrimary,
+  secondaryLabel,
+  onSecondary,
+  primaryTone = "accent",
+  customContent,
+}: {
+  visible: boolean;
+  title: string;
+  subtitle: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  colors: any;
+  onClose: () => void;
+  primaryLabel: string;
+  onPrimary: () => void;
+  secondaryLabel: string;
+  onSecondary: () => void;
+  primaryTone?: "accent" | "danger";
+  customContent?: React.ReactNode;
+}) {
+  const translateY = useRef(new Animated.Value(280)).current;
+  const screenHeight = Dimensions.get("window").height;
+  const closeWithAction = (fn: () => void) => {
+    Animated.timing(translateY, {
+      toValue: 280,
+      duration: 180,
+      useNativeDriver: true,
+    }).start(() => fn());
+  };
+
+  useEffect(() => {
+    if (!visible) {
+      translateY.setValue(280);
+      return;
+    }
+    Animated.timing(translateY, {
+      toValue: 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [translateY, visible]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gesture) => gesture.dy > 8,
+      onPanResponderMove: (_, gesture) => {
+        if (gesture.dy > 0) {
+          translateY.setValue(gesture.dy);
+        }
+      },
+      onPanResponderRelease: (_, gesture) => {
+        if (gesture.dy > 100 || gesture.vy > 1.2) {
+          closeWithAction(onClose);
+          return;
+        }
+        Animated.spring(translateY, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 80,
+          friction: 12,
+        }).start();
+      },
+    })
+  ).current;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={() => closeWithAction(onClose)}
+    >
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "flex-end",
+          backgroundColor: withAlpha(colors.background, 0.56),
+        }}
+      >
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => closeWithAction(onClose)} />
+        <Animated.View
+          {...panResponder.panHandlers}
+          style={{
+            transform: [{ translateY }],
+            height: Math.max(320, Math.round(screenHeight * 0.4)),
+            backgroundColor: colors.surface2,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            borderWidth: 1,
+            borderColor: colors.border,
+            paddingTop: 8,
+            paddingHorizontal: 16,
+            paddingBottom: 20,
+          }}
+        >
+          <Pressable
+            onPress={() => closeWithAction(onClose)}
+            style={{
+              alignSelf: "center",
+              width: 32,
+              height: 4,
+              borderRadius: 999,
+              backgroundColor: colors.surface3,
+              marginBottom: 18,
+            }}
+          />
+          <Ionicons
+            name={icon}
+            size={24}
+            color={colors.textTertiary}
+            style={{ alignSelf: "center", marginBottom: 12 }}
+          />
+          <Text
+            style={{
+              color: colors.textPrimary,
+              fontSize: 20,
+              fontWeight: "500",
+              textAlign: "center",
+            }}
+          >
+            {title}
+          </Text>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontSize: 12,
+              textAlign: "center",
+              lineHeight: 18,
+              marginTop: 8,
+              paddingHorizontal: 8,
+            }}
+          >
+            {subtitle}
+          </Text>
+
+          {customContent}
+
+          <View style={{ marginTop: "auto", gap: 8 }}>
+            <Pressable
+              onPress={() => closeWithAction(onPrimary)}
+              style={{
+                height: 44,
+                borderRadius: 999,
+                backgroundColor:
+                  primaryTone === "danger" ? colors.danger : colors.accent,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ color: colors.buttonText, fontSize: 14, fontWeight: "500" }}>
+                {primaryLabel}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => closeWithAction(onSecondary)}
+              style={{
+                height: 44,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: colors.border,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "transparent",
+              }}
+            >
+              <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
+                {secondaryLabel}
+              </Text>
+            </Pressable>
+          </View>
+        </Animated.View>
+      </View>
+    </Modal>
   );
 }
 

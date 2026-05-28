@@ -12,7 +12,6 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Swipeable } from "react-native-gesture-handler";
 
 import { useTheme } from "@/content/ThemeProvider";
@@ -63,7 +62,6 @@ type GroupedAlert = {
   route?: string;
 };
 
-const CALM_SEEN_KEY = "alerts:calmSeen:v1";
 const FILTERS: Array<{ key: AlertCategory; label: string }> = [
   { key: "all", label: "All" },
   { key: "friends", label: "Friends" },
@@ -265,61 +263,43 @@ function groupNotifications(raw: AppNotification[]): GroupedAlert[] {
   return [...map.values()].sort((a, b) => b.createdAtMs - a.createdAtMs);
 }
 
-function cardMeta(type: AlertCardType) {
+function cardMeta(type: AlertCardType, colors: any) {
   switch (type) {
     case "friendPing":
-      return { icon: "notifications-outline" as const, tint: "#6C63FF" };
+      return { icon: "notifications-outline" as const, tint: colors.accent };
     case "streak":
-      return { icon: "flame-outline" as const, tint: "#FFC107" };
+      return { icon: "flame-outline" as const, tint: colors.warning };
     case "coach":
-      return { icon: "sparkles-outline" as const, tint: "#6C63FF" };
+      return { icon: "sparkles-outline" as const, tint: colors.accent };
     case "pr":
-      return { icon: "trophy-outline" as const, tint: "#FFC107" };
+      return { icon: "trophy-outline" as const, tint: colors.warning };
     case "goalHit":
-      return { icon: "checkmark-circle-outline" as const, tint: "#4CAF50" };
+      return { icon: "checkmark-circle-outline" as const, tint: colors.success };
     case "friendMilestone":
-      return { icon: "person-outline" as const, tint: "#6C63FF" };
+      return { icon: "person-outline" as const, tint: colors.accent };
     case "syncError":
-      return { icon: "warning-outline" as const, tint: "#F44336" };
+      return { icon: "warning-outline" as const, tint: colors.danger };
     case "weeklySummary":
-      return { icon: "stats-chart-outline" as const, tint: "#6C63FF" };
+      return { icon: "stats-chart-outline" as const, tint: colors.accent };
     default:
-      return { icon: "notifications-outline" as const, tint: "#6C63FF" };
+      return { icon: "notifications-outline" as const, tint: colors.accent };
   }
 }
 
 export default function AlertsPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { colors } = useTheme() as any;
+  const { colors, isDark } = useTheme() as any;
   const [refreshing, setRefreshing] = useState(false);
   const [raw, setRaw] = useState<AppNotification[]>([]);
   const [filter, setFilter] = useState<AlertCategory>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [showCalm, setShowCalm] = useState(false);
 
   useEffect(() => {
     if (!user?.uid) return;
     const unsub = subscribeNotifications(user.uid, setRaw, { max: 120 });
     return () => unsub && unsub();
   }, [user?.uid]);
-
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      const seen = await AsyncStorage.getItem(CALM_SEEN_KEY);
-      if (!alive) return;
-      if (!seen && raw.length === 0) {
-        setShowCalm(true);
-        await AsyncStorage.setItem(CALM_SEEN_KEY, "1");
-      } else {
-        setShowCalm(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [raw.length]);
 
   const grouped = useMemo(() => groupNotifications(raw), [raw]);
   const unreadCount = useMemo(
@@ -401,7 +381,7 @@ export default function AlertsPage() {
   }, [sections]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#0D0D0F" }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <FlatList
         data={rowData}
         keyExtractor={(row, index) =>
@@ -415,47 +395,44 @@ export default function AlertsPage() {
           <View style={{ paddingHorizontal: 16, gap: 14, paddingBottom: 12 }}>
             <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" }}>
               <View>
-                <Text style={{ color: colors.text, fontSize: 30, fontWeight: "900", letterSpacing: -0.3 }}>
+                <Text style={{ color: colors.textPrimary, fontSize: 24, fontWeight: "500", letterSpacing: 0 }}>
                   Alerts
                 </Text>
-                <Text style={{ color: colors.muted, marginTop: 4, fontSize: 13, fontWeight: "700" }}>
-                  {unreadCount === 0 ? "All caught up" : `${unreadCount} unread · Mark all as read`}
+                <Text
+                  style={{
+                    color: unreadCount === 0 ? colors.textTertiary : colors.accent,
+                    marginTop: 4,
+                    fontSize: 12,
+                    fontWeight: "300",
+                    fontStyle: unreadCount === 0 ? "italic" : "normal",
+                  }}
+                >
+                  {unreadCount === 0 ? "All caught up" : `${unreadCount} unread`}
                 </Text>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <Pressable
                   onPress={() => router.push("/friends" as any)}
                   style={({ pressed }) => ({
-                    minHeight: 40,
+                    minHeight: 32,
                     borderRadius: 999,
                     paddingHorizontal: 14,
                     alignItems: "center",
                     justifyContent: "center",
                     borderWidth: 1,
-                    borderColor: withAlpha(colors.text, 0.08),
-                    backgroundColor: pressed ? withAlpha(colors.text, 0.06) : "#1A1A24",
+                    borderColor: colors.accent,
+                    backgroundColor: pressed ? colors.surface2 : colors.surface1,
                   })}
                 >
-                  <Text style={{ color: colors.text, fontWeight: "900", fontSize: 12.5 }}>
-                    Friends
+                  <Text style={{ color: colors.accent, fontWeight: "400", fontSize: 12 }}>
+                    Friends →
                   </Text>
                 </Pressable>
                 {unreadCount > 0 ? (
-                  <Pressable
-                    onPress={markAllRead}
-                    style={({ pressed }) => ({
-                      minHeight: 40,
-                      borderRadius: 999,
-                      paddingHorizontal: 14,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderWidth: 1,
-                      borderColor: withAlpha(colors.primary, 0.3),
-                      backgroundColor: withAlpha(colors.primary, pressed ? 0.18 : 0.12),
-                    })}
-                  >
-                    <Text style={{ color: colors.text, fontWeight: "900", fontSize: 12.5 }}>
-                      Mark all as read
+                  <Pressable onPress={markAllRead} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <Ionicons name="checkmark-outline" size={14} color={colors.textSecondary} />
+                    <Text style={{ color: colors.textSecondary, fontWeight: "400", fontSize: 12 }}>
+                      Mark all
                     </Text>
                   </Pressable>
                 ) : null}
@@ -470,69 +447,37 @@ export default function AlertsPage() {
                     key={item.key}
                     onPress={() => setFilter(item.key)}
                     style={({ pressed }) => ({
-                      minHeight: 38,
+                      minHeight: 32,
                       paddingHorizontal: 14,
                       borderRadius: 999,
                       borderWidth: 1,
-                      borderColor: active ? withAlpha("#6C63FF", 0.42) : withAlpha(colors.text, 0.08),
+                      borderColor: active ? colors.accent : colors.border,
                       backgroundColor: active
-                        ? withAlpha("#6C63FF", 0.16)
+                        ? withAlpha(colors.accent, 0.12)
                         : pressed
-                        ? withAlpha(colors.text, 0.06)
-                        : "#1A1A24",
+                        ? colors.surface3
+                        : colors.surface2,
                       alignItems: "center",
                       justifyContent: "center",
                     })}
                   >
-                    <Text style={{ color: active ? "#C9C5FF" : colors.muted, fontWeight: "900", fontSize: 12.5 }}>
+                    <Text style={{ color: active ? colors.accent : colors.textSecondary, fontWeight: "400", fontSize: 12 }}>
                       {item.label}
                     </Text>
                   </Pressable>
                 );
               })}
             </ScrollView>
-
-            {showCalm && filtered.length === 0 ? (
-              <View
-                style={{
-                  borderRadius: 18,
-                  borderWidth: 1,
-                  borderColor: withAlpha(colors.primary, 0.22),
-                  backgroundColor: "#1A1A24",
-                  padding: 16,
-                }}
-              >
-                <Text style={{ color: colors.text, fontWeight: "900", fontSize: 14 }}>
-                  Calm by design
-                </Text>
-                <Text style={{ color: colors.muted, marginTop: 4, lineHeight: 18 }}>
-                  Alerts stay concise and actionable. Duplicate nudges are grouped automatically.
-                </Text>
-              </View>
-            ) : null}
           </View>
         }
         ListEmptyComponent={
           <View style={{ paddingHorizontal: 24, paddingTop: 42, alignItems: "center" }}>
-            <View
-              style={{
-                width: 72,
-                height: 72,
-                borderRadius: 24,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "#1A1A24",
-                borderWidth: 1,
-                borderColor: withAlpha(colors.text, 0.08),
-              }}
-            >
-              <Ionicons name="notifications-off-outline" size={30} color={colors.muted} />
-            </View>
-            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 18, marginTop: 16 }}>
-              No new alerts
+            <Ionicons name="notifications-off-outline" size={32} color={colors.textTertiary} />
+            <Text style={{ color: colors.textSecondary, fontWeight: "400", fontSize: 16, marginTop: 16 }}>
+              Nothing here yet
             </Text>
-            <Text style={{ color: colors.muted, marginTop: 6, textAlign: "center", lineHeight: 18 }}>
-              You’re all caught up. New friend pings, streak warnings, and summaries will land here.
+            <Text style={{ color: colors.textTertiary, marginTop: 6, textAlign: "center", lineHeight: 18, fontWeight: "300" }}>
+              Friend activity and app updates will appear here
             </Text>
           </View>
         }
@@ -540,13 +485,13 @@ export default function AlertsPage() {
           if (item.type === "section") {
             return (
               <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8 }}>
-                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "900", letterSpacing: 0.8, textTransform: "uppercase" }}>
+                <Text style={{ color: colors.textTertiary, fontSize: 11, fontWeight: "500", letterSpacing: 1, textTransform: "uppercase" }}>
                   {item.title}
                 </Text>
               </View>
             );
           }
-          const meta = cardMeta(item.item.cardType);
+          const meta = cardMeta(item.item.cardType, colors);
           const expanded = expandedId === item.item.id;
           const subtitle =
             item.item.count > 1 && item.item.sourceName
@@ -562,14 +507,16 @@ export default function AlertsPage() {
                       style={{
                         width: 96,
                         height: 82,
-                        borderRadius: 18,
-                        backgroundColor: withAlpha("#6C63FF", 0.22),
+                        borderRadius: 14,
+                        backgroundColor: colors.surface2,
+                        borderWidth: 1,
+                        borderColor: colors.accent,
                         alignItems: "center",
                         justifyContent: "center",
                       }}
                     >
-                      <Ionicons name="notifications-outline" size={18} color="#C9C5FF" />
-                      <Text style={{ color: "#C9C5FF", fontWeight: "900", marginTop: 6, fontSize: 12 }}>Ping back</Text>
+                      <Ionicons name="notifications-outline" size={18} color={colors.accent} />
+                      <Text style={{ color: colors.accent, fontWeight: "400", marginTop: 6, fontSize: 12 }}>Ping back</Text>
                     </Pressable>
                   </View>
                 ) : null
@@ -581,14 +528,16 @@ export default function AlertsPage() {
                     style={{
                       width: 92,
                       height: 82,
-                      borderRadius: 18,
-                      backgroundColor: withAlpha("#F44336", 0.18),
+                      borderRadius: 14,
+                      backgroundColor: colors.surface2,
+                      borderWidth: 1,
+                      borderColor: colors.danger,
                       alignItems: "center",
                       justifyContent: "center",
                     }}
                   >
-                    <Ionicons name="close-outline" size={20} color="#F44336" />
-                    <Text style={{ color: "#F44336", fontWeight: "900", marginTop: 6, fontSize: 12 }}>Dismiss</Text>
+                    <Ionicons name="close-outline" size={20} color={colors.danger} />
+                    <Text style={{ color: colors.danger, fontWeight: "400", marginTop: 6, fontSize: 12 }}>Dismiss</Text>
                   </Pressable>
                 </View>
               )}
@@ -597,29 +546,39 @@ export default function AlertsPage() {
                 onPress={() => openGroup(item.item)}
                 style={({ pressed }) => ({
                   marginHorizontal: 16,
-                  marginBottom: 10,
-                  borderRadius: 20,
+                  marginBottom: 6,
+                  borderRadius: 14,
                   borderWidth: 1,
-                  borderColor: item.item.unread > 0 ? withAlpha(meta.tint, 0.25) : withAlpha(colors.text, 0.08),
-                  backgroundColor: pressed ? withAlpha(colors.text, 0.04) : "#1A1A24",
+                  borderColor: colors.border,
+                  borderLeftWidth: item.item.unread > 0 ? 2 : 1,
+                  borderLeftColor: item.item.unread > 0 ? colors.accent : colors.border,
+                  backgroundColor: pressed
+                    ? colors.surface2
+                    : item.item.unread > 0
+                    ? withAlpha(colors.surface1, 1)
+                    : colors.surface1,
                   padding: 14,
+                  shadowColor: isDark ? colors.textPrimary : colors.textPrimary,
+                  shadowOpacity: isDark ? 0 : 0.04,
+                  shadowRadius: isDark ? 0 : 8,
+                  shadowOffset: { width: 0, height: 2 },
                 })}
               >
                 <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
                   <View
                     style={{
-                      width: 42,
-                      height: 42,
-                      borderRadius: 14,
-                      backgroundColor: withAlpha(meta.tint, 0.16),
+                      width: 36,
+                      height: 36,
+                      borderRadius: 999,
+                      backgroundColor: colors.surface3,
                       borderWidth: 1,
-                      borderColor: withAlpha(meta.tint, 0.24),
+                      borderColor: colors.border,
                       alignItems: "center",
                       justifyContent: "center",
                     }}
                   >
                     {item.item.cardType === "friendPing" && item.item.sourceName ? (
-                      <Text style={{ color: "#C9C5FF", fontWeight: "900", fontSize: 15 }}>
+                      <Text style={{ color: meta.tint, fontWeight: "500", fontSize: 15 }}>
                         {item.item.sourceName[0]?.toUpperCase() || "F"}
                       </Text>
                     ) : (
@@ -628,7 +587,7 @@ export default function AlertsPage() {
                   </View>
                   <View style={{ flex: 1, gap: 6 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                      <Text style={{ color: colors.text, fontWeight: "900", fontSize: 14.5, flex: 1 }}>
+                      <Text style={{ color: colors.textPrimary, fontWeight: "500", fontSize: 14.5, flex: 1 }}>
                         {item.item.cardType === "friendPing" && item.item.count > 1 && item.item.sourceName
                           ? `${item.item.sourceName} pinged you`
                           : item.item.title}
@@ -642,24 +601,26 @@ export default function AlertsPage() {
                             paddingHorizontal: 8,
                             alignItems: "center",
                             justifyContent: "center",
-                            backgroundColor: withAlpha("#6C63FF", 0.2),
+                            borderWidth: 1,
+                            borderColor: colors.accent,
+                            backgroundColor: withAlpha(colors.accent, 0.12),
                           }}
                         >
-                          <Text style={{ color: "#C9C5FF", fontWeight: "900", fontSize: 11 }}>
+                          <Text style={{ color: colors.accent, fontWeight: "400", fontSize: 11 }}>
                             {item.item.count}
                           </Text>
                         </View>
                       ) : null}
                     </View>
-                    <Text style={{ color: colors.muted, fontWeight: "700", lineHeight: 18 }}>
+                    <Text style={{ color: colors.textSecondary, fontWeight: "300", lineHeight: 18 }}>
                       {subtitle}
                     </Text>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                      <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+                      <Text style={{ color: colors.textTertiary, fontSize: 11, fontWeight: "300" }}>
                         {relativeTime(item.item.createdAtMs)}
                       </Text>
                       {item.item.cta ? (
-                        <Text style={{ color: meta.tint, fontSize: 12.5, fontWeight: "900" }}>
+                        <Text style={{ color: meta.tint, fontSize: 12, fontWeight: "400" }}>
                           {item.item.cta}
                         </Text>
                       ) : null}
@@ -669,13 +630,13 @@ export default function AlertsPage() {
                         style={{
                           marginTop: 4,
                           borderTopWidth: 1,
-                          borderTopColor: withAlpha(colors.text, 0.06),
+                          borderTopColor: colors.border,
                           paddingTop: 8,
                           gap: 6,
                         }}
                       >
                         {item.item.items.map((n) => (
-                          <Text key={n.id} style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+                          <Text key={n.id} style={{ color: colors.textTertiary, fontSize: 11, fontWeight: "300" }}>
                             {relativeTime(toMs(n))}
                           </Text>
                         ))}

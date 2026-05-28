@@ -1,30 +1,33 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import Svg, { Line, Rect, Text as SvgText } from "react-native-svg";
 
 import { useAuth } from "@/content/AuthContext";
+import { useTheme } from "@/content/ThemeProvider";
 import { subscribeProfile, type Profile } from "@/services/profile";
 
 type RangeKey = 7 | 30 | 90;
 
-const C = {
-  bg: "#0D0D0F",
-  card: "#1A1A24",
-  card2: "#202033",
-  text: "#F6F7FF",
-  muted: "rgba(246,247,255,0.66)",
-  hairline: "rgba(255,255,255,0.10)",
-  purple: "#6C63FF",
-  blue: "#4DA3FF",
-  teal: "#22D3EE",
-  green: "#4CAF50",
-  amber: "#FFC107",
-  red: "#F44336",
-};
+function useC() {
+  const { colors } = (useTheme as any)();
+  return {
+    bg: colors.background as string,
+    card: colors.surface1 as string,
+    card2: colors.surface2 as string,
+    text: colors.textPrimary as string,
+    muted: colors.textTertiary as string,
+    hairline: colors.border as string,
+    purple: colors.accent as string,
+    blue: colors.accent as string,
+    teal: colors.accent as string,
+    green: colors.success as string,
+    amber: colors.warning as string,
+    red: colors.danger as string,
+  };
+}
 
 const RANGE_OPTIONS: RangeKey[] = [7, 30, 90];
 const CHART_W = 340;
@@ -83,6 +86,7 @@ function rangeSubtitle(range: RangeKey, dates: string[]) {
 }
 
 export default function StepsHistoryScreen() {
+  const C = useC();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -167,7 +171,7 @@ export default function StepsHistoryScreen() {
             onPress={() => router.back()}
             accessibilityRole="button"
             accessibilityLabel="Back"
-            style={iconButton()}
+            style={iconButton(C)}
           >
             <Ionicons name="chevron-back" size={20} color={C.text} />
           </Pressable>
@@ -180,12 +184,7 @@ export default function StepsHistoryScreen() {
           <RangePill value={range} onChange={setRange} />
         </View>
 
-        <LinearGradient
-          colors={[alpha(C.teal, 0.16), alpha(C.purple, 0.12)]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ borderRadius: 24, padding: 1 }}
-        >
+        <View style={{ borderRadius: 24 }}>
           <View
             style={{
               borderRadius: 23,
@@ -238,7 +237,7 @@ export default function StepsHistoryScreen() {
               />
             </View>
           </View>
-        </LinearGradient>
+        </View>
 
         <SectionLabel title="Trend" />
         <View
@@ -252,7 +251,7 @@ export default function StepsHistoryScreen() {
           }}
         >
           <Svg width="100%" height={CHART_H} viewBox={`0 0 ${CHART_W} ${CHART_H}`}>
-            <Line x1="14" y1={CHART_H - 28} x2={CHART_W - 14} y2={CHART_H - 28} stroke={alpha("#fff", 0.14)} strokeWidth="1" />
+            <Line x1="14" y1={CHART_H - 28} x2={CHART_W - 14} y2={CHART_H - 28} stroke={alpha(C.hairline, 0.14)} strokeWidth="1" />
             <Line
               x1="14"
               y1={CHART_H - 28 - ((stepsGoal / chartMax) * (CHART_H - 42))}
@@ -382,6 +381,7 @@ function RangePill({
   value: RangeKey;
   onChange: (range: RangeKey) => void;
 }) {
+  const C = useC();
   return (
     <View
       style={{
@@ -427,6 +427,7 @@ function StatCard({
   value: string;
   accent: string;
 }) {
+  const C = useC();
   return (
     <View
       style={{
@@ -446,6 +447,7 @@ function StatCard({
 }
 
 function SectionLabel({ title }: { title: string }) {
+  const C = useC();
   return (
     <Text
       style={{
@@ -461,7 +463,7 @@ function SectionLabel({ title }: { title: string }) {
   );
 }
 
-function iconButton() {
+function iconButton(C: ReturnType<typeof useC>) {
   return {
     width: 42,
     height: 42,

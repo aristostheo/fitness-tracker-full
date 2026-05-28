@@ -103,7 +103,7 @@ export default function SettingsModal() {
     const card = withAlpha(colors.card, isDark ? 0.72 : 0.82);
     const sub = withAlpha(colors.text, isDark ? 0.65 : 0.7);
     const hairline = withAlpha(colors.text, isDark ? 0.1 : 0.12);
-    const danger = "#ff4d4d";
+    const danger = colors.danger;
     return { border, card, sub, hairline, danger };
   }, [colors, isDark]);
 
@@ -167,10 +167,10 @@ export default function SettingsModal() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <LinearGradient
         colors={[
-          withAlpha(colors.accent ?? "#7c5cff", isDark ? 0.18 : 0.12),
+          withAlpha(colors.accent, isDark ? 0.18 : 0.12),
           withAlpha(colors.background, 0.0),
           withAlpha(colors.background, 0.0),
-          withAlpha(colors.accent ?? "#7c5cff", isDark ? 0.08 : 0.06),
+          withAlpha(colors.accent, isDark ? 0.08 : 0.06),
         ]}
         locations={[0, 0.45, 0.75, 1]}
         style={StyleSheet.absoluteFill}
@@ -302,9 +302,9 @@ export default function SettingsModal() {
                     }}
                     trackColor={{
                       false: withAlpha(colors.text, 0.18),
-                      true: withAlpha(colors.accent ?? "#7c5cff", 0.55),
+                      true: withAlpha(colors.accent, 0.55),
                     }}
-                    thumbColor={Platform.OS === "android" ? undefined : "#fff"}
+                    thumbColor={Platform.OS === "android" ? undefined : "white"}
                   />
                 }
               />
@@ -323,9 +323,9 @@ export default function SettingsModal() {
                     }}
                     trackColor={{
                       false: withAlpha(colors.text, 0.18),
-                      true: withAlpha(colors.accent ?? "#7c5cff", 0.55),
+                      true: withAlpha(colors.accent, 0.55),
                     }}
-                    thumbColor={Platform.OS === "android" ? undefined : "#fff"}
+                    thumbColor={Platform.OS === "android" ? undefined : "white"}
                   />
                 }
               />
@@ -601,9 +601,9 @@ export default function SettingsModal() {
                     }}
                     trackColor={{
                       false: withAlpha(colors.text, 0.18),
-                      true: withAlpha(colors.accent ?? "#7c5cff", 0.55),
+                      true: withAlpha(colors.accent, 0.55),
                     }}
-                    thumbColor={Platform.OS === "android" ? undefined : "#fff"}
+                    thumbColor={Platform.OS === "android" ? undefined : "white"}
                   />
                 }
               />
@@ -664,9 +664,9 @@ export default function SettingsModal() {
                     }}
                     trackColor={{
                       false: withAlpha(colors.text, 0.18),
-                      true: withAlpha(colors.accent ?? "#7c5cff", 0.55),
+                      true: withAlpha(colors.accent, 0.55),
                     }}
-                    thumbColor={Platform.OS === "android" ? undefined : "#fff"}
+                    thumbColor={Platform.OS === "android" ? undefined : "white"}
                   />
                 }
               />

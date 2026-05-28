@@ -1,4 +1,5 @@
 // services/profile.ts
+import type { GoalInputs, MacroResult } from "./macroCalculator";
 import {
   doc,
   getDoc,
@@ -23,12 +24,19 @@ export type Profile = {
   dailyProteinTarget?: number;
 
   // profile fields
-  sex?: "male" | "female";
+  sex?: "male" | "female" | "other";
   age?: number;
   heightCm?: number;
   weightKg?: number;
-  activityLevel?: "sedentary" | "light" | "moderate" | "active" | "athlete";
-  goal?: "cut" | "maintain" | "bulk";
+  activityLevel?:
+    | "sedentary"
+    | "light"
+    | "moderate"
+    | "active"
+    | "athlete"
+    | "very_active"
+    | "extra_active";
+  goal?: "cut" | "maintain" | "lean_bulk" | "bulk";
 
   // targets
   targetMode?: "proteinPerKg" | "percent";
@@ -131,6 +139,16 @@ export type Profile = {
       cardioSessions?: boolean;
     };
   };
+  goalInputs?: GoalInputs;
+  goalResult?: MacroResult;
+  goalUpdatedAt?: number;
+  goalPace?: GoalInputs["pace"];
+  proteinPriority?: GoalInputs["proteinPriority"];
+  cardioMinutesPerWeek?: number;
+  cyclingEnabled?: boolean;
+  manualTDEEOverride?: number | null;
+  manualMacroRatios?: GoalInputs["manualMacroRatios"];
+  bmrFormula?: GoalInputs["bmrFormula"];
 };
 
 const ref = (uid: string) => doc(getFirestore() ?? db, "users", uid);

@@ -1,9 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useTheme } from "@/content/ThemeProvider";
-import { withAlpha } from "@/lib/color";
 
 export function RequestRowPremium({
   name,
@@ -26,13 +24,18 @@ export function RequestRowPremium({
   onCancel?: () => void;
   onOpenActions?: () => void;
 }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme() as any;
   const hue = Math.abs(
     accentSeed.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0)
   );
-  const avatar = ["#6C63FF", "#22D3EE", "#34D399", "#F59E0B", "#EC4899"][
-    hue % 5
+  const avatarPalette = [
+    colors.accent,
+    colors.info,
+    colors.success,
+    colors.warning,
+    colors.danger,
   ];
+  const avatar = avatarPalette[hue % avatarPalette.length];
 
   return (
     <Pressable onPress={onOpenActions}>
@@ -41,38 +44,33 @@ export function RequestRowPremium({
           style={[
             styles.card,
             {
-              backgroundColor: pressed ? withAlpha(colors.text, 0.04) : "#1A1A24",
-              borderColor: withAlpha(colors.text, 0.08),
+              backgroundColor: colors.surface1,
+              borderColor: colors.border,
+              shadowColor: colors.textPrimary,
+              shadowOpacity: isDark ? 0 : 0.05,
+              shadowRadius: isDark ? 0 : 8,
+              shadowOffset: { width: 0, height: 2 },
+              elevation: isDark ? 0 : 1,
+              transform: [{ scale: pressed ? 0.99 : 1 }],
             },
           ]}
         >
-          <View
-            style={[
-              styles.avatar,
-              {
-                backgroundColor: withAlpha(avatar, 0.18),
-                borderColor: withAlpha(avatar, 0.28),
-              },
-            ]}
-          >
-            <Text style={[styles.avatarText, { color: colors.text }]}>
-              {(name || "F")[0]?.toUpperCase() || "F"}
+          <View style={[styles.avatar, { backgroundColor: avatar }]}>
+            <Text style={[styles.avatarText, { color: colors.surface1 }]}>
+              {(name || "?")[0]?.toUpperCase() || "?"}
             </Text>
           </View>
 
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
+          <View style={styles.content}>
+            <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>
               {name}
             </Text>
             {handle ? (
-              <Text style={[styles.handle, { color: colors.muted }]} numberOfLines={1}>
+              <Text style={[styles.handle, { color: colors.textTertiary }]} numberOfLines={1}>
                 {handle}
               </Text>
             ) : null}
-            <Text
-              style={[styles.subtitle, { color: colors.muted }]}
-              numberOfLines={1}
-            >
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>
               {subtitle}
             </Text>
           </View>
@@ -81,35 +79,27 @@ export function RequestRowPremium({
             <View style={styles.actions}>
               <Pressable
                 onPress={() => {
-                  Haptics.notificationAsync(
-                    Haptics.NotificationFeedbackType.Success
-                  );
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                   onAccept?.();
                 }}
-                style={({ pressed: p }) => [
-                  styles.cta,
-                  {
-                    backgroundColor: withAlpha("#4CAF50", p ? 0.28 : 0.18),
-                    borderColor: withAlpha("#4CAF50", 0.26),
-                  },
+                style={[
+                  styles.pillButton,
+                  { borderColor: colors.success, backgroundColor: colors.surface2 },
                 ]}
               >
-                <Text style={styles.ctaText}>Accept ✓</Text>
+                <Text style={[styles.pillText, { color: colors.success }]}>Accept</Text>
               </Pressable>
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   onDecline?.();
                 }}
-                style={({ pressed: p }) => [
-                  styles.cta,
-                  {
-                    backgroundColor: withAlpha("#F44336", p ? 0.24 : 0.14),
-                    borderColor: withAlpha("#F44336", 0.24),
-                  },
+                style={[
+                  styles.pillButton,
+                  { borderColor: colors.danger, backgroundColor: colors.surface2 },
                 ]}
               >
-                <Text style={styles.ctaText}>Decline ✗</Text>
+                <Text style={[styles.pillText, { color: colors.danger }]}>Decline</Text>
               </Pressable>
             </View>
           ) : (
@@ -118,19 +108,9 @@ export function RequestRowPremium({
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 onCancel?.();
               }}
-              style={({ pressed: p }) => [
-                styles.cancel,
-                {
-                  backgroundColor: p
-                    ? withAlpha(colors.text, 0.08)
-                    : withAlpha(colors.text, 0.04),
-                  borderColor: withAlpha(colors.text, 0.12),
-                },
-              ]}
+              style={styles.cancelWrap}
             >
-              <Text style={[styles.cancelText, { color: colors.text }]}>
-                Cancel →
-              </Text>
+              <Text style={[styles.cancelText, { color: colors.danger }]}>Cancel →</Text>
             </Pressable>
           )}
         </View>
@@ -141,66 +121,65 @@ export function RequestRowPremium({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+    borderWidth: 1,
     padding: 14,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
   },
   avatar: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: 999,
-    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
   avatarText: {
     fontSize: 16,
-    fontWeight: "900",
+    fontWeight: "500",
+  },
+  content: {
+    flex: 1,
+    minWidth: 0,
   },
   name: {
     fontSize: 15,
-    fontWeight: "900",
-    letterSpacing: -0.2,
+    fontWeight: "500",
   },
   handle: {
-    marginTop: 3,
-    fontSize: 11.5,
-    fontWeight: "700",
+    marginTop: 4,
+    fontSize: 11,
+    fontWeight: "300",
+    letterSpacing: 0.3,
   },
   subtitle: {
     marginTop: 4,
-    fontSize: 12.5,
-    fontWeight: "700",
+    fontSize: 12,
+    fontWeight: "300",
   },
   actions: {
+    flexDirection: "row",
     gap: 8,
   },
-  cta: {
-    minHeight: 34,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  ctaText: {
-    color: "#FFFFFF",
-    fontSize: 11.5,
-    fontWeight: "900",
-  },
-  cancel: {
-    minHeight: 38,
-    borderRadius: 12,
+  pillButton: {
+    minHeight: 32,
+    borderRadius: 999,
     borderWidth: 1,
     paddingHorizontal: 12,
     alignItems: "center",
     justifyContent: "center",
   },
+  pillText: {
+    fontSize: 11,
+    fontWeight: "500",
+  },
+  cancelWrap: {
+    justifyContent: "center",
+    minHeight: 32,
+  },
   cancelText: {
-    fontSize: 12.5,
-    fontWeight: "800",
+    fontSize: 12,
+    fontWeight: "400",
   },
 });

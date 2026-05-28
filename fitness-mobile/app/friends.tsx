@@ -114,13 +114,12 @@ type FriendIntel = {
   prLabel?: string | null;
 };
 
-const ACCENT_COLORS = ["#6C63FF", "#22D3EE", "#4CAF50", "#FFC107", "#EC4899"];
 const PING_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 const PING_PRESETS = [
-  "💪 Keep it up!",
-  "🍽 Log your meal!",
-  "🔥 Protect that streak!",
-  "👊 Let's go!",
+  "Keep it up!",
+  "Log your meal!",
+  "Protect that streak!",
+  "Let's go!",
 ];
 
 function truncateUid(uid: string) {
@@ -140,9 +139,9 @@ function toMillis(t: any) {
     : 0;
 }
 
-function accentFromSeed(seed: string) {
+function accentFromSeed(seed: string, palette: string[]) {
   const hash = seed.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-  return ACCENT_COLORS[Math.abs(hash) % ACCENT_COLORS.length];
+  return palette[Math.abs(hash) % palette.length];
 }
 
 function isoDate(d: Date) {
@@ -284,23 +283,23 @@ function sharedSummary(
     return "Nothing shared yet";
   }
   if (visibility.progress?.consistencyStreak && (intel?.streakDays || 0) > 0) {
-    return `🔥 ${intel?.streakDays} day streak`;
+    return `${intel?.streakDays} day streak`;
   }
   if (
     visibility.nutrition?.macroBreakdown &&
     profile?.proteinGoal &&
     (intel?.proteinTotalToday || 0) >= Number(profile.proteinGoal || 0)
   ) {
-    return "✓ Hit protein goal today";
+    return "Hit protein goal today";
   }
   if (visibility.workouts?.personalRecords && intel?.prLabel) {
-    return `🏆 ${intel.prLabel}`;
+    return intel.prLabel;
   }
   if (visibility.workouts?.workoutsLogged && intel?.latestWorkout) {
-    return `💪 Logged a workout · ${relativeTimeFromMs(intel.latestWorkout.lastMs)}`;
+    return `Logged a workout · ${relativeTimeFromMs(intel.latestWorkout.lastMs)}`;
   }
   if (visibility.activity?.stepCount && (intel?.stepCountToday || 0) > 0) {
-    return `👣 ${Math.round(intel?.stepCountToday || 0).toLocaleString()} steps today`;
+    return `${Math.round(intel?.stepCountToday || 0).toLocaleString()} steps today`;
   }
   return "No activity shared";
 }
@@ -314,7 +313,7 @@ function buildFriendChips(
   if (visibility.progress?.consistencyStreak && (intel?.streakDays || 0) > 0) {
     chips.push({
       key: "streak",
-      label: `🔥 ${intel?.streakDays} days`,
+      label: `${intel?.streakDays} days`,
       tone: "amber",
     });
   }
@@ -559,18 +558,19 @@ async function loadFriendIntel(
 }
 
 function LockedCard({ text, action }: { text: string; action?: () => void }) {
+  const { colors } = useTheme() as any;
   return (
     <View
       style={{
-        borderRadius: 18,
+        borderRadius: 16,
         borderWidth: 1,
-        borderColor: "rgba(246,247,255,0.08)",
-        backgroundColor: "#12121A",
+        borderColor: colors.border,
+        backgroundColor: colors.surface2,
         padding: 16,
         gap: 10,
       }}
     >
-      <Text style={{ color: "rgba(246,247,255,0.76)", fontWeight: "800", lineHeight: 20 }}>
+      <Text style={{ color: colors.textSecondary, fontWeight: "400", lineHeight: 20 }}>
         {text}
       </Text>
       {action ? (
@@ -578,17 +578,17 @@ function LockedCard({ text, action }: { text: string; action?: () => void }) {
           onPress={action}
           style={{
             alignSelf: "flex-start",
-            minHeight: 38,
+            minHeight: 36,
             paddingHorizontal: 12,
             borderRadius: 999,
-            backgroundColor: "rgba(108,99,255,0.16)",
+            backgroundColor: colors.surface2,
             borderWidth: 1,
-            borderColor: "rgba(108,99,255,0.28)",
+            borderColor: colors.accent,
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Text style={{ color: "#F6F7FF", fontWeight: "900" }}>Ping →</Text>
+          <Text style={{ color: colors.accent, fontWeight: "400" }}>Ping →</Text>
         </Pressable>
       ) : null}
     </View>
@@ -596,7 +596,7 @@ function LockedCard({ text, action }: { text: string; action?: () => void }) {
 }
 
 export default function FriendsPage() {
-  const { colors } = useTheme() as any;
+  const { colors, isDark } = useTheme() as any;
   const { user } = useAuth();
   const router = useRouter();
 
@@ -699,6 +699,11 @@ export default function FriendsPage() {
     };
   }, [accepted, friendProfiles]);
 
+  const accentPalette = useMemo(
+    () => [colors.accent, colors.info, colors.success, colors.warning, colors.danger],
+    [colors.accent, colors.info, colors.success, colors.warning, colors.danger]
+  );
+
   const friendsUI: UIFriend[] = useMemo(
     () =>
       accepted.map((edge, index) => ({
@@ -707,10 +712,10 @@ export default function FriendsPage() {
         name: displayFromEdge(edge, index),
         uidLabel: truncateUid(edge.friendUid),
         subtitle: "",
-        accentColor: accentFromSeed(edge.friendUid),
+        accentColor: accentFromSeed(edge.friendUid, accentPalette),
         raw: edge,
       })),
-    [accepted]
+    [accepted, accentPalette]
   );
 
   const requestsUI: UIFriend[] = useMemo(
@@ -723,10 +728,10 @@ export default function FriendsPage() {
         subtitle: edge.requestedAt
           ? `Sent ${relativeTimeFromMs(toMillis(edge.requestedAt))}`
           : "Pending request",
-        accentColor: accentFromSeed(edge.friendUid),
+        accentColor: accentFromSeed(edge.friendUid, accentPalette),
         raw: edge,
       })),
-    [incomingEdges]
+    [incomingEdges, accentPalette]
   );
 
   const sentUI: UIFriend[] = useMemo(
@@ -739,10 +744,10 @@ export default function FriendsPage() {
         subtitle: edge.requestedAt
           ? `Pending · Sent ${relativeTimeFromMs(toMillis(edge.requestedAt))}`
           : "Pending approval",
-        accentColor: accentFromSeed(edge.friendUid),
+        accentColor: accentFromSeed(edge.friendUid, accentPalette),
         raw: edge,
       })),
-    [pendingOutgoing]
+    [pendingOutgoing, accentPalette]
   );
 
   const filteredFriends = useMemo(() => {
@@ -819,7 +824,7 @@ export default function FriendsPage() {
       },
       { message: message || undefined }
     );
-    setToast(`Ping sent to ${friend.name} 🔔`);
+      setToast(`Ping sent to ${friend.name}`);
     setTimeout(() => setToast(""), 1600);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }
@@ -828,7 +833,7 @@ export default function FriendsPage() {
     const lastPingMs = toMillis(friend.raw.lastPingAt);
     const canPing = !lastPingMs || Date.now() - lastPingMs >= PING_COOLDOWN_MS;
     if (!canPing) {
-      setToast("You pinged recently — give them some space 😄");
+      setToast("You pinged recently — give them some space");
       setTimeout(() => setToast(""), 1800);
       return;
     }
@@ -966,7 +971,7 @@ export default function FriendsPage() {
   }, []);
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#0D0D0F" }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <FlatList
         data={data}
         keyExtractor={(item) => item.id}
@@ -993,14 +998,12 @@ export default function FriendsPage() {
                 style={({ pressed }) => [
                   styles.addBtn,
                   {
-                    backgroundColor: pressed
-                      ? withAlpha("#6C63FF", 0.24)
-                      : withAlpha("#6C63FF", 0.18),
-                    borderColor: withAlpha("#6C63FF", 0.32),
+                    backgroundColor: pressed ? colors.surface2 : colors.surface1,
+                    borderColor: colors.accent,
                   },
                 ]}
               >
-                <Text style={{ color: colors.text, fontWeight: "900" }}>+ Add</Text>
+                <Text style={{ color: colors.accent, fontWeight: "400" }}>+ Add</Text>
               </Pressable>
             </View>
 
@@ -1014,9 +1017,9 @@ export default function FriendsPage() {
               style={{
                 minHeight: 46,
                 borderRadius: 16,
-                backgroundColor: "#1A1A24",
+                backgroundColor: colors.surface3,
                 borderWidth: 1,
-                borderColor: withAlpha(colors.text, 0.08),
+                borderColor: colors.border,
                 flexDirection: "row",
                 alignItems: "center",
                 gap: 10,
@@ -1029,13 +1032,21 @@ export default function FriendsPage() {
                 onChangeText={setSearch}
                 placeholder="Search friends..."
                 placeholderTextColor={withAlpha(colors.muted, 0.75)}
-                style={{ flex: 1, color: colors.text, fontWeight: "700", fontSize: 14 }}
+                style={{ flex: 1, color: colors.textPrimary, fontWeight: "400", fontSize: 14 }}
               />
             </View>
 
             {errorMsg ? (
-              <View style={styles.errorBanner}>
-                <Text style={{ color: colors.text, fontWeight: "800" }}>{errorMsg}</Text>
+              <View
+                style={[
+                  styles.errorBanner,
+                  {
+                    borderColor: colors.danger,
+                    backgroundColor: withAlpha(colors.danger, 0.12),
+                  },
+                ]}
+              >
+                <Text style={{ color: colors.textPrimary, fontWeight: "400" }}>{errorMsg}</Text>
               </View>
             ) : null}
           </View>
@@ -1044,31 +1055,41 @@ export default function FriendsPage() {
           tab === "friends" ? (
             <View style={{ alignItems: "center", paddingTop: 36, gap: 14 }}>
               <View style={styles.emptyGraphic}>
-                <View style={[styles.emptyDot, { left: 18, top: 18 }]} />
-                <View style={[styles.emptyDot, { right: 18, bottom: 18 }]} />
-                <View style={styles.emptyLine} />
+                <View
+                  style={[
+                    styles.emptyDot,
+                    { left: 18, top: 18, backgroundColor: colors.surface3, borderColor: colors.border },
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.emptyDot,
+                    { right: 18, bottom: 18, backgroundColor: colors.surface3, borderColor: colors.border },
+                  ]}
+                />
+                <View style={[styles.emptyLine, { backgroundColor: colors.border }]} />
               </View>
-              <Text style={{ color: colors.text, fontWeight: "900", fontSize: 22 }}>
+              <Text style={{ color: colors.textSecondary, fontWeight: "500", fontSize: 18 }}>
                 No friends yet
               </Text>
-              <Text style={styles.emptyBody}>
+              <Text style={[styles.emptyBody, { color: colors.textTertiary }]}>
                 Add someone you trust with their email or UID. Everything is private by default.
               </Text>
               <Pressable
                 onPress={() => setAddOpen(true)}
-                style={styles.primaryBtn}
+                style={[styles.primaryBtn, { backgroundColor: colors.accent, borderColor: colors.accent }]}
               >
-                <Text style={styles.primaryBtnText}>+ Add your first friend</Text>
+                <Text style={[styles.primaryBtnText, { color: colors.surface1 }]}>+ Add your first friend</Text>
               </Pressable>
               <View style={{ alignItems: "center", gap: 8 }}>
-                <Text style={{ color: colors.muted, fontWeight: "700" }}>
+                <Text style={{ color: colors.textTertiary, fontWeight: "300" }}>
                   Or share your UID so they can find you
                 </Text>
                 <Pressable
                   onPress={() => user?.uid && handleCopyUid(user.uid)}
-                  style={styles.copyChip}
+                  style={[styles.copyChip, { backgroundColor: colors.surface2, borderColor: colors.border }]}
                 >
-                  <Text style={{ color: colors.text, fontWeight: "900" }}>
+                  <Text style={{ color: colors.textSecondary, fontWeight: "400" }}>
                     Copy my UID
                   </Text>
                 </Pressable>
@@ -1076,19 +1097,19 @@ export default function FriendsPage() {
             </View>
           ) : tab === "requests" ? (
             <View style={{ paddingTop: 36, alignItems: "center", gap: 8 }}>
-              <Text style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}>
+              <Text style={{ color: colors.textSecondary, fontWeight: "500", fontSize: 16 }}>
                 No pending requests
               </Text>
-              <Text style={styles.emptyBody}>
+              <Text style={[styles.emptyBody, { color: colors.textTertiary }]}>
                 Share your UID to connect with friends
               </Text>
             </View>
           ) : (
             <View style={{ paddingTop: 36, alignItems: "center", gap: 8 }}>
-              <Text style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}>
+              <Text style={{ color: colors.textSecondary, fontWeight: "500", fontSize: 16 }}>
                 No sent requests
               </Text>
-              <Text style={styles.emptyBody}>
+              <Text style={[styles.emptyBody, { color: colors.textTertiary }]}>
                 Add someone using their email or UID
               </Text>
             </View>
@@ -1175,7 +1196,7 @@ export default function FriendsPage() {
       />
 
       {detailOpen && selected ? (
-        <View style={styles.overlay}>
+        <View style={[styles.overlay, { backgroundColor: withAlpha(colors.textPrimary, isDark ? 0.5 : 0.16) }]}>
           <Pressable
             style={StyleSheet.absoluteFillObject}
             onPress={() => {
@@ -1183,9 +1204,33 @@ export default function FriendsPage() {
               setActiveModal(null);
             }}
           />
-          <View style={styles.sheet}>
-            <View style={styles.sheetHandle} />
+          <View style={[styles.sheet, { backgroundColor: colors.surface2, borderColor: colors.borderElevated }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: colors.surface3 }]} />
             <ScrollView contentContainerStyle={{ paddingBottom: 28, gap: 16 }}>
+              {activeModal ? (
+                <View style={styles.rowBetween}>
+                  <Pressable
+                    onPress={() => setActiveModal(null)}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+                  >
+                    <Ionicons name="chevron-back" size={16} color={colors.textSecondary} />
+                    <Text style={{ color: colors.textSecondary, fontSize: 14, fontWeight: "400" }}>
+                      {selected.name}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      setDetailOpen(false);
+                      setActiveModal(null);
+                    }}
+                  >
+                    <Ionicons name="close" size={18} color={colors.textTertiary} />
+                  </Pressable>
+                </View>
+              ) : null}
+
+              {!activeModal ? (
+                <>
               <View style={{ alignItems: "center", gap: 8 }}>
                 <View
                   style={[
@@ -1193,9 +1238,9 @@ export default function FriendsPage() {
                     {
                       borderColor:
                         (selectedIntel?.streakDays || 0) >= 14
-                          ? "#FFC107"
+                          ? colors.warning
                           : (selectedIntel?.streakDays || 0) >= 3
-                          ? "#4CAF50"
+                          ? colors.success
                           : withAlpha(colors.text, 0.14),
                     },
                   ]}
@@ -1209,26 +1254,26 @@ export default function FriendsPage() {
                       },
                     ]}
                   >
-                    <Text style={{ color: colors.text, fontWeight: "900", fontSize: 28 }}>
+                    <Text style={{ color: colors.textPrimary, fontWeight: "500", fontSize: 28 }}>
                       {selected.name[0]?.toUpperCase() || "F"}
                     </Text>
                   </View>
                 </View>
-                <Text style={{ color: colors.text, fontWeight: "900", fontSize: 24 }}>
+                <Text style={{ color: colors.textPrimary, fontWeight: "500", fontSize: 22 }}>
                   {selected.name}
                 </Text>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Text style={{ color: colors.muted, fontWeight: "700" }}>
+                  <Text style={{ color: colors.textTertiary, fontWeight: "300" }}>
                     {selected.uidLabel}
                   </Text>
                   <Pressable onPress={() => handleCopyUid(selected.friendUid)}>
                     <Ionicons name="copy-outline" size={16} color={colors.muted} />
                   </Pressable>
                 </View>
-                <Text style={{ color: colors.muted, fontWeight: "700" }}>
+                <Text style={{ color: colors.textSecondary, fontWeight: "300" }}>
                   {`${activeLabel(selectedIntel?.lastActiveMs || 0)} · ${
                     (selectedIntel?.streakDays || 0) > 0
-                      ? `${selectedIntel?.streakDays} day streak 🔥`
+                      ? `${selectedIntel?.streakDays} day streak`
                       : "No current streak"
                   }`}
                 </Text>
@@ -1241,38 +1286,42 @@ export default function FriendsPage() {
                   { key: "meals", icon: "restaurant-outline", label: "Meals", onPress: () => setActiveModal("meals") },
                   { key: "workouts", icon: "barbell-outline", label: "Workouts", onPress: () => setActiveModal("workouts") },
                 ].map((item) => (
-                  <Pressable key={item.key} onPress={item.onPress} style={styles.quickBtn}>
-                    <Ionicons name={item.icon as any} size={18} color={colors.text} />
-                    <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>
+                  <Pressable
+                    key={item.key}
+                    onPress={item.onPress}
+                    style={[styles.quickBtn, { backgroundColor: colors.surface3, borderColor: colors.border }]}
+                  >
+                    <Ionicons name={item.icon as any} size={18} color={colors.accent} />
+                    <Text style={{ color: colors.textSecondary, fontWeight: "400", fontSize: 12 }}>
                       {item.label}
                     </Text>
                   </Pressable>
                 ))}
               </View>
 
-              <View style={styles.sectionCard}>
-                <Text style={styles.sectionLabel}>Shared Activity</Text>
+              <View style={[styles.sectionCard, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+                <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>RECENT ACTIVITY</Text>
                 {selectedIntel?.activityFeed?.length ? (
                   selectedIntel.activityFeed.map((row) => (
                     <View key={row.key} style={styles.feedRow}>
                       <Ionicons name={row.icon} size={16} color={colors.muted} />
                       <View style={{ flex: 1 }}>
-                        <Text style={{ color: colors.text, fontWeight: "800" }}>{row.text}</Text>
-                        <Text style={{ color: colors.muted, fontWeight: "700", marginTop: 2 }}>
+                        <Text style={{ color: colors.textPrimary, fontWeight: "400" }}>{row.text}</Text>
+                        <Text style={{ color: colors.textTertiary, fontWeight: "300", marginTop: 2 }}>
                           {row.tsLabel}
                         </Text>
                       </View>
                     </View>
                   ))
                 ) : (
-                  <Text style={{ color: colors.muted, lineHeight: 20 }}>
-                    Your friend keeps things private. You can still ping them 👋
+                  <Text style={{ color: colors.textTertiary, lineHeight: 20 }}>
+                    Your friend keeps things private. You can still ping them.
                   </Text>
                 )}
               </View>
 
-              <View style={styles.sectionCard}>
-                <Text style={styles.sectionLabel}>Stats Snapshot</Text>
+              <View style={[styles.sectionCard, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+                <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>STATS SNAPSHOT</Text>
                 <View style={styles.grid}>
                   {[
                     {
@@ -1281,7 +1330,7 @@ export default function FriendsPage() {
                       value:
                         progressVisible && selectedVisibility.progress?.consistencyStreak
                           ? `${selectedIntel?.streakDays || 0} days`
-                          : "🔒 Private",
+                          : "Private",
                     },
                     {
                       key: "protein",
@@ -1290,32 +1339,32 @@ export default function FriendsPage() {
                         selectedVisibility.enabled && selectedVisibility.nutrition?.macroBreakdown
                           ? selectedProfile?.proteinGoal &&
                             (selectedIntel?.proteinTotalToday || 0) >= Number(selectedProfile?.proteinGoal || 0)
-                            ? "✓ Goal hit today"
+                            ? "Goal hit today"
                             : `${Math.round(selectedIntel?.proteinTotalToday || 0)}g today`
-                          : "🔒 Private",
+                          : "Private",
                     },
                     {
                       key: "workouts",
                       label: "Workouts",
-                      value:
+                        value:
                         workoutsVisible
                           ? `${selectedIntel?.workoutCountWeek || 0} this week`
-                          : "🔒 Private",
+                          : "Private",
                     },
                     {
                       key: "badges",
                       label: "Badges",
-                      value:
+                        value:
                         selectedVisibility.enabled && selectedVisibility.progress?.badgeCollection
                           ? `${selectedIntel?.badgeCount || 0} earned`
-                          : "🔒 Private",
+                          : "Private",
                     },
                   ].map((tile) => (
-                    <View key={tile.key} style={styles.statTile}>
-                      <Text style={{ color: colors.muted, fontWeight: "800", fontSize: 12 }}>
+                    <View key={tile.key} style={[styles.statTile, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+                      <Text style={{ color: colors.textTertiary, fontWeight: "500", fontSize: 11 }}>
                         {tile.label}
                       </Text>
-                      <Text style={{ color: colors.text, fontWeight: "900", fontSize: 15, marginTop: 8 }}>
+                      <Text style={{ color: colors.textPrimary, fontWeight: "400", fontSize: 15, marginTop: 8 }}>
                         {tile.value}
                       </Text>
                     </View>
@@ -1323,9 +1372,9 @@ export default function FriendsPage() {
                 </View>
               </View>
 
-              <View style={styles.actionsCard}>
+              <View style={[styles.actionsCard, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
                 <Pressable style={styles.actionRow} onPress={() => openPing(selected)}>
-                  <Text style={styles.actionPrimary}>Ping →</Text>
+                  <Text style={[styles.actionPrimary, { color: colors.accent }]}>Ping →</Text>
                 </Pressable>
                 <Pressable
                   style={styles.actionRow}
@@ -1334,121 +1383,22 @@ export default function FriendsPage() {
                     setNicknameEditorOpen(true);
                   }}
                 >
-                  <Text style={styles.actionNeutral}>Edit nickname →</Text>
+                  <Text style={[styles.actionNeutral, { color: colors.textSecondary }]}>Edit nickname →</Text>
                 </Pressable>
                 <View style={{ height: 1, backgroundColor: withAlpha(colors.text, 0.08), marginVertical: 8 }} />
                 <Pressable style={styles.actionRow} onPress={() => handleRemove(selected)}>
-                  <Text style={styles.actionDanger}>Remove friend</Text>
+                  <Text style={[styles.actionDanger, { color: colors.danger }]}>Remove friend</Text>
                 </Pressable>
                 <Pressable style={styles.actionRow} onPress={() => handleBlock(selected)}>
-                  <Text style={styles.actionDanger}>Block</Text>
+                  <Text style={[styles.actionDanger, { color: colors.danger }]}>Block</Text>
                 </Pressable>
                 <Pressable style={styles.actionRow} onPress={() => handleReport(selected)}>
-                  <Text style={styles.actionNeutral}>Report</Text>
+                  <Text style={[styles.actionNeutral, { color: colors.textSecondary }]}>Report</Text>
                 </Pressable>
               </View>
-            </ScrollView>
-          </View>
-        </View>
-      ) : null}
+                </>
+              ) : null}
 
-      {pingPickerOpen && pendingPing ? (
-        <View style={styles.overlay}>
-          <Pressable
-            style={StyleSheet.absoluteFillObject}
-            onPress={() => setPingPickerOpen(false)}
-          />
-          <View style={styles.modalCard}>
-            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 20 }}>
-              Send a nudge to {pendingPing.name}
-            </Text>
-            <Text style={{ color: colors.muted, lineHeight: 18 }}>
-              They'll get a gentle notification. No pressure.
-            </Text>
-            <View style={styles.presetWrap}>
-              {PING_PRESETS.map((preset) => {
-                const active = selectedPingPreset === preset;
-                return (
-                  <Pressable
-                    key={preset}
-                    onPress={() => setSelectedPingPreset(preset)}
-                    style={[
-                      styles.presetChip,
-                      {
-                        backgroundColor: active
-                          ? withAlpha("#6C63FF", 0.18)
-                          : "#12121A",
-                        borderColor: active
-                          ? withAlpha("#6C63FF", 0.3)
-                          : withAlpha(colors.text, 0.08),
-                      },
-                    ]}
-                  >
-                    <Text style={{ color: colors.text, fontWeight: "800" }}>{preset}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <Pressable onPress={() => setSelectedPingPreset("")}>
-              <Text style={{ color: "#A6A0FF", fontWeight: "800" }}>Send blank ping</Text>
-            </Pressable>
-            <Pressable
-              disabled={selectedPingPreset === null}
-              onPress={async () => {
-                await sendPing(pendingPing, selectedPingPreset || "");
-                setPingPickerOpen(false);
-              }}
-              style={[
-                styles.primaryBtn,
-                {
-                  opacity: selectedPingPreset === null ? 0.45 : 1,
-                  alignSelf: "stretch",
-                },
-              ]}
-            >
-              <Text style={styles.primaryBtnText}>Send</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
-
-      {nicknameEditorOpen && selected ? (
-        <View style={styles.overlay}>
-          <Pressable
-            style={StyleSheet.absoluteFillObject}
-            onPress={() => setNicknameEditorOpen(false)}
-          />
-          <View style={styles.modalCard}>
-            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 20 }}>
-              Edit nickname
-            </Text>
-            <Text style={{ color: colors.muted }}>
-              This name is only visible to you.
-            </Text>
-            <View style={styles.inputWrap}>
-              <TextInput
-                value={nicknameValue}
-                onChangeText={setNicknameValue}
-                placeholder="Enter a nickname"
-                placeholderTextColor={withAlpha(colors.muted, 0.7)}
-                style={{ color: colors.text, fontWeight: "700", fontSize: 15 }}
-              />
-            </View>
-            <Pressable style={styles.primaryBtn} onPress={handleNicknameSave}>
-              <Text style={styles.primaryBtnText}>Save nickname</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
-
-      {activeModal && selected ? (
-        <View style={styles.overlay}>
-          <Pressable
-            style={StyleSheet.absoluteFillObject}
-            onPress={() => setActiveModal(null)}
-          />
-          <View style={[styles.modalCard, { maxHeight: "82%" }]}>
-            <ScrollView contentContainerStyle={{ gap: 14, paddingBottom: 4 }}>
               {activeModal === "profile" ? (
                 <>
                   <View style={{ alignItems: "center", gap: 8 }}>
@@ -1461,14 +1411,14 @@ export default function FriendsPage() {
                         },
                       ]}
                     >
-                      <Text style={{ color: colors.text, fontWeight: "900", fontSize: 24 }}>
+                      <Text style={{ color: colors.textPrimary, fontWeight: "500", fontSize: 24 }}>
                         {selected.name[0]?.toUpperCase() || "F"}
                       </Text>
                     </View>
-                    <Text style={{ color: colors.text, fontWeight: "900", fontSize: 22 }}>
+                    <Text style={{ color: colors.textPrimary, fontWeight: "500", fontSize: 22 }}>
                       {selected.name}
                     </Text>
-                    <Text style={{ color: colors.muted, fontWeight: "700" }}>
+                    <Text style={{ color: colors.textTertiary, fontWeight: "300" }}>
                       Private connection
                     </Text>
                   </View>
@@ -1479,14 +1429,14 @@ export default function FriendsPage() {
                         value:
                           selectedVisibility.enabled && selectedVisibility.progress?.weightTrend
                             ? focusLabel(selectedProfile)
-                            : "🔒 Private",
+                            : "Private",
                       },
                       {
                         label: "Streak",
                         value:
                           selectedVisibility.enabled && selectedVisibility.progress?.consistencyStreak
                             ? `${selectedIntel?.streakDays || 0} days`
-                            : "🔒 Private",
+                            : "Private",
                       },
                       {
                         label: "Member since",
@@ -1502,21 +1452,21 @@ export default function FriendsPage() {
                         value:
                           selectedVisibility.enabled && selectedVisibility.progress?.weightTrend
                             ? friendTrendLabel(selectedProfile) || "On track"
-                            : "🔒 Private",
+                            : "Private",
                       },
                     ].map((tile) => (
-                      <View key={tile.label} style={styles.statTile}>
-                        <Text style={{ color: colors.muted, fontWeight: "800", fontSize: 12 }}>
+                      <View key={tile.label} style={[styles.statTile, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+                        <Text style={{ color: colors.textTertiary, fontWeight: "500", fontSize: 11 }}>
                           {tile.label}
                         </Text>
-                        <Text style={{ color: colors.text, fontWeight: "900", fontSize: 15, marginTop: 8 }}>
+                        <Text style={{ color: colors.textPrimary, fontWeight: "400", fontSize: 15, marginTop: 8 }}>
                           {tile.value}
                         </Text>
                       </View>
                     ))}
                   </View>
-                  <View style={styles.sectionCard}>
-                    <Text style={styles.sectionLabel}>Badge Showcase</Text>
+                  <View style={[styles.sectionCard, { backgroundColor: colors.surface1, borderColor: colors.border }]}>
+                    <Text style={[styles.sectionLabel, { color: colors.textTertiary }]}>BADGE SHOWCASE</Text>
                     {selectedVisibility.enabled && selectedVisibility.progress?.badgeCollection ? (
                       selectedIntel?.topBadgeIds?.length ? (
                         <View style={{ gap: 10 }}>
@@ -1527,9 +1477,9 @@ export default function FriendsPage() {
                                 <Ionicons
                                   name={(badge?.icon || "ribbon-outline") as any}
                                   size={18}
-                                  color={badge?.accent || "#6C63FF"}
+                                  color={badge?.accent || colors.accent}
                                 />
-                                <Text style={{ color: colors.text, fontWeight: "800" }}>
+                                <Text style={{ color: colors.textPrimary, fontWeight: "400" }}>
                                   {badge?.title || id}
                                 </Text>
                               </View>
@@ -1537,14 +1487,17 @@ export default function FriendsPage() {
                           })}
                         </View>
                       ) : (
-                        <Text style={{ color: colors.muted }}>No badges shared yet</Text>
+                        <Text style={{ color: colors.textTertiary }}>No badges shared yet</Text>
                       )
                     ) : (
-                      <LockedCard text="🔒 Private" />
+                      <LockedCard text="Private" />
                     )}
                   </View>
-                  <Pressable style={styles.primaryBtn} onPress={() => openPing(selected)}>
-                    <Text style={styles.primaryBtnText}>Ping →</Text>
+                  <Pressable
+                    style={[styles.primaryBtn, { backgroundColor: colors.accent, borderColor: colors.accent }]}
+                    onPress={() => openPing(selected)}
+                  >
+                    <Text style={[styles.primaryBtnText, { color: colors.surface1 }]}>Ping →</Text>
                   </Pressable>
                 </>
               ) : null}
@@ -1552,7 +1505,7 @@ export default function FriendsPage() {
               {activeModal === "meals" ? (
                 mealsVisible ? (
                   <>
-                    <Text style={{ color: colors.text, fontWeight: "900", fontSize: 20 }}>
+                    <Text style={{ color: colors.textPrimary, fontWeight: "500", fontSize: 20 }}>
                       {selected.name}'s recent meals
                     </Text>
                     <View style={styles.periodTabs}>
@@ -1575,11 +1528,14 @@ export default function FriendsPage() {
                           0
                         );
                         return (
-                          <View key={period.key} style={styles.periodCard}>
-                            <Text style={{ color: colors.text, fontWeight: "900" }}>
+                          <View
+                            key={period.key}
+                            style={[styles.periodCard, { backgroundColor: colors.surface2, borderColor: colors.border }]}
+                          >
+                            <Text style={{ color: colors.textPrimary, fontWeight: "400" }}>
                               {period.label}
                             </Text>
-                            <Text style={{ color: colors.muted, marginTop: 4 }}>
+                            <Text style={{ color: colors.textTertiary, marginTop: 4 }}>
                               {items.length ? `${Math.round(totalCalories)} kcal` : "No meals"}
                             </Text>
                           </View>
@@ -1595,23 +1551,26 @@ export default function FriendsPage() {
                         0
                       );
                       return (
-                        <View key={meal} style={styles.sectionCard}>
+                        <View
+                          key={meal}
+                          style={[styles.sectionCard, { backgroundColor: colors.surface1, borderColor: colors.border }]}
+                        >
                           <View style={styles.rowBetween}>
-                            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}>
+                            <Text style={{ color: colors.textPrimary, fontWeight: "500", fontSize: 16 }}>
                               {meal[0].toUpperCase() + meal.slice(1)}
                             </Text>
-                            <Text style={{ color: colors.muted, fontWeight: "800" }}>
+                            <Text style={{ color: colors.textTertiary, fontWeight: "300" }}>
                               {total ? `${Math.round(total)} kcal` : "No entries"}
                             </Text>
                           </View>
                           {items.length ? (
                             items.map((item) => (
-                              <Text key={item.id} style={{ color: colors.muted, marginTop: 6 }}>
+                              <Text key={item.id} style={{ color: colors.textSecondary, marginTop: 6 }}>
                                 {item.name}
                               </Text>
                             ))
                           ) : (
-                            <Text style={{ color: colors.muted, marginTop: 6 }}>
+                            <Text style={{ color: colors.textTertiary, marginTop: 6 }}>
                               No items logged
                             </Text>
                           )}
@@ -1621,7 +1580,7 @@ export default function FriendsPage() {
                   </>
                 ) : (
                   <LockedCard
-                    text={`🔒 ${selected.name} hasn't shared recent meals. You can ping them to ask!`}
+                    text={`${selected.name} hasn't shared recent meals. You can ping them to ask.`}
                     action={() => openPing(selected)}
                   />
                 )
@@ -1630,19 +1589,22 @@ export default function FriendsPage() {
               {activeModal === "workouts" ? (
                 workoutsVisible ? (
                   <>
-                    <Text style={{ color: colors.text, fontWeight: "900", fontSize: 20 }}>
+                    <Text style={{ color: colors.textPrimary, fontWeight: "500", fontSize: 20 }}>
                       {selected.name}'s workouts
                     </Text>
                     {(selectedIntel?.recentSessions || []).slice(0, 5).map((session) => (
-                      <View key={session.id} style={styles.sectionCard}>
-                        <Text style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}>
+                      <View
+                        key={session.id}
+                        style={[styles.sectionCard, { backgroundColor: colors.surface1, borderColor: colors.border }]}
+                      >
+                        <Text style={{ color: colors.textPrimary, fontWeight: "500", fontSize: 16 }}>
                           {session.title}
                         </Text>
-                        <Text style={{ color: colors.muted, marginTop: 6 }}>
+                        <Text style={{ color: colors.textTertiary, marginTop: 6 }}>
                           {session.date} · {session.durationMin} min · {session.exerciseCount} exercises
                         </Text>
                         {selectedVisibility.workouts?.workoutDetails ? (
-                          <Text style={{ color: colors.muted, marginTop: 6 }}>
+                          <Text style={{ color: colors.textSecondary, marginTop: 6 }}>
                             {session.items
                               .slice(0, 3)
                               .map((item) => item.exercise)
@@ -1660,17 +1622,115 @@ export default function FriendsPage() {
                         )
                       }
                     >
-                      <Text style={{ color: "#A6A0FF", fontWeight: "800" }}>See more →</Text>
+                      <Text style={{ color: colors.accent, fontWeight: "400" }}>See more →</Text>
                     </Pressable>
                   </>
                 ) : (
-                  <LockedCard text={`🔒 ${selected.name}'s workouts are private.`} />
+                  <LockedCard text={`${selected.name}'s workouts are private.`} />
                 )
               ) : null}
             </ScrollView>
           </View>
         </View>
       ) : null}
+
+      {pingPickerOpen && pendingPing ? (
+        <View style={[styles.overlay, { backgroundColor: withAlpha(colors.textPrimary, isDark ? 0.5 : 0.16) }]}>
+          <Pressable
+            style={StyleSheet.absoluteFillObject}
+            onPress={() => setPingPickerOpen(false)}
+          />
+          <View style={[styles.modalCard, { backgroundColor: colors.surface2, borderColor: colors.borderElevated }]}>
+            <Text style={{ color: colors.textPrimary, fontWeight: "500", fontSize: 18 }}>
+              Send a nudge to {pendingPing.name}
+            </Text>
+            <Text style={{ color: colors.textTertiary, lineHeight: 18 }}>
+              They'll get a gentle notification. No pressure.
+            </Text>
+            <View style={styles.presetWrap}>
+              {PING_PRESETS.map((preset) => {
+                const active = selectedPingPreset === preset;
+                return (
+                  <Pressable
+                    key={preset}
+                    onPress={() => setSelectedPingPreset(preset)}
+                    style={[
+                      styles.presetChip,
+                      {
+                        backgroundColor: active ? colors.surface1 : colors.surface2,
+                        borderColor: active ? colors.accent : colors.border,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        color: active ? colors.accent : colors.textSecondary,
+                        fontWeight: "400",
+                      }}
+                    >
+                      {preset}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Pressable onPress={() => setSelectedPingPreset("")}>
+              <Text style={{ color: colors.textTertiary, fontWeight: "300" }}>Send blank ping</Text>
+            </Pressable>
+            <Pressable
+              disabled={selectedPingPreset === null}
+              onPress={async () => {
+                await sendPing(pendingPing, selectedPingPreset || "");
+                setPingPickerOpen(false);
+              }}
+              style={[
+                styles.primaryBtn,
+                {
+                  opacity: selectedPingPreset === null ? 0.45 : 1,
+                  alignSelf: "stretch",
+                  backgroundColor: colors.accent,
+                  borderColor: colors.accent,
+                },
+              ]}
+            >
+              <Text style={[styles.primaryBtnText, { color: colors.surface1 }]}>Send</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
+      {nicknameEditorOpen && selected ? (
+        <View style={[styles.overlay, { backgroundColor: withAlpha(colors.textPrimary, isDark ? 0.5 : 0.16) }]}>
+          <Pressable
+            style={StyleSheet.absoluteFillObject}
+            onPress={() => setNicknameEditorOpen(false)}
+          />
+          <View style={[styles.modalCard, { backgroundColor: colors.surface2, borderColor: colors.borderElevated }]}>
+            <Text style={{ color: colors.textPrimary, fontWeight: "500", fontSize: 18 }}>
+              Edit nickname
+            </Text>
+            <Text style={{ color: colors.textTertiary }}>
+              This name is only visible to you.
+            </Text>
+            <View style={[styles.inputWrap, { backgroundColor: colors.surface3, borderColor: colors.border }]}>
+              <TextInput
+                value={nicknameValue}
+                onChangeText={setNicknameValue}
+                placeholder="Enter a nickname"
+                placeholderTextColor={withAlpha(colors.muted, 0.7)}
+                style={{ color: colors.textPrimary, fontWeight: "400", fontSize: 15 }}
+              />
+            </View>
+            <Pressable
+              style={[styles.primaryBtn, { backgroundColor: colors.accent, borderColor: colors.accent }]}
+              onPress={handleNicknameSave}
+            >
+              <Text style={[styles.primaryBtnText, { color: colors.surface1 }]}>Save nickname</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
 
       {toast ? (
         <Animated.View entering={FadeIn.duration(180)} style={styles.toast}>
@@ -1708,8 +1768,6 @@ const styles = StyleSheet.create({
   errorBanner: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(244,67,54,0.24)",
-    backgroundColor: "rgba(244,67,54,0.12)",
     padding: 12,
   },
   emptyGraphic: {
@@ -1723,23 +1781,19 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 999,
-    backgroundColor: "rgba(108,99,255,0.18)",
     borderWidth: 1,
-    borderColor: "rgba(108,99,255,0.28)",
   },
   emptyLine: {
     alignSelf: "center",
     width: 54,
     height: 2,
     borderRadius: 999,
-    backgroundColor: "rgba(246,247,255,0.18)",
   },
   emptyBody: {
-    color: "rgba(246,247,255,0.65)",
     textAlign: "center",
     lineHeight: 20,
     maxWidth: 300,
-    fontWeight: "700",
+    fontWeight: "300",
   },
   primaryBtn: {
     minHeight: 46,
@@ -1747,13 +1801,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(108,99,255,0.18)",
     borderWidth: 1,
-    borderColor: "rgba(108,99,255,0.32)",
   },
   primaryBtnText: {
-    color: "#F6F7FF",
-    fontWeight: "900",
+    fontWeight: "500",
     fontSize: 14,
   },
   copyChip: {
@@ -1762,13 +1813,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#1A1A24",
     borderWidth: 1,
-    borderColor: "rgba(246,247,255,0.08)",
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.45)",
     justifyContent: "flex-end",
     padding: 12,
   },
@@ -1776,9 +1824,7 @@ const styles = StyleSheet.create({
     minHeight: "85%",
     maxHeight: "90%",
     borderRadius: 28,
-    backgroundColor: "#1A1A24",
     borderWidth: 1,
-    borderColor: "rgba(246,247,255,0.08)",
     padding: 16,
   },
   sheetHandle: {
@@ -1786,7 +1832,6 @@ const styles = StyleSheet.create({
     height: 5,
     borderRadius: 999,
     alignSelf: "center",
-    backgroundColor: "rgba(246,247,255,0.16)",
     marginBottom: 12,
   },
   detailAvatarRing: {
@@ -1814,8 +1859,6 @@ const styles = StyleSheet.create({
     minHeight: 46,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(246,247,255,0.08)",
-    backgroundColor: "#12121A",
     alignItems: "center",
     justifyContent: "center",
     gap: 4,
@@ -1823,15 +1866,12 @@ const styles = StyleSheet.create({
   sectionCard: {
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(246,247,255,0.08)",
-    backgroundColor: "#12121A",
     padding: 14,
     gap: 10,
   },
   sectionLabel: {
-    color: "rgba(246,247,255,0.52)",
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "500",
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
@@ -1850,15 +1890,11 @@ const styles = StyleSheet.create({
     minHeight: 92,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(246,247,255,0.08)",
-    backgroundColor: "#12121A",
     padding: 14,
   },
   actionsCard: {
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(246,247,255,0.08)",
-    backgroundColor: "#12121A",
     padding: 14,
   },
   actionRow: {
@@ -1866,25 +1902,20 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   actionPrimary: {
-    color: "#A6A0FF",
     fontSize: 15,
-    fontWeight: "900",
+    fontWeight: "400",
   },
   actionNeutral: {
-    color: "#E8E8EE",
     fontSize: 15,
-    fontWeight: "800",
+    fontWeight: "400",
   },
   actionDanger: {
-    color: "#F87171",
     fontSize: 15,
-    fontWeight: "900",
+    fontWeight: "400",
   },
   modalCard: {
     borderRadius: 24,
-    backgroundColor: "#1A1A24",
     borderWidth: 1,
-    borderColor: "rgba(246,247,255,0.08)",
     padding: 16,
     gap: 14,
   },
@@ -1905,8 +1936,6 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(246,247,255,0.08)",
-    backgroundColor: "#12121A",
     paddingHorizontal: 14,
     justifyContent: "center",
   },
@@ -1919,8 +1948,6 @@ const styles = StyleSheet.create({
     minHeight: 64,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(246,247,255,0.08)",
-    backgroundColor: "#12121A",
     padding: 12,
   },
   rowBetween: {
@@ -1937,8 +1964,6 @@ const styles = StyleSheet.create({
     minHeight: 46,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(108,99,255,0.28)",
-    backgroundColor: "#1A1A24",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 14,

@@ -35,20 +35,20 @@ export default function FriendProfilePage() {
   }, [profile, visibility]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#0D0D0F" }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 24, gap: 14 }}>
         <Pressable onPress={() => router.back()} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <Ionicons name="chevron-back" size={18} color={colors.muted} />
           <Text style={{ color: colors.muted, fontWeight: "800" }}>Back</Text>
         </Pressable>
-        <View style={{ borderRadius: 22, borderWidth: 1, borderColor: withAlpha(colors.text, 0.08), backgroundColor: "#1A1A24", padding: 16, gap: 8 }}>
+        <View style={{ borderRadius: 22, borderWidth: 1, borderColor: withAlpha(colors.text, 0.08), backgroundColor: colors.surface1, padding: 16, gap: 8 }}>
           <View style={{ width: 52, height: 52, borderRadius: 999, backgroundColor: withAlpha(colors.primary, 0.18), alignItems: "center", justifyContent: "center" }}>
             <Text style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}>{name[0]?.toUpperCase() || "F"}</Text>
           </View>
           <Text style={{ color: colors.text, fontWeight: "900", fontSize: 22 }}>{name}</Text>
           <Text style={{ color: colors.muted, fontWeight: "700" }}>Private connection</Text>
         </View>
-        <View style={{ borderRadius: 22, borderWidth: 1, borderColor: withAlpha(colors.text, 0.08), backgroundColor: "#1A1A24", padding: 16, gap: 10 }}>
+        <View style={{ borderRadius: 22, borderWidth: 1, borderColor: withAlpha(colors.text, 0.08), backgroundColor: colors.surface1, padding: 16, gap: 10 }}>
           <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "900", letterSpacing: 0.8, textTransform: "uppercase" }}>
             Shared with you
           </Text>
