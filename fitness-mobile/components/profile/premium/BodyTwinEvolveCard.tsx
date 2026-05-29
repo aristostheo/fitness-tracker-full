@@ -54,7 +54,7 @@ export function BodyTwinEvolveCard(props: {
       : `${fmt.num1(props.targetWeightKg * 2.20462)} lb`;
   }, [props.targetWeightKg, props.unit]);
   const ringSize = 118;
-  const ringStroke = 5;
+  const ringStroke = 4;
   const ringRadius = (ringSize - ringStroke) / 2;
   const ringCirc = 2 * Math.PI * ringRadius;
 
@@ -104,7 +104,7 @@ export function BodyTwinEvolveCard(props: {
               cx={ringSize / 2}
               cy={ringSize / 2}
               r={ringRadius}
-              stroke={withAlpha(colors.primary, isDark ? 0.2 : 0.14)}
+              stroke={withAlpha(colors.accent, isDark ? 0.2 : 0.14)}
               strokeWidth={ringStroke}
               fill="transparent"
             />
@@ -112,8 +112,7 @@ export function BodyTwinEvolveCard(props: {
               cx={ringSize / 2}
               cy={ringSize / 2}
               r={ringRadius}
-              stroke={colors.primary}
-              strokeOpacity={0.78}
+              stroke={colors.accent}
               strokeWidth={ringStroke}
               fill="transparent"
               strokeDasharray={`${ringCirc} ${ringCirc}`}
@@ -127,14 +126,14 @@ export function BodyTwinEvolveCard(props: {
           <View
             style={[
               styles.ringMid,
-              { borderColor: withAlpha(colors.primary, isDark ? 0.28 : 0.18) },
+              { borderColor: withAlpha(colors.accent, isDark ? 0.28 : 0.18) },
             ]}
           >
             <View
               style={[
                 styles.ringInner,
                 {
-                  borderColor: withAlpha(colors.primary, isDark ? 0.22 : 0.14),
+                  borderColor: withAlpha(colors.accent, isDark ? 0.22 : 0.14),
                 },
               ]}
             >
@@ -159,31 +158,33 @@ export function BodyTwinEvolveCard(props: {
 
       <View style={{ height: 12 }} />
 
-      <View style={{ flexDirection: "row", gap: 10 }}>
+      <View style={{ flexDirection: "row", gap: 8 }}>
         <Chip
           label="Progress"
           value={`${progressPct}%`}
           subLabel="How close to your goal physique"
         />
-        <Chip label="Goal" value={goalLabel} />
+        <Chip label="Goal" value={`Goal · ${goalLabel}`} />
       </View>
     </GlassCard>
   );
 }
 
 function Chip({ label, value, subLabel }: { label: string; value: string; subLabel?: string }) {
-  const { colors, isDark } = useTheme() as any;
+  const { colors } = useTheme() as any;
   return (
     <View style={styles.chip}>
-      <Text style={{ color: colors.textTertiary, fontSize: 11, fontWeight: "300" }}>{label}</Text>
+      <Text style={{ color: colors.textTertiary, fontSize: 9, fontWeight: "400" }} numberOfLines={1}>
+        {label}
+      </Text>
       <Text
-        style={{ color: colors.textPrimary, fontWeight: "500", marginTop: 4 }}
+        style={{ color: colors.textPrimary, fontSize: 14, fontWeight: "600", marginTop: 3 }}
         numberOfLines={1}
       >
         {value}
       </Text>
       {subLabel ? (
-        <Text style={{ color: colors.textTertiary, fontSize: 10.5, marginTop: 3, lineHeight: 13, fontWeight: "300" }}>
+        <Text style={{ color: colors.textTertiary, fontSize: 9, marginTop: 3, lineHeight: 12, fontWeight: "300" }} numberOfLines={2}>
           {subLabel}
         </Text>
       ) : null}
@@ -233,7 +234,8 @@ const styles = StyleSheet.create({
   core: { borderWidth: 1, alignItems: "center", justifyContent: "center" },
   chip: {
     flex: 1,
-    borderRadius: 16,
-    padding: 10,
+    minWidth: 0,
+    borderRadius: 14,
+    padding: 8,
   },
 });

@@ -1942,18 +1942,17 @@ function fmtTime(ms: number) {
         index={index}
         onPress={() =>
           router.push({
-            pathname: "/workouts/recap",
-            params: { sessionKey: w.id }, // ✅ opens recap
+            pathname: "/workouts/session-detail",
+            params: { sessionKey: w.id },
+          } as any)
+        }
+        onMore={() =>
+          router.push({
+            pathname: "/workouts/session-detail",
+            params: { sessionKey: w.id, focus: "actions" },
           } as any)
         }
         onDuplicate={() => duplicateRecent(w)}
-        onDelete={() => deleteRecent(w)}
-        onSaveTemplate={() =>
-          router.push({
-            pathname: "/(modals)/save-workout-as-templates",
-            params: { sessionKey: w.id, defaultName: w.title },
-          } as any)
-        }
       />
     );
   };

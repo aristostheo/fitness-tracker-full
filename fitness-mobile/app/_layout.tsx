@@ -26,6 +26,7 @@ import { AuthProvider, useAuth } from "@/content/AuthContext";
 import { ThemeProvider, useTheme } from "@/content/ThemeProvider";
 import { SettingsProvider } from "@/content/SettingsContext";
 import { startIntegrationAutoSync } from "@/services/integrations";
+import { SomataIcon } from "@/components/brand/SomataIcon";
 
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
@@ -184,52 +185,11 @@ function Gate() {
             gap: 14,
           }}
         >
-          <View
-            style={{
-              width: 78,
-              height: 78,
-              borderRadius: 20,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "#fff",
-              borderWidth: 1,
-              borderColor: isDark
-                ? "rgba(255,255,255,0.06)"
-                : "rgba(0,0,0,0.03)",
-              shadowColor: "#000",
-              shadowOpacity: 0.12,
-              shadowRadius: 16,
-              shadowOffset: { width: 0, height: 10 },
-              elevation: 8,
-            }}
-          >
-            <View
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 12,
-                backgroundColor: colors.primary,
-                alignItems: "center",
-                justifyContent: "center",
-                transform: [{ rotate: "-8deg" }],
-              }}
-            >
-              <Text
-                style={{
-                  color: "#fff",
-                  fontWeight: "800",
-                  fontSize: 18,
-                  letterSpacing: 0.6,
-                }}
-              >
-                Fit
-              </Text>
-            </View>
-          </View>
+          <SomataIcon size={120} />
           <View style={{ alignItems: "center", gap: 4 }}>
             <ActivityIndicator color={colors.primary} />
             <Text style={{ color: colors.muted, fontSize: 14 }}>
-              Loading your plan…
+              Loading Somata…
             </Text>
           </View>
         </View>

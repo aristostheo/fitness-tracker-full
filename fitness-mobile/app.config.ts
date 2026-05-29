@@ -2,12 +2,18 @@ import "dotenv/config";
 import type { ExpoConfig } from "expo/config";
 
 const config: ExpoConfig = {
-  name: "fitness-mobile",
+  name: "Somata",
   slug: "fitness-mobile",
   scheme: "fitnessmobile",
   version: "1.0.0",
   orientation: "portrait",
   platforms: ["ios", "android"],
+  icon: "./assets/images/icon.png",
+  splash: {
+    image: "./assets/images/icon.png",
+    resizeMode: "contain",
+    backgroundColor: "#0a0812",
+  },
 
   plugins: [
     "expo-dev-client",
@@ -27,6 +33,7 @@ const config: ExpoConfig = {
   ],
 
   ios: {
+    icon: "./assets/images/icon.png",
     bundleIdentifier: "com.aristos.fitnessmobile",
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
@@ -37,6 +44,16 @@ const config: ExpoConfig = {
       NSCameraUsageDescription:
         "We use the camera to scan food barcodes to auto-fill nutrition.",
     },
+  },
+
+  android: {
+    icon: "./assets/images/icon.png",
+    adaptiveIcon: {
+      foregroundImage: "./assets/images/icon.png",
+      backgroundColor: "#0a0812",
+    },
+    edgeToEdgeEnabled: true,
+    predictiveBackGestureEnabled: false,
   },
 
   updates: {

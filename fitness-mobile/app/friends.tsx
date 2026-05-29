@@ -141,7 +141,9 @@ function toMillis(t: any) {
 
 function accentFromSeed(seed: string, palette: string[]) {
   const hash = seed.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-  return palette[Math.abs(hash) % palette.length];
+  const safePalette = palette.filter(Boolean);
+  if (!safePalette.length) return "";
+  return safePalette[Math.abs(hash) % safePalette.length];
 }
 
 function isoDate(d: Date) {
@@ -700,7 +702,14 @@ export default function FriendsPage() {
   }, [accepted, friendProfiles]);
 
   const accentPalette = useMemo(
-    () => [colors.accent, colors.info, colors.success, colors.warning, colors.danger],
+    () =>
+      [
+        colors.accent,
+        colors.info || colors.accent,
+        colors.success || colors.accent,
+        colors.warning || colors.accent,
+        colors.danger || colors.accent,
+      ].filter(Boolean),
     [colors.accent, colors.info, colors.success, colors.warning, colors.danger]
   );
 

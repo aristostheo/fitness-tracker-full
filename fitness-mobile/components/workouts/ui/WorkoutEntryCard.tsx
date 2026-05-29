@@ -1,6 +1,5 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import {
-  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -37,6 +36,7 @@ type Props = {
   onDuplicate?: () => void;
   onSaveTemplate?: () => void;
   onDelete?: () => void | Promise<void>;
+  onMore?: () => void;
   index?: number;
 };
 
@@ -202,101 +202,16 @@ function Ring({
   );
 }
 
-function ActionMenu({
-  visible,
-  onClose,
-  colors,
-  onDuplicate,
-  onSaveTemplate,
-  onDelete,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  colors: any;
-  onDuplicate?: () => void;
-  onSaveTemplate?: () => void;
-  onDelete?: () => void;
-}) {
-  if (!visible) return null;
-  return (
-    <Modal transparent animationType="fade" visible onRequestClose={onClose}>
-      <Pressable style={[styles.modalBackdrop, { backgroundColor: withAlpha(colors.textPrimary, 0.16) }]} onPress={onClose}>
-        <Pressable
-          onPress={() => {}}
-          style={[
-            styles.menuCard,
-            {
-              backgroundColor: colors.surface1,
-              borderColor: colors.borderElevated,
-              shadowColor: "#000000",
-            },
-          ]}
-        >
-          <MenuRow
-            icon="copy-outline"
-            title="Duplicate"
-            colors={colors}
-            onPress={() => {
-              onClose();
-              onDuplicate?.();
-            }}
-          />
-          <MenuRow
-            icon="bookmark-outline"
-            title="Save as template"
-            colors={colors}
-            onPress={() => {
-              onClose();
-              onSaveTemplate?.();
-            }}
-          />
-          <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-          <MenuRow
-            icon="trash-outline"
-            title="Delete"
-            colors={{ ...colors, rowTint: colors.danger }}
-            onPress={() => {
-              onClose();
-              onDelete?.();
-            }}
-          />
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
-function MenuRow({
-  icon,
-  title,
-  colors,
-  onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  colors: any;
-  onPress: () => void;
-}) {
-  const tint = colors.rowTint || colors.textSecondary;
-  return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.menuRow, pressed && { opacity: 0.85 }]}>
-      <Ionicons name={icon} size={16} color={tint} />
-      <Text style={[styles.menuText, { color: tint }]}>{title}</Text>
-      <Ionicons name="chevron-forward" size={14} color={colors.textTertiary} />
-    </Pressable>
-  );
-}
-
 export function WorkoutEntryCardPremium({
   summary,
   onPress,
   onDuplicate,
   onSaveTemplate,
   onDelete,
+  onMore,
   index = 0,
 }: Props) {
   const { colors, isDark } = useTheme();
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const token = useMemo(
     () => ({
@@ -373,7 +288,10 @@ export function WorkoutEntryCardPremium({
             </Text>
           </View>
           <Pressable
-            onPress={() => setMenuOpen(true)}
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              onMore?.();
+            }}
             style={[styles.moreButton, { backgroundColor: token.surface3 }]}
           >
             <Ionicons name="ellipsis-horizontal" size={14} color={token.textTertiary} />
@@ -455,15 +373,6 @@ export function WorkoutEntryCardPremium({
             <Text style={[styles.duplicateText, { color: token.textSecondary }]}>Duplicate</Text>
           </Pressable>
         </View>
-
-        <ActionMenu
-          visible={menuOpen}
-          onClose={() => setMenuOpen(false)}
-          colors={token}
-          onDuplicate={onDuplicate}
-          onSaveTemplate={onSaveTemplate}
-          onDelete={requestDelete}
-        />
       </Pressable>
     </Animated.View>
   );
@@ -610,37 +519,5 @@ const styles = StyleSheet.create({
   duplicateText: {
     fontSize: 11,
     fontWeight: "400",
-  },
-  modalBackdrop: {
-    flex: 1,
-    justifyContent: "flex-end",
-    padding: 16,
-  },
-  menuCard: {
-    borderWidth: 1,
-    borderRadius: 20,
-    padding: 12,
-    gap: 2,
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 24,
-    elevation: 3,
-  },
-  menuRow: {
-    minHeight: 40,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  menuText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: "400",
-  },
-  menuDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginVertical: 4,
   },
 });

@@ -30,12 +30,12 @@ export function RequestRowPremium({
   );
   const avatarPalette = [
     colors.accent,
-    colors.info,
-    colors.success,
-    colors.warning,
-    colors.danger,
-  ];
-  const avatar = avatarPalette[hue % avatarPalette.length];
+    colors.info || colors.accent,
+    colors.success || colors.accent,
+    colors.warning || colors.accent,
+    colors.danger || colors.accent,
+  ].filter(Boolean);
+  const avatar = avatarPalette[hue % avatarPalette.length] || colors.accent;
 
   return (
     <Pressable onPress={onOpenActions}>

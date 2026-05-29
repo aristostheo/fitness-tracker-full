@@ -105,6 +105,8 @@ export type Profile = {
   recoveryScore?: number;
   bloodOxygenPct?: number;
   waistCm?: number;
+  neckCm?: number;
+  hipCm?: number;
   healthLastUpdatedVia?: string;
   healthLastUpdatedAt?: number;
   macroEngineMode?: "cut" | "maintain" | "lean_bulk" | "bulk";
