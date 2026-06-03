@@ -19,9 +19,9 @@ import { MotiView } from "moti";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getAuth } from "firebase/auth";
 
 import { useTheme } from "@/content/ThemeProvider";
+import { callOpenAIJson } from "@/services/openai";
 import PremiumModalSheet, {
   PremiumActionButton,
 } from "@/components/ui/PremiumModalSheet";
@@ -72,10 +72,6 @@ type MealCategory = "Breakfast" | "Lunch" | "Dinner" | "Snack";
 
 const PENDING_BATCH_KEY = "@pending_add_meal_batch_v1";
 const DAILY_SCAN_LIMIT = 2;
-const AI_DESCRIBE_URL =
-  process.env.AI_DESCRIBE_URL ||
-  "https://us-central1-fitness-tracker-25254.cloudfunctions.net/describe";
-
 function withAlpha(color: string, alpha = 0.2) {
   if (!color) return `rgba(0,0,0,${alpha})`;
   if (color.startsWith("rgb")) {
@@ -212,26 +208,32 @@ async function reanalyzeFoodMacros(food: DetectedFood) {
   const unit = String(food.portion?.unit ?? "serving");
   const query = `${amount} ${unit} ${food.name}`.trim();
 
-  const token = await getAuth().currentUser?.getIdToken(true);
-  const res = await fetch(AI_DESCRIBE_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({
-      mode: "meal:v2",
-      query,
-      rawText: query,
-      context: { source: "scan-edit" },
-    }),
-  });
+  const parsed = await callOpenAIJson<any>(
+    [
+      {
+        role: "system",
+        content:
+          "You estimate meal macros for the Somata app. Return valid JSON only.",
+      },
+      {
+        role: "user",
+        content: `Estimate macros for this single food. Return JSON only:
+${query}
 
-  const raw = await res.text();
-  if (!res.ok) throw new Error(raw || `Describe failed (${res.status})`);
-
-  const parsed = safeJsonParse(raw) ?? extractJsonFromText(raw);
+{
+  "calories": number,
+  "protein": number,
+  "carbs": number,
+  "fat": number,
+  "fiber": number | null,
+  "sugar": number | null,
+  "sodiumMg": number | null,
+  "satFat": number | null
+}`,
+      },
+    ],
+    { maxTokens: 700, temperature: 0.3 }
+  );
   if (!parsed) return null;
   const macros = normalizeDescribeMacros(parsed);
   const hasAny =
@@ -454,7 +456,7 @@ export default function ScanMealV2Screen() {
     if (!ok) return;
 
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       quality: 0.9,
       allowsEditing: true,
       aspect: [4, 3],

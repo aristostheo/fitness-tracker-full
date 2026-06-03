@@ -30,6 +30,10 @@ export type ThemeColors = {
   chartSecondary: string;
   primary: string;
   accent: string;
+  accentMuted: string;
+  accentDim: string;
+  accentSubtle: string;
+  accentForeground: string;
 
   // NEW semantic tokens
   bg: string;
@@ -100,6 +104,78 @@ export function useTheme() {
 const DEFAULT_PRIMARY = "#7B6FFF";
 const DEFAULT_ACCENT = "#7B6FFF";
 const DEFAULT_STYLE: GradientPairingStyle = "balanced";
+
+function hexToHSL(hex: string): { h: number; s: number; l: number } {
+  const normalized = hex.replace("#", "");
+  const r = parseInt(normalized.slice(0, 2), 16) / 255;
+  const g = parseInt(normalized.slice(2, 4), 16) / 255;
+  const b = parseInt(normalized.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+        break;
+      case g:
+        h = ((b - r) / d + 2) / 6;
+        break;
+      case b:
+        h = ((r - g) / d + 4) / 6;
+        break;
+    }
+  }
+
+  return { h: h * 360, s: s * 100, l: l * 100 };
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const sat = s / 100;
+  const light = l / 100;
+  const a = sat * Math.min(light, 1 - light);
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const color = light - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color)
+      .toString(16)
+      .padStart(2, "0");
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+function sanitizeAccentColor(hex: string, isDark: boolean): string {
+  const { h, s, l } = hexToHSL(hex);
+  if (isDark) {
+    return hslToHex(h, Math.min(Math.max(s, 40), 75), Math.min(Math.max(l, 50), 70));
+  }
+  return hslToHex(h, Math.min(Math.max(s, 45), 85), Math.min(Math.max(l, 30), 55));
+}
+
+function deriveAccentPalette(baseHex: string, isDark: boolean) {
+  const safe = sanitizeAccentColor(baseHex, isDark);
+  const { h, s, l } = hexToHSL(safe);
+  const adjustedS = isDark ? Math.min(s, 75) : Math.min(s, 85);
+  const adjustedL = isDark ? Math.max(l, 55) : Math.min(l, 50);
+  const accent = hslToHex(h, adjustedS, adjustedL);
+  return {
+    accent,
+    accentMuted: hslToHex(
+      h,
+      Math.max(28, adjustedS * 0.7),
+      isDark ? Math.max(48, adjustedL * 0.9) : Math.min(58, adjustedL * 1.08)
+    ),
+    accentDim: hslToHex(h, Math.max(18, adjustedS * 0.4), isDark ? 20 : 92),
+    accentSubtle: hslToHex(h, Math.max(22, adjustedS * 0.55), isDark ? 28 : 85),
+    accentForeground: adjustedL > 60 ? "#0A0A14" : "#F0F0FF",
+    accentRaw: safe,
+  };
+}
 
 const STORAGE_KEYS = {
   MODE: "@theme:mode",
@@ -334,6 +410,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const accent = activeAccents.accent ?? DEFAULT_ACCENT;
 
   const colors: ThemeColors = useMemo(() => {
+    const accentPalette = deriveAccentPalette(accent, isDark);
     if (isDark) {
       const background = "#08080F";
       const text = "#F0F0FF";
@@ -347,14 +424,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         placeholder: "#444466",
         inputBg: "#1C1C2E",
         inputBorder: "#FFFFFF12",
-        chipActiveBg: "#7B6FFF20",
-        chipActiveText: "#F0F0FF",
-        buttonBg: primary,
-        buttonText: "#F0F0FF",
+        chipActiveBg: accentPalette.accentDim,
+        chipActiveText: accentPalette.accentForeground,
+        buttonBg: accentPalette.accent,
+        buttonText: accentPalette.accentForeground,
         chartPrimary: primary,
-        chartSecondary: accent,
+        chartSecondary: accentPalette.accentMuted,
         primary,
-        accent,
+        accent: accentPalette.accent,
+        accentMuted: accentPalette.accentMuted,
+        accentDim: accentPalette.accentDim,
+        accentSubtle: accentPalette.accentSubtle,
+        accentForeground: accentPalette.accentForeground,
 
         bg: background,
         surface: "#0F0F1A",
@@ -388,14 +469,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       placeholder: "#AAABCC",
       inputBg: "#EAEAF2",
       inputBorder: "#00000012",
-      chipActiveBg: "#6355E810",
-      chipActiveText: "#0A0A1A",
-      buttonBg: primary,
-      buttonText: "#FFFFFF",
-      chartPrimary: primary,
-      chartSecondary: accent,
-      primary,
-      accent,
+        chipActiveBg: accentPalette.accentDim,
+        chipActiveText: accentPalette.accentForeground,
+        buttonBg: accentPalette.accent,
+        buttonText: accentPalette.accentForeground,
+        chartPrimary: primary,
+        chartSecondary: accentPalette.accentMuted,
+        primary,
+        accent: accentPalette.accent,
+        accentMuted: accentPalette.accentMuted,
+        accentDim: accentPalette.accentDim,
+        accentSubtle: accentPalette.accentSubtle,
+        accentForeground: accentPalette.accentForeground,
 
       bg: background,
       surface: "#FFFFFF",

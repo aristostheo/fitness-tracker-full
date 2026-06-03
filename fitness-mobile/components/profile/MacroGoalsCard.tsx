@@ -69,7 +69,7 @@ export default function MacroGoalsCard({
             justifyContent: "center",
           }}
         >
-          <Ionicons name="barbell-outline" size={18} color={colors.accent} />
+          <Ionicons name="barbell-outline" size={18} color={colors.accentMuted} />
         </View>
         <View style={{ flex: 1, gap: 4 }}>
           <Text style={{ color: colors.textPrimary, fontWeight: "500", fontSize: 16 }}>

@@ -1703,15 +1703,7 @@ export default function AddMealModal() {
   );
 
   /* ───────────── Describe ───────────── */
-  const expoExtra =
-    (Constants?.expoConfig?.extra as any) ||
-    ((Constants as any)?.manifest?.extra as any) ||
-    {};
-  const AI_URL =
-    process.env.EXPO_PUBLIC_AI_DESCRIBE_URL ||
-    process.env.AI_DESCRIBE_URL ||
-    expoExtra.AI_DESCRIBE_URL ||
-    "https://us-central1-fitness-tracker-25254.cloudfunctions.net/describe";
+  const AI_URL = "https://api.openai.com/v1/chat/completions";
 
   async function calculateFromDescription() {
     const text = descText.trim();
@@ -1772,7 +1764,7 @@ export default function AddMealModal() {
         setDescError(
           parsed?.fallbackReason
             ? `AI estimate failed: ${String(parsed.fallbackReason).slice(0, 160)}`
-            : "AI estimate is falling back to a generic rule estimate. Check the describe function logs / OpenAI key.",
+            : "AI estimate is falling back to a generic rule estimate.",
         );
         return;
       }

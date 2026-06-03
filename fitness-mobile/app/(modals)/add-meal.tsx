@@ -29,11 +29,9 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MotiView } from "moti";
 import * as Haptics from "expo-haptics";
-import { getAuth } from "firebase/auth";
 import {
   CameraView,
   useCameraPermissions,
@@ -49,6 +47,7 @@ import {
   type RecentFood,
 } from "@/services/nutritionRecents";
 import { searchCatalog } from "@/services/foodCatalog";
+import { callOpenAIJson } from "@/services/openai";
 
 // Optional (you already import this in your file)
 import MealHealthScoreIndicator from "@/components/nutrition/uiNew/MealHealthScoreIndicator";
@@ -1758,16 +1757,6 @@ export default function AddMealModal() {
   );
 
   /* ───────────── Describe ───────────── */
-  const expoExtra =
-    (Constants?.expoConfig?.extra as any) ||
-    ((Constants as any)?.manifest?.extra as any) ||
-    {};
-  const AI_URL =
-    process.env.EXPO_PUBLIC_AI_DESCRIBE_URL ||
-    process.env.AI_DESCRIBE_URL ||
-    expoExtra.AI_DESCRIBE_URL ||
-    "https://us-central1-fitness-tracker-25254.cloudfunctions.net/describe";
-
   async function calculateFromDescription() {
     const text = descText.trim();
     if (!text) return;
@@ -1776,58 +1765,32 @@ export default function AddMealModal() {
     setDescError(null);
 
     try {
-      const token = await getAuth().currentUser?.getIdToken(true);
-
-      const payload = {
-        mode: "meal:v2",
-        query: text,
-        rawText: text,
-        context: { meal, date },
-      };
-
-      const res = await fetch(AI_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      const parsed = await callOpenAIJson<any>(
+        [
+          {
+            role: "system",
+            content:
+              "You estimate nutrition from a short meal description. Respond with JSON only. Output an object with name, unit, qty, calories, protein, carbs, fat, optional sugar and fiber.",
+          },
+          {
+            role: "user",
+            content: `Estimate nutrition for this ${meal} entry on ${date}: ${text}`,
+          },
+        ],
+        {
+          model: "gpt-4o-mini",
+          maxTokens: 500,
+          temperature: 0.4,
+          retryTemperature: 0.25,
         },
-        body: JSON.stringify(payload),
-      });
-
-      if (res.status === 401) {
-        setDescError("Please sign in to use Describe.");
-        return;
-      }
-
-      const raw = await res.text();
-      if (!res.ok) {
-        const snippet = raw?.trim()?.slice(0, 160);
-        setDescError(
-          `Describe failed (${res.status}). ${
-            snippet ? `Server says: ${snippet}` : "No response body."
-          }`,
-        );
-        return;
-      }
-
-      const parsed = safeJsonParse(raw) ?? extractJsonFromText(raw);
-      if (!parsed) {
-        const snippet = raw?.trim()?.slice(0, 160);
-        setDescError(
-          `Describe returned non-JSON. ${
-            snippet ? `Response: ${snippet}` : "Empty response."
-          }`,
-        );
-        return;
-      }
+      );
 
       const item = normalizeDescribeItem(parsed, text);
       if (parsed?.fallback) {
         setDescError(
           parsed?.fallbackReason
             ? `AI estimate failed: ${String(parsed.fallbackReason).slice(0, 160)}`
-            : "AI estimate is falling back to a generic rule estimate. Check the describe function logs / OpenAI key.",
+            : "AI estimate is falling back to a generic rule estimate.",
         );
         return;
       }

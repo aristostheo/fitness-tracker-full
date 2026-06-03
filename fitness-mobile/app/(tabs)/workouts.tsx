@@ -1099,6 +1099,8 @@ export default function WorkoutsPage() {
     return subscribeProfile(user.uid, (next) => setProfile(next || null));
   }, [user?.uid]);
 
+  useEffect(() => subscribeIntegrations(setCoachIntegrations), []);
+
   useEffect(() => {
     AsyncStorage.getItem(TEMPLATE_KEEP_KEY)
       .then((raw) => {
@@ -1159,6 +1161,8 @@ export default function WorkoutsPage() {
 
   const [templateActionsOpen, setTemplateActionsOpen] = useState(false);
   const [activeTemplate, setActiveTemplate] = useState<TemplateVM | null>(null);
+  const [coachIntegrations, setCoachIntegrations] =
+    useState<IntegrationSnapshot | null>(null);
 
   function openTemplateActions(t: TemplateVM) {
     setActiveTemplate(t);
@@ -1829,6 +1833,24 @@ function fmtTime(ms: number) {
     setSurpriseOpen(true);
   };
 
+  const coachSparkContextLine = useMemo(() => {
+    const recovery = getRecoveryMetrics(coachIntegrations);
+    const latest = recents[0];
+    if (recovery?.recoveryScore != null) {
+      const score = Math.round(recovery.recoveryScore);
+      if (score < 40) return `Recovery: ${score}% · Consider a lighter session today`;
+      if (score < 70) return `Recovery: ${score}% · Consider a moderate session today`;
+      return `Recovery: ${score}% · Good day to train with intent`;
+    }
+    if (latest?.group === "legs") {
+      return "Last session: Legs · Upper body or rest recommended";
+    }
+    if (!recents.length) {
+      return "No sessions yet this week · Good time to start";
+    }
+    return "Tap to build a personalized workout";
+  }, [coachIntegrations, recents]);
+
   const onCreateTemplate = () => {
     setStartOpen(false);
     router.push("/(modals)/create-template");
@@ -2457,18 +2479,28 @@ function fmtTime(ms: number) {
             <SmallCapsHeader title="AI Coach" />
             <View style={{ marginTop: 10 }}>
               <CoachSparkCardPremium
+                contextLine={coachSparkContextLine}
                 onOpen={() => router.push("/(modals)/coach-spark")}
-                onGenerate={async (sel) => {
+                onQuickPick={(preset) => {
+                  if (preset === "surprise") {
+                    router.push({
+                      pathname: "/(modals)/coach-spark",
+                      params: { instant: "1", quickPreset: "surprise" },
+                    } as any);
+                    return;
+                  }
+                  if (preset === "push") {
+                    router.push({
+                      pathname: "/(modals)/coach-spark",
+                      params: { mode: "quick", focus: "Push" },
+                    } as any);
+                    return;
+                  }
                   router.push({
                     pathname: "/(modals)/coach-spark",
-                    params: {
-                      focus: sel.focus,
-                      duration: String(sel.duration),
-                      style: sel.style,
-                    },
+                    params: { mode: "quick", duration: "15-30" },
                   } as any);
                 }}
-                hasHistorySignal={true}
               />
             </View>
             <RecoveryCoachCard

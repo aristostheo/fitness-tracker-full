@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -25,6 +25,7 @@ import {
   type AppNotification,
 } from "@/services/notifications";
 import { notifyPingSafe } from "@/services/notifications";
+import { notifyFriendPing } from "@/services/notificationTriggers";
 import { pingFriend } from "@/services/friends/friends";
 
 type AlertCategory =
@@ -266,23 +267,23 @@ function groupNotifications(raw: AppNotification[]): GroupedAlert[] {
 function cardMeta(type: AlertCardType, colors: any) {
   switch (type) {
     case "friendPing":
-      return { icon: "notifications-outline" as const, tint: colors.accent };
+      return { icon: "notifications-outline" as const, tint: colors.accentMuted };
     case "streak":
       return { icon: "flame-outline" as const, tint: colors.warning };
     case "coach":
-      return { icon: "sparkles-outline" as const, tint: colors.accent };
+      return { icon: "sparkles-outline" as const, tint: colors.accentMuted };
     case "pr":
       return { icon: "trophy-outline" as const, tint: colors.warning };
     case "goalHit":
       return { icon: "checkmark-circle-outline" as const, tint: colors.success };
     case "friendMilestone":
-      return { icon: "person-outline" as const, tint: colors.accent };
+      return { icon: "person-outline" as const, tint: colors.accentMuted };
     case "syncError":
       return { icon: "warning-outline" as const, tint: colors.danger };
     case "weeklySummary":
-      return { icon: "stats-chart-outline" as const, tint: colors.accent };
+      return { icon: "stats-chart-outline" as const, tint: colors.accentMuted };
     default:
-      return { icon: "notifications-outline" as const, tint: colors.accent };
+      return { icon: "notifications-outline" as const, tint: colors.accentMuted };
   }
 }
 
@@ -294,12 +295,22 @@ export default function AlertsPage() {
   const [raw, setRaw] = useState<AppNotification[]>([]);
   const [filter, setFilter] = useState<AlertCategory>("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const lastLocalPingId = useRef<string | null>(null);
 
   useEffect(() => {
     if (!user?.uid) return;
     const unsub = subscribeNotifications(user.uid, setRaw, { max: 120 });
     return () => unsub && unsub();
   }, [user?.uid]);
+
+  useEffect(() => {
+    const latestPing = raw.find((item) => item.type === "ping" && !item.readAt);
+    if (!latestPing) return;
+    if (lastLocalPingId.current === latestPing.id) return;
+    lastLocalPingId.current = latestPing.id;
+    // NOTIFICATION TRIGGER
+    notifyFriendPing(parseSourceName(latestPing) || "Friend").catch(() => {});
+  }, [raw]);
 
   const grouped = useMemo(() => groupNotifications(raw), [raw]);
   const unreadCount = useMemo(
@@ -400,7 +411,7 @@ export default function AlertsPage() {
                 </Text>
                 <Text
                   style={{
-                    color: unreadCount === 0 ? colors.textTertiary : colors.accent,
+                    color: unreadCount === 0 ? colors.textTertiary : colors.accentMuted,
                     marginTop: 4,
                     fontSize: 12,
                     fontWeight: "300",
@@ -420,11 +431,11 @@ export default function AlertsPage() {
                     alignItems: "center",
                     justifyContent: "center",
                     borderWidth: 1,
-                    borderColor: colors.accent,
+                    borderColor: colors.accentSubtle,
                     backgroundColor: pressed ? colors.surface2 : colors.surface1,
                   })}
                 >
-                  <Text style={{ color: colors.accent, fontWeight: "400", fontSize: 12 }}>
+                  <Text style={{ color: colors.accentMuted, fontWeight: "400", fontSize: 12 }}>
                     Friends →
                   </Text>
                 </Pressable>
@@ -451,9 +462,9 @@ export default function AlertsPage() {
                       paddingHorizontal: 14,
                       borderRadius: 999,
                       borderWidth: 1,
-                      borderColor: active ? colors.accent : colors.border,
+                      borderColor: active ? colors.accentSubtle : colors.border,
                       backgroundColor: active
-                        ? withAlpha(colors.accent, 0.12)
+                        ? colors.accentDim
                         : pressed
                         ? colors.surface3
                         : colors.surface2,
@@ -461,7 +472,7 @@ export default function AlertsPage() {
                       justifyContent: "center",
                     })}
                   >
-                    <Text style={{ color: active ? colors.accent : colors.textSecondary, fontWeight: "400", fontSize: 12 }}>
+                    <Text style={{ color: active ? colors.accentMuted : colors.textSecondary, fontWeight: "400", fontSize: 12 }}>
                       {item.label}
                     </Text>
                   </Pressable>
@@ -510,13 +521,13 @@ export default function AlertsPage() {
                         borderRadius: 14,
                         backgroundColor: colors.surface2,
                         borderWidth: 1,
-                        borderColor: colors.accent,
+                        borderColor: colors.accentSubtle,
                         alignItems: "center",
                         justifyContent: "center",
                       }}
                     >
-                      <Ionicons name="notifications-outline" size={18} color={colors.accent} />
-                      <Text style={{ color: colors.accent, fontWeight: "400", marginTop: 6, fontSize: 12 }}>Ping back</Text>
+                      <Ionicons name="notifications-outline" size={18} color={colors.accentMuted} />
+                      <Text style={{ color: colors.accentMuted, fontWeight: "400", marginTop: 6, fontSize: 12 }}>Ping back</Text>
                     </Pressable>
                   </View>
                 ) : null
@@ -551,7 +562,7 @@ export default function AlertsPage() {
                   borderWidth: 1,
                   borderColor: colors.border,
                   borderLeftWidth: item.item.unread > 0 ? 2 : 1,
-                  borderLeftColor: item.item.unread > 0 ? colors.accent : colors.border,
+                  borderLeftColor: item.item.unread > 0 ? colors.accentSubtle : colors.border,
                   backgroundColor: pressed
                     ? colors.surface2
                     : item.item.unread > 0
@@ -602,11 +613,11 @@ export default function AlertsPage() {
                             alignItems: "center",
                             justifyContent: "center",
                             borderWidth: 1,
-                            borderColor: colors.accent,
-                            backgroundColor: withAlpha(colors.accent, 0.12),
+                            borderColor: colors.accentSubtle,
+                            backgroundColor: colors.accentDim,
                           }}
                         >
-                          <Text style={{ color: colors.accent, fontWeight: "400", fontSize: 11 }}>
+                          <Text style={{ color: colors.accentMuted, fontWeight: "400", fontSize: 11 }}>
                             {item.item.count}
                           </Text>
                         </View>

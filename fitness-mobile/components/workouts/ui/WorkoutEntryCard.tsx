@@ -259,121 +259,122 @@ export function WorkoutEntryCardPremium({
 
   return (
     <Animated.View
-      entering={FadeInDown.duration(320).delay(Math.min(140, index * 18))}
       layout={LinearTransition.springify().damping(18).stiffness(220)}
       style={{ marginBottom: 12 }}
     >
-      <Pressable
-        onPress={() => {
-          Haptics.selectionAsync().catch(() => {});
-          onPress?.();
-        }}
-        style={({ pressed }) => [
-          styles.card,
-          {
-            backgroundColor: token.background,
-            borderColor: token.border,
-          },
-          token.shadowStyle,
-          pressed && { transform: [{ scale: 0.99 }] },
-        ]}
-      >
-        <View style={styles.headerRow}>
-          <View style={{ flex: 1, paddingRight: 12 }}>
-            <Text style={[styles.title, { color: token.textPrimary }]} numberOfLines={1}>
-              {summary.title || "Workout"}
-            </Text>
-            <Text style={[styles.meta, { color: token.textTertiary }]} numberOfLines={1}>
-              {formatDateShort(summary.dateISO, summary.timeLabel)}
-            </Text>
-          </View>
-          <Pressable
-            onPress={() => {
-              Haptics.selectionAsync().catch(() => {});
-              onMore?.();
-            }}
-            style={[styles.moreButton, { backgroundColor: token.surface3 }]}
-          >
-            <Ionicons name="ellipsis-horizontal" size={14} color={token.textTertiary} />
-          </Pressable>
-        </View>
-
-        <View style={styles.middleRow}>
-          <View style={{ flex: 1 }}>
-            <View style={styles.chipsRow}>
-              <StatChip icon="barbell-outline" label={`${summary.exercisesCount} ex`} token={token} />
-              <StatChip icon="layers-outline" label={`${summary.sets} sets`} token={token} />
-              <StatChip icon="pulse-outline" label={`${Math.round(summary.volumeKg)} kg`} token={token} />
-              <StatChip icon="time-outline" label={formatDuration(summary.durationMin)} token={token} />
+      <Animated.View entering={FadeInDown.duration(320).delay(Math.min(140, index * 18))}>
+        <Pressable
+          onPress={() => {
+            Haptics.selectionAsync().catch(() => {});
+            onPress?.();
+          }}
+          style={({ pressed }) => [
+            styles.card,
+            {
+              backgroundColor: token.background,
+              borderColor: token.border,
+            },
+            token.shadowStyle,
+            pressed && { transform: [{ scale: 0.99 }] },
+          ]}
+        >
+          <View style={styles.headerRow}>
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text style={[styles.title, { color: token.textPrimary }]} numberOfLines={1}>
+                {summary.title || "Workout"}
+              </Text>
+              <Text style={[styles.meta, { color: token.textTertiary }]} numberOfLines={1}>
+                {formatDateShort(summary.dateISO, summary.timeLabel)}
+              </Text>
             </View>
+            <Pressable
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                onMore?.();
+              }}
+              style={[styles.moreButton, { backgroundColor: token.surface3 }]}
+            >
+              <Ionicons name="ellipsis-horizontal" size={14} color={token.textTertiary} />
+            </Pressable>
+          </View>
 
-            <View style={styles.intensityRow}>
-              <Text style={[styles.intensityLabel, { color: token.textTertiary }]}>Intensity</Text>
-              <View style={styles.dotsRow}>
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <View
-                    key={`${summary.id}-dot-${i}`}
-                    style={[
-                      styles.dot,
-                      {
-                        backgroundColor: i < activeDots ? token.accent : token.surface3,
-                      },
-                    ]}
-                  />
-                ))}
+          <View style={styles.middleRow}>
+            <View style={{ flex: 1 }}>
+              <View style={styles.chipsRow}>
+                <StatChip icon="barbell-outline" label={`${summary.exercisesCount} ex`} token={token} />
+                <StatChip icon="layers-outline" label={`${summary.sets} sets`} token={token} />
+                <StatChip icon="pulse-outline" label={`${Math.round(summary.volumeKg)} kg`} token={token} />
+                <StatChip icon="time-outline" label={formatDuration(summary.durationMin)} token={token} />
+              </View>
+
+              <View style={styles.intensityRow}>
+                <Text style={[styles.intensityLabel, { color: token.textTertiary }]}>Intensity</Text>
+                <View style={styles.dotsRow}>
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <View
+                      key={`${summary.id}-dot-${i}`}
+                      style={[
+                        styles.dot,
+                        {
+                          backgroundColor: i < activeDots ? token.accent : token.surface3,
+                        },
+                      ]}
+                    />
+                  ))}
+                </View>
               </View>
             </View>
+
+            <Ring
+              score={scorePct}
+              accent={token.accent}
+              track={colors.ringTrack || token.surface3}
+              textPrimary={token.textPrimary}
+              textTertiary={token.textTertiary}
+              descriptorTint={descriptorTint}
+            />
           </View>
 
-          <Ring
-            score={scorePct}
-            accent={token.accent}
-            track={colors.ringTrack || token.surface3}
-            textPrimary={token.textPrimary}
-            textTertiary={token.textTertiary}
-            descriptorTint={descriptorTint}
-          />
-        </View>
+          <View style={styles.bottomCluster}>
+            <View style={styles.bestSetRow}>
+              <View
+                style={[
+                  styles.bestSetChip,
+                  { backgroundColor: token.surface2, borderColor: token.border },
+                ]}
+              >
+                <Ionicons name="sparkles-outline" size={14} color={token.textTertiary} />
+                <Text style={[styles.bestSetLabel, { color: token.textTertiary }]}>Best set</Text>
+                <Text style={[styles.bestSetText, { color: token.textPrimary }]} numberOfLines={1}>
+                  {formatBestSet(summary.highlight?.text)}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.fatigueBadge,
+                  {
+                    backgroundColor: withAlpha(fatigueTint, 0.18),
+                    borderColor: fatigueTint,
+                  },
+                ]}
+              >
+                <Text style={[styles.fatigueText, { color: fatigueTint }]}>{fatigue}</Text>
+              </View>
+            </View>
 
-        <View style={styles.bottomCluster}>
-          <View style={styles.bestSetRow}>
-            <View
+            <Pressable
+              onPress={onDuplicate}
               style={[
-                styles.bestSetChip,
+                styles.duplicateButton,
                 { backgroundColor: token.surface2, borderColor: token.border },
               ]}
             >
-              <Ionicons name="sparkles-outline" size={14} color={token.textTertiary} />
-              <Text style={[styles.bestSetLabel, { color: token.textTertiary }]}>Best set</Text>
-              <Text style={[styles.bestSetText, { color: token.textPrimary }]} numberOfLines={1}>
-                {formatBestSet(summary.highlight?.text)}
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.fatigueBadge,
-                {
-                  backgroundColor: withAlpha(fatigueTint, 0.18),
-                  borderColor: fatigueTint,
-                },
-              ]}
-            >
-              <Text style={[styles.fatigueText, { color: fatigueTint }]}>{fatigue}</Text>
-            </View>
+              <Ionicons name="copy-outline" size={12} color={token.textTertiary} />
+              <Text style={[styles.duplicateText, { color: token.textSecondary }]}>Duplicate</Text>
+            </Pressable>
           </View>
-
-          <Pressable
-            onPress={onDuplicate}
-            style={[
-              styles.duplicateButton,
-              { backgroundColor: token.surface2, borderColor: token.border },
-            ]}
-          >
-            <Ionicons name="copy-outline" size={12} color={token.textTertiary} />
-            <Text style={[styles.duplicateText, { color: token.textSecondary }]}>Duplicate</Text>
-          </Pressable>
-        </View>
-      </Pressable>
+        </Pressable>
+      </Animated.View>
     </Animated.View>
   );
 }

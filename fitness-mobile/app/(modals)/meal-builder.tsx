@@ -623,13 +623,13 @@ export default function MealBuilderScreen() {
     const picker =
       source === "camera"
         ? await ImagePicker.launchCameraAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ["images"],
             quality: 0.9,
             allowsEditing: true,
             aspect: [4, 3],
           })
         : await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ["images"],
             quality: 0.9,
             allowsEditing: true,
             aspect: [4, 3],

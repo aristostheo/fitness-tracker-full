@@ -29,7 +29,9 @@ import {
   ActivityIndicator,
   Linking,
   StatusBar,
+  Modal,
 } from "react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
@@ -62,6 +64,12 @@ import {
   setAccountCenterPrivacySettings,
   DEFAULT_PRIVACY_SETTINGS,
 } from "@/services/account/accountCenterSettings";
+import {
+  DEFAULT_SETTINGS as DEFAULT_NOTIFICATION_SETTINGS,
+  loadNotificationSettings,
+  saveNotificationSettings,
+  type NotificationSettings,
+} from "@/services/notificationSettings";
 
 type ThemeMode = "system" | "light" | "dark";
 
@@ -159,6 +167,14 @@ export default function ControlCenterModal() {
     DEFAULT_PRIVACY_SETTINGS
   );
   const [privacyLoaded, setPrivacyLoaded] = useState(false);
+  const [notificationSettings, setNotificationSettings] =
+    useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
+  const [notificationsLoaded, setNotificationsLoaded] = useState(false);
+  const [timePickerState, setTimePickerState] = useState<{
+    key: string;
+    value: Date;
+    apply: (date: Date) => void;
+  } | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -179,6 +195,24 @@ export default function ControlCenterModal() {
       alive = false;
     };
   }, [user?.uid]);
+
+  useEffect(() => {
+    let alive = true;
+    loadNotificationSettings()
+      .then((next) => {
+        if (!alive) return;
+        setNotificationSettings(next);
+        setNotificationsLoaded(true);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setNotificationSettings(DEFAULT_NOTIFICATION_SETTINGS);
+        setNotificationsLoaded(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const chrome = useMemo(() => {
     const border = withAlpha(colors.text, isDark ? 0.1 : 0.12);
@@ -208,6 +242,47 @@ export default function ControlCenterModal() {
       } catch {}
     },
     [hapticsEnabled]
+  );
+
+  const notifDisabled = !notificationSettings.enabled;
+
+  const formatClock = useCallback((hour: number, minute: number) => {
+    const d = new Date();
+    d.setHours(hour, minute, 0, 0);
+    return d.toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }, []);
+
+  const saveNotifications = useCallback(
+    async (next: NotificationSettings) => {
+      setNotificationSettings(next);
+      await saveNotificationSettings(next);
+    },
+    []
+  );
+
+  const openTimePicker = useCallback(
+    (
+      key: string,
+      hour: number,
+      minute: number,
+      apply: (hour: number, minute: number) => NotificationSettings
+    ) => {
+      const value = new Date();
+      value.setHours(hour, minute, 0, 0);
+      setTimePickerState({
+        key,
+        value,
+        apply: (date) => {
+          saveNotifications(apply(date.getHours(), date.getMinutes())).catch(
+            () => {}
+          );
+        },
+      });
+    },
+    [saveNotifications]
   );
 
   const signedIn = !!user?.uid;
@@ -692,8 +767,8 @@ export default function ControlCenterModal() {
                     styles.avatar,
                     {
                       backgroundColor: withAlpha(
-                        colors.accent,
-                        isDark ? 0.22 : 0.16
+                        colors.accentDim,
+                        isDark ? 0.78 : 0.92
                       ),
                       borderColor: withAlpha(colors.text, isDark ? 0.1 : 0.12),
                     },
@@ -792,9 +867,9 @@ export default function ControlCenterModal() {
                     styles.verifyBanner,
                     {
                       backgroundColor: pressed
-                        ? withAlpha(colors.accent, 0.18)
-                        : withAlpha(colors.accent, 0.14),
-                      borderColor: withAlpha(colors.accent, 0.25),
+                        ? colors.accentDim
+                        : withAlpha(colors.accentDim, 0.92),
+                      borderColor: colors.accentSubtle,
                     },
                   ]}
                 >
@@ -995,7 +1070,7 @@ export default function ControlCenterModal() {
                   onValueChange={(v) => onTogglePrivacy({ shareWorkouts: v })}
                   trackColor={{
                     false: withAlpha(colors.text, 0.18),
-                    true: withAlpha(colors.accent, 0.55),
+                    true: colors.accentMuted,
                   }}
                   thumbColor={Platform.OS === "android" ? undefined : "white"}
                 />
@@ -1013,7 +1088,7 @@ export default function ControlCenterModal() {
                   onValueChange={(v) => onTogglePrivacy({ shareNutrition: v })}
                   trackColor={{
                     false: withAlpha(colors.text, 0.18),
-                    true: withAlpha(colors.accent, 0.55),
+                    true: colors.accentMuted,
                   }}
                   thumbColor={Platform.OS === "android" ? undefined : "white"}
                 />
@@ -1031,7 +1106,7 @@ export default function ControlCenterModal() {
                   onValueChange={(v) => onTogglePrivacy({ shareStreaks: v })}
                   trackColor={{
                     false: withAlpha(colors.text, 0.18),
-                    true: withAlpha(colors.accent, 0.55),
+                    true: colors.accentMuted,
                   }}
                   thumbColor={Platform.OS === "android" ? undefined : "white"}
                 />
@@ -1097,7 +1172,7 @@ export default function ControlCenterModal() {
                   }}
                   trackColor={{
                     false: withAlpha(colors.text, 0.18),
-                    true: withAlpha(colors.accent, 0.55),
+                    true: colors.accentMuted,
                   }}
                   thumbColor={Platform.OS === "android" ? undefined : "white"}
                 />
@@ -1118,7 +1193,7 @@ export default function ControlCenterModal() {
                   }}
                   trackColor={{
                     false: withAlpha(colors.text, 0.18),
-                    true: withAlpha(colors.accent, 0.55),
+                    true: colors.accentMuted,
                   }}
                   thumbColor={Platform.OS === "android" ? undefined : "white"}
                 />
@@ -1143,7 +1218,7 @@ export default function ControlCenterModal() {
                   }}
                   trackColor={{
                     false: withAlpha(colors.text, 0.18),
-                    true: withAlpha(colors.accent, 0.55),
+                    true: colors.accentMuted,
                   }}
                   thumbColor={Platform.OS === "android" ? undefined : "white"}
                 />
@@ -1266,6 +1341,417 @@ export default function ControlCenterModal() {
             />
           </Section>
 
+          <Section
+            title="Notifications"
+            subtitle="Reminders, goals, and social pings."
+            footer="Changes apply immediately and scheduled reminders sync on save."
+            delay={220}
+          >
+            {!notificationsLoaded ? (
+              <View style={{ padding: 16, alignItems: "center" }}>
+                <ActivityIndicator color={colors.accentMuted} />
+              </View>
+            ) : (
+              <>
+                <Row
+                  icon="notifications-outline"
+                  title="All notifications"
+                  hint="Master switch for reminders and alerts"
+                  right={
+                    <Switch
+                      value={notificationSettings.enabled}
+                      onValueChange={(v) =>
+                        saveNotifications({ ...notificationSettings, enabled: v }).catch(
+                          () => {}
+                        )
+                      }
+                      trackColor={{
+                        false: withAlpha(colors.text, 0.18),
+                        true: colors.accentMuted,
+                      }}
+                      thumbColor={Platform.OS === "android" ? undefined : "white"}
+                    />
+                  }
+                />
+                <Divider />
+                <View style={[styles.subSectionPad, notifDisabled && styles.dimmed]}>
+                  <Text style={[styles.sectionMiniLabel, { color: chrome.sub }]}>
+                    MEAL REMINDERS
+                  </Text>
+                </View>
+                <Row
+                  icon="restaurant-outline"
+                  title="Meal reminders"
+                  hint="Breakfast, lunch, dinner, snack"
+                  disabled={notifDisabled}
+                  right={
+                    <Switch
+                      value={notificationSettings.mealReminders.enabled}
+                      onValueChange={(v) =>
+                        saveNotifications({
+                          ...notificationSettings,
+                          mealReminders: {
+                            ...notificationSettings.mealReminders,
+                            enabled: v,
+                          },
+                        }).catch(() => {})
+                      }
+                      trackColor={{
+                        false: withAlpha(colors.text, 0.18),
+                        true: colors.accentMuted,
+                      }}
+                      thumbColor={Platform.OS === "android" ? undefined : "white"}
+                    />
+                  }
+                />
+                {(["breakfast", "lunch", "dinner", "snack"] as const).map((meal) => {
+                  const row = notificationSettings.mealReminders[meal];
+                  return (
+                    <View key={meal}>
+                      <Divider />
+                      <Row
+                        icon="time-outline"
+                        title={row.label.charAt(0).toUpperCase() + row.label.slice(1)}
+                        value={formatClock(row.hour, row.minute)}
+                        hint={row.enabled ? "Scheduled" : "Off"}
+                        disabled={notifDisabled || !notificationSettings.mealReminders.enabled}
+                        onPress={() =>
+                          openTimePicker(
+                            `meal-${meal}`,
+                            row.hour,
+                            row.minute,
+                            (hour, minute) => ({
+                              ...notificationSettings,
+                              mealReminders: {
+                                ...notificationSettings.mealReminders,
+                                [meal]: {
+                                  ...row,
+                                  hour,
+                                  minute,
+                                },
+                              },
+                            })
+                          )
+                        }
+                        right={
+                          <Switch
+                            value={row.enabled}
+                            onValueChange={(v) =>
+                              saveNotifications({
+                                ...notificationSettings,
+                                mealReminders: {
+                                  ...notificationSettings.mealReminders,
+                                  [meal]: {
+                                    ...row,
+                                    enabled: v,
+                                  },
+                                },
+                              }).catch(() => {})
+                            }
+                            disabled={notifDisabled || !notificationSettings.mealReminders.enabled}
+                            trackColor={{
+                              false: withAlpha(colors.text, 0.18),
+                              true: colors.accentMuted,
+                            }}
+                            thumbColor={Platform.OS === "android" ? undefined : "white"}
+                          />
+                        }
+                      />
+                    </View>
+                  );
+                })}
+                <Divider />
+                <View style={[styles.subSectionPad, notifDisabled && styles.dimmed]}>
+                  <Text style={[styles.sectionMiniLabel, { color: chrome.sub }]}>
+                    GOALS & PROGRESS
+                  </Text>
+                </View>
+                <Row
+                  icon="flash-outline"
+                  title="Protein reminder"
+                  value={formatClock(
+                    notificationSettings.proteinReminder.hour,
+                    notificationSettings.proteinReminder.minute
+                  )}
+                  disabled={notifDisabled}
+                  onPress={() =>
+                    openTimePicker(
+                      "protein-reminder",
+                      notificationSettings.proteinReminder.hour,
+                      notificationSettings.proteinReminder.minute,
+                      (hour, minute) => ({
+                        ...notificationSettings,
+                        proteinReminder: {
+                          ...notificationSettings.proteinReminder,
+                          hour,
+                          minute,
+                        },
+                      })
+                    )
+                  }
+                  right={
+                    <Switch
+                      value={notificationSettings.proteinReminder.enabled}
+                      onValueChange={(v) =>
+                        saveNotifications({
+                          ...notificationSettings,
+                          proteinReminder: {
+                            ...notificationSettings.proteinReminder,
+                            enabled: v,
+                          },
+                        }).catch(() => {})
+                      }
+                      disabled={notifDisabled}
+                      trackColor={{
+                        false: withAlpha(colors.text, 0.18),
+                        true: colors.accentMuted,
+                      }}
+                      thumbColor={Platform.OS === "android" ? undefined : "white"}
+                    />
+                  }
+                />
+                <Divider />
+                <Row
+                  icon="flame-outline"
+                  title="Streak protection"
+                  value={formatClock(
+                    notificationSettings.streakReminder.hour,
+                    notificationSettings.streakReminder.minute
+                  )}
+                  disabled={notifDisabled}
+                  onPress={() =>
+                    openTimePicker(
+                      "streak-reminder",
+                      notificationSettings.streakReminder.hour,
+                      notificationSettings.streakReminder.minute,
+                      (hour, minute) => ({
+                        ...notificationSettings,
+                        streakReminder: {
+                          ...notificationSettings.streakReminder,
+                          hour,
+                          minute,
+                        },
+                      })
+                    )
+                  }
+                  right={
+                    <Switch
+                      value={notificationSettings.streakReminder.enabled}
+                      onValueChange={(v) =>
+                        saveNotifications({
+                          ...notificationSettings,
+                          streakReminder: {
+                            ...notificationSettings.streakReminder,
+                            enabled: v,
+                          },
+                        }).catch(() => {})
+                      }
+                      disabled={notifDisabled}
+                      trackColor={{
+                        false: withAlpha(colors.text, 0.18),
+                        true: colors.accentMuted,
+                      }}
+                      thumbColor={Platform.OS === "android" ? undefined : "white"}
+                    />
+                  }
+                />
+                <Divider />
+                <Row
+                  icon="checkmark-circle-outline"
+                  title="Goal hit alerts"
+                  disabled={notifDisabled}
+                  right={
+                    <Switch
+                      value={notificationSettings.goalHitAlerts}
+                      onValueChange={(v) =>
+                        saveNotifications({
+                          ...notificationSettings,
+                          goalHitAlerts: v,
+                        }).catch(() => {})
+                      }
+                      disabled={notifDisabled}
+                      trackColor={{
+                        false: withAlpha(colors.text, 0.18),
+                        true: colors.accentMuted,
+                      }}
+                      thumbColor={Platform.OS === "android" ? undefined : "white"}
+                    />
+                  }
+                />
+                <Divider />
+                <Row
+                  icon="trophy-outline"
+                  title="New PRs"
+                  disabled={notifDisabled}
+                  right={
+                    <Switch
+                      value={notificationSettings.prAlerts}
+                      onValueChange={(v) =>
+                        saveNotifications({
+                          ...notificationSettings,
+                          prAlerts: v,
+                        }).catch(() => {})
+                      }
+                      disabled={notifDisabled}
+                      trackColor={{
+                        false: withAlpha(colors.text, 0.18),
+                        true: colors.accentMuted,
+                      }}
+                      thumbColor={Platform.OS === "android" ? undefined : "white"}
+                    />
+                  }
+                />
+                <Divider />
+                <Row
+                  icon="ribbon-outline"
+                  title="Badge unlocks"
+                  disabled={notifDisabled}
+                  right={
+                    <Switch
+                      value={notificationSettings.badgeAlerts}
+                      onValueChange={(v) =>
+                        saveNotifications({
+                          ...notificationSettings,
+                          badgeAlerts: v,
+                        }).catch(() => {})
+                      }
+                      disabled={notifDisabled}
+                      trackColor={{
+                        false: withAlpha(colors.text, 0.18),
+                        true: colors.accentMuted,
+                      }}
+                      thumbColor={Platform.OS === "android" ? undefined : "white"}
+                    />
+                  }
+                />
+                <Divider />
+                <View style={[styles.subSectionPad, notifDisabled && styles.dimmed]}>
+                  <Text style={[styles.sectionMiniLabel, { color: chrome.sub }]}>
+                    SOCIAL
+                  </Text>
+                </View>
+                <Row
+                  icon="notifications-circle-outline"
+                  title="Friend pings"
+                  disabled={notifDisabled}
+                  right={
+                    <Switch
+                      value={notificationSettings.friendPings}
+                      onValueChange={(v) =>
+                        saveNotifications({
+                          ...notificationSettings,
+                          friendPings: v,
+                        }).catch(() => {})
+                      }
+                      disabled={notifDisabled}
+                      trackColor={{
+                        false: withAlpha(colors.text, 0.18),
+                        true: colors.accentMuted,
+                      }}
+                      thumbColor={Platform.OS === "android" ? undefined : "white"}
+                    />
+                  }
+                />
+                <Divider />
+                <Row
+                  icon="people-outline"
+                  title="Friend milestones"
+                  disabled={notifDisabled}
+                  right={
+                    <Switch
+                      value={notificationSettings.friendMilestones}
+                      onValueChange={(v) =>
+                        saveNotifications({
+                          ...notificationSettings,
+                          friendMilestones: v,
+                        }).catch(() => {})
+                      }
+                      disabled={notifDisabled}
+                      trackColor={{
+                        false: withAlpha(colors.text, 0.18),
+                        true: colors.accentMuted,
+                      }}
+                      thumbColor={Platform.OS === "android" ? undefined : "white"}
+                    />
+                  }
+                />
+                <Divider />
+                <View style={[styles.subSectionPad, notifDisabled && styles.dimmed]}>
+                  <Text style={[styles.sectionMiniLabel, { color: chrome.sub }]}>
+                    WEEKLY
+                  </Text>
+                </View>
+                <Row
+                  icon="calendar-number-outline"
+                  title="Weekly summary"
+                  value={`Sun ${formatClock(
+                    notificationSettings.weeklySummary.hour,
+                    notificationSettings.weeklySummary.minute
+                  )}`}
+                  disabled={notifDisabled}
+                  onPress={() =>
+                    openTimePicker(
+                      "weekly-summary",
+                      notificationSettings.weeklySummary.hour,
+                      notificationSettings.weeklySummary.minute,
+                      (hour, minute) => ({
+                        ...notificationSettings,
+                        weeklySummary: {
+                          ...notificationSettings.weeklySummary,
+                          hour,
+                          minute,
+                        },
+                      })
+                    )
+                  }
+                  right={
+                    <Switch
+                      value={notificationSettings.weeklySummary.enabled}
+                      onValueChange={(v) =>
+                        saveNotifications({
+                          ...notificationSettings,
+                          weeklySummary: {
+                            ...notificationSettings.weeklySummary,
+                            enabled: v,
+                          },
+                        }).catch(() => {})
+                      }
+                      disabled={notifDisabled}
+                      trackColor={{
+                        false: withAlpha(colors.text, 0.18),
+                        true: colors.accentMuted,
+                      }}
+                      thumbColor={Platform.OS === "android" ? undefined : "white"}
+                    />
+                  }
+                />
+                <Divider />
+                <Row
+                  icon="sparkles-outline"
+                  title="Weekly check-in reminder"
+                  disabled={notifDisabled}
+                  right={
+                    <Switch
+                      value={notificationSettings.weeklyCheckinReminder}
+                      onValueChange={(v) =>
+                        saveNotifications({
+                          ...notificationSettings,
+                          weeklyCheckinReminder: v,
+                        }).catch(() => {})
+                      }
+                      disabled={notifDisabled}
+                      trackColor={{
+                        false: withAlpha(colors.text, 0.18),
+                        true: colors.accentMuted,
+                      }}
+                      thumbColor={Platform.OS === "android" ? undefined : "white"}
+                    />
+                  }
+                />
+              </>
+            )}
+          </Section>
+
           {/* Privacy & Safety (device) */}
           <Section
             title="Privacy & safety"
@@ -1286,7 +1772,7 @@ export default function ControlCenterModal() {
                   }}
                   trackColor={{
                     false: withAlpha(colors.text, 0.18),
-                    true: withAlpha(colors.accent, 0.55),
+                    true: colors.accentMuted,
                   }}
                   thumbColor={Platform.OS === "android" ? undefined : "white"}
                 />
@@ -1455,12 +1941,109 @@ export default function ControlCenterModal() {
           <View style={{ height: 26 }} />
         </ScrollView>
       )}
+
+      {timePickerState ? (
+        <Modal transparent animationType="fade" visible>
+          <View style={styles.pickerScrim}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={() => setTimePickerState(null)}
+            />
+            <View
+              style={[
+                styles.pickerCard,
+                {
+                  backgroundColor: colors.surface1,
+                  borderColor: chrome.hairline,
+                },
+              ]}
+            >
+              <View style={styles.pickerHeader}>
+                <Pressable onPress={() => setTimePickerState(null)}>
+                  <Text style={[styles.pickerAction, { color: chrome.sub }]}>
+                    Cancel
+                  </Text>
+                </Pressable>
+                <Text style={[styles.pickerTitle, { color: colors.text }]}>
+                  Pick a time
+                </Text>
+                <Pressable onPress={() => setTimePickerState(null)}>
+                  <Text
+                    style={[styles.pickerAction, { color: colors.accentMuted }]}
+                  >
+                    Done
+                  </Text>
+                </Pressable>
+              </View>
+              <DateTimePicker
+                value={timePickerState.value}
+                mode="time"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                onChange={(event, date) => {
+                  if (Platform.OS === "android") {
+                    if (event.type === "dismissed") {
+                      setTimePickerState(null);
+                      return;
+                    }
+                    if (date) {
+                      timePickerState.apply(date);
+                    }
+                    setTimePickerState(null);
+                    return;
+                  }
+                  if (date) {
+                    setTimePickerState((current) =>
+                      current
+                        ? {
+                            ...current,
+                            value: date,
+                          }
+                        : current
+                    );
+                    timePickerState.apply(date);
+                  }
+                }}
+              />
+            </View>
+          </View>
+        </Modal>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  dimmed: { opacity: 0.4 },
+  subSectionPad: {
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 2,
+  },
+  sectionMiniLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1,
+  },
+  pickerScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "flex-end",
+  },
+  pickerCard: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 16,
+  },
+  pickerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  pickerTitle: { fontSize: 16, fontWeight: "600" },
+  pickerAction: { fontSize: 14, fontWeight: "500" },
 
   topBar: {
     paddingTop: Platform.OS === "android" ? 14 : 12,

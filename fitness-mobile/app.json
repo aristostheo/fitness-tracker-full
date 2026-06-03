@@ -15,7 +15,12 @@
     },
     "ios": {
       "icon": "./assets/images/icon.png",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Somata uses your camera so you can take progress photos and scan meals.",
+        "NSPhotoLibraryUsageDescription": "Somata uses your photo library so you can choose progress photos and meal images.",
+        "NSPhotoLibraryAddUsageDescription": "Somata saves progress photos you choose only on your device."
+      }
     },
     "android": {
       "icon": "./assets/images/icon.png",
@@ -32,6 +37,13 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Somata uses your photo library so you can choose progress photos and meal images.",
+          "cameraPermission": "Somata uses your camera so you can take progress photos and scan meals."
+        }
+      ],
       "expo-router"
     ],
     "experiments": {

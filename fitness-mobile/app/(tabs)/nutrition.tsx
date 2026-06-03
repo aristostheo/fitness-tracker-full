@@ -1,5 +1,5 @@
 // app/(tabs)/nutrition.tsx
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -39,6 +39,7 @@ import { reconcileBadgesFromSnapshot } from "@/services/badges/reconcile";
 import { useBadgesLocal } from "@/services/badges/useBadgesLocal";
 import { DailyGoalsCard } from "@/components/nutrition/uiNew/DailyGoalsCard";
 import { HydrationCardPremium } from "@/components/nutrition/uiNew/HydrationCardPremium";
+import { notifyGoalHit } from "@/services/notificationTriggers";
 // import { MacroCompletionCard } from "@/components/nutrition/uiNew/MacroCompletionCard";
 
 function pad(n: number) {
@@ -426,6 +427,33 @@ export default function NutritionScreen() {
       waterMl,
     };
   }, [totals, mealsMap, waterMl]);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    if (dateISO !== isoToday()) return;
+    if (goals.calories > 0 && dayTotals.calories >= goals.calories) {
+      // NOTIFICATION TRIGGER
+      notifyGoalHit("calories").catch(() => {});
+    }
+  }, [dateISO, dayTotals.calories, goals.calories, user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    if (dateISO !== isoToday()) return;
+    if (goals.protein > 0 && dayTotals.protein >= goals.protein) {
+      // NOTIFICATION TRIGGER
+      notifyGoalHit("protein").catch(() => {});
+    }
+  }, [dateISO, dayTotals.protein, goals.protein, user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    if (dateISO !== isoToday()) return;
+    if (waterGoalMl > 0 && waterMl >= waterGoalMl) {
+      // NOTIFICATION TRIGGER
+      notifyGoalHit("hydration").catch(() => {});
+    }
+  }, [dateISO, user?.uid, waterGoalMl, waterMl]);
 
   React.useEffect(() => {
     if (!user?.uid) return;

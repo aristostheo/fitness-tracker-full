@@ -1,7 +1,7 @@
 import Constants from "expo-constants";
-import { getAuth } from "firebase/auth";
 
 import { scanMealFromImage } from "@/components/scanMeal/new/services/scanMealService";
+import { callOpenAIJson, extractJsonFromText } from "@/services/openai";
 
 export type MealBuilderInputFood = {
   id?: string;
@@ -36,30 +36,6 @@ function safeJsonParse(raw: string): any | null {
   } catch {
     return null;
   }
-}
-
-function extractJsonFromText(text: string): any | null {
-  const s = text.trim();
-  const direct = safeJsonParse(s);
-  if (direct) return direct;
-
-  const objStart = s.indexOf("{");
-  const objEnd = s.lastIndexOf("}");
-  if (objStart !== -1 && objEnd !== -1 && objEnd > objStart) {
-    const sub = s.slice(objStart, objEnd + 1);
-    const parsed = safeJsonParse(sub);
-    if (parsed) return parsed;
-  }
-
-  const arrStart = s.indexOf("[");
-  const arrEnd = s.lastIndexOf("]");
-  if (arrStart !== -1 && arrEnd !== -1 && arrEnd > arrStart) {
-    const sub = s.slice(arrStart, arrEnd + 1);
-    const parsed = safeJsonParse(sub);
-    if (parsed) return parsed;
-  }
-
-  return null;
 }
 
 function unwrapDescribePayload(anyGot: any): any {
@@ -213,40 +189,28 @@ export async function describeMeal(args: {
   const text = args.text.trim();
   if (!text) return [];
 
-  const expoExtra =
-    (Constants?.expoConfig?.extra as any) ||
-    ((Constants as any)?.manifest?.extra as any) ||
-    {};
-  const AI_URL =
-    process.env.EXPO_PUBLIC_AI_DESCRIBE_URL ||
-    process.env.AI_DESCRIBE_URL ||
-    expoExtra.AI_DESCRIBE_URL ||
-    "https://us-central1-fitness-tracker-25254.cloudfunctions.net/describe";
+  const parsed = await callOpenAIJson<any>(
+    [
+      {
+        role: "system",
+        content:
+          "You estimate meal macros for the Somata app. Return valid JSON only.",
+      },
+      {
+        role: "user",
+        content: `Estimate this meal description and return JSON only.
+Context:
+- Meal: ${args.meal}
+- Date: ${args.date}
+- Description: ${text}
 
-  const token = await getAuth().currentUser?.getIdToken(true);
-  const payload = {
-    mode: "meal:v2",
-    query: text,
-    rawText: text,
-    context: { meal: args.meal, date: args.date },
-  };
-
-  const res = await fetch(AI_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const raw = await res.text();
-  if (!res.ok) {
-    throw new Error(raw?.trim()?.slice(0, 160) || `Describe failed (${res.status})`);
-  }
-
-  const parsed = safeJsonParse(raw) ?? extractJsonFromText(raw);
+Return either:
+{ "foods": [ { "name": string, "qty": number, "unit": string, "calories": number, "protein": number, "carbs": number, "fat": number, "sugar": number | null, "fiber": number | null, "addedSugar": number | null, "satFat": number | null, "sodium": number | null, "wholeFoodRatio": number | null, "veggieFruitServings": number | null, "unsatFatRatio": number | null, "alcoholCalories": number | null } ] }
+or a single food object in the same shape. Use realistic estimates.`,
+      },
+    ],
+    { maxTokens: 1400, temperature: 0.35 }
+  );
   if (!parsed) throw new Error("Describe returned invalid JSON.");
   if (parsed?.fallback) {
     throw new Error(

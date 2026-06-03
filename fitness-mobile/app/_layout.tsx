@@ -16,6 +16,7 @@ import {
 import { Stack, usePathname, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Notifications from "expo-notifications";
 import {
   SafeAreaProvider,
   useSafeAreaInsets,
@@ -27,6 +28,13 @@ import { ThemeProvider, useTheme } from "@/content/ThemeProvider";
 import { SettingsProvider } from "@/content/SettingsContext";
 import { startIntegrationAutoSync } from "@/services/integrations";
 import { SomataIcon } from "@/components/brand/SomataIcon";
+import {
+  registerForPushNotifications,
+} from "@/services/notifications";
+import {
+  loadNotificationSettings,
+  syncScheduledNotifications,
+} from "@/services/notificationSettings";
 
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
@@ -167,6 +175,36 @@ function Gate() {
       stop?.();
     };
   }, [user?.uid]);
+
+  useEffect(() => {
+    registerForPushNotifications().catch(() => {});
+    loadNotificationSettings().then(syncScheduledNotifications).catch(() => {});
+
+    const sub = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        const data: any = response.notification.request.content.data || {};
+        if (!data?.type) return;
+        switch (data.type) {
+          case "friend_ping":
+            router.push("/(tabs)/notifications");
+            break;
+          case "pr":
+            router.push("/(tabs)/workouts");
+            break;
+          case "badge":
+            router.push("/(tabs)/profile");
+            break;
+          case "weekly_checkin":
+            router.push("/(modals)/weekly-checkin");
+            break;
+          default:
+            break;
+        }
+      }
+    );
+
+    return () => sub.remove();
+  }, [router]);
 
   if (initializing) {
     return (

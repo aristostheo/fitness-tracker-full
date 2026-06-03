@@ -19,6 +19,16 @@ const config: ExpoConfig = {
     "expo-dev-client",
     "expo-build-properties",
     "expo-font",
+    "expo-notifications",
+    [
+      "expo-image-picker",
+      {
+        photosPermission:
+          "Somata uses your photo library so you can choose progress photos and meal images.",
+        cameraPermission:
+          "Somata uses your camera so you can take progress photos and scan meals.",
+      },
+    ],
     "expo-router",
     "expo-web-browser",
     [
@@ -43,6 +53,10 @@ const config: ExpoConfig = {
         "We may write workouts or body metrics you choose to log to Apple Health.",
       NSCameraUsageDescription:
         "We use the camera to scan food barcodes to auto-fill nutrition.",
+      NSPhotoLibraryUsageDescription:
+        "We use your photo library so you can choose progress photos and meal images.",
+      NSPhotoLibraryAddUsageDescription:
+        "We save progress photos you choose only on your device.",
     },
   },
 
@@ -66,7 +80,6 @@ const config: ExpoConfig = {
 
   extra: {
     FDC_API_KEY: process.env.FDC_API_KEY,
-    AI_DESCRIBE_URL: process.env.AI_DESCRIBE_URL,
     eas: {
       projectId: "32f5a4f2-1672-4b2b-87d0-c97dc293f81d",
     },

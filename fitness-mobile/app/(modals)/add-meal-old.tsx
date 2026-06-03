@@ -1303,9 +1303,7 @@ export default function AddMealModal() {
     );
   }
 
-  const AI_URL =
-    process.env.AI_DESCRIBE_URL ||
-    "https://us-central1-fitness-tracker-25254.cloudfunctions.net/describe";
+  const AI_URL = "https://api.openai.com/v1/chat/completions";
 
   async function calculateFromDescription() {
     const text = descText.trim();

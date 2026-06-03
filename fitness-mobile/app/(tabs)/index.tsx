@@ -77,6 +77,7 @@ import {
   syncHealth,
   type IntegrationSnapshot,
 } from "@/services/integrations";
+import { notifyGoalHit } from "@/services/notificationTriggers";
 
 import { useFocusEffect } from "expo-router";
 import { useBadgesLocal } from "@/services/badges/useBadgesLocal";
@@ -332,6 +333,14 @@ export default function HomeScreen() {
       (((profile as any)?.steps ?? {}) as Record<string, number>) || {};
     return Number(map?.[todayStr] ?? 0);
   }, [profile, todayStr]);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    if (stepsGoal > 0 && stepsToday >= stepsGoal) {
+      // NOTIFICATION TRIGGER
+      notifyGoalHit("steps").catch(() => {});
+    }
+  }, [stepsGoal, stepsToday, user?.uid]);
 
   const goalModeRaw =
     (profile as any)?.macroEngineMode ?? profile?.goal ?? "maintain";

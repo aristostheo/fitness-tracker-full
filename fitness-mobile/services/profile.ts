@@ -2,6 +2,7 @@
 import type { GoalInputs, MacroResult } from "./macroCalculator";
 import {
   doc,
+  deleteField,
   getDoc,
   getFirestore,
   onSnapshot,
@@ -155,6 +156,35 @@ export type Profile = {
 
 const ref = (uid: string) => doc(getFirestore() ?? db, "users", uid);
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function sanitizeNested(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  if (Array.isArray(value)) return value;
+  if (!isPlainObject(value)) return value;
+  const next: Record<string, unknown> = {};
+  for (const [key, inner] of Object.entries(value)) {
+    const sanitized = sanitizeNested(inner);
+    if (sanitized !== undefined) next[key] = sanitized;
+  }
+  return next;
+}
+
+function sanitizeProfilePatch(patch: Partial<Profile>) {
+  const next: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) {
+      next[key] = deleteField();
+      continue;
+    }
+    next[key] = sanitizeNested(value);
+  }
+  next.updatedAt = Date.now();
+  return next;
+}
+
 /**
  * Create the user doc if missing (with sensible defaults) and optionally
  * merge any seed values (email, displayName, etc.). If the doc exists,
@@ -209,7 +239,7 @@ export function subscribeProfile(uid: string, cb: (p: Profile | null) => void) {
 }
 
 export async function updateProfile(uid: string, patch: Partial<Profile>) {
-  await updateDoc(ref(uid), { ...patch, updatedAt: Date.now() });
+  await updateDoc(ref(uid), sanitizeProfilePatch(patch) as any);
 }
 export async function setStepsForDate(
   uid: string,

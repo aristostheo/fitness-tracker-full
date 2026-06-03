@@ -28,21 +28,21 @@ function Pill({
 
   const bg =
     tone === "good"
-      ? withAlpha(colors.accent, 0.12)
+      ? colors.accentDim
       : tone === "warn"
       ? withAlpha(colors.warning, 0.16)
       : withAlpha(colors.border, 0.22);
 
   const border =
     tone === "good"
-      ? withAlpha(colors.accent, 0.32)
+      ? colors.accentSubtle
       : tone === "warn"
       ? withAlpha(colors.warning, 0.35)
       : withAlpha(colors.border, 0.55);
 
   const text =
     tone === "good"
-      ? colors.accent
+      ? colors.accentMuted
       : tone === "warn"
       ? colors.text
       : colors.muted;
@@ -110,7 +110,7 @@ export function DietPreferencesCard({
               justifyContent: "center",
             }}
           >
-            <Ionicons name="leaf-outline" size={20} color={colors.accent} />
+            <Ionicons name="leaf-outline" size={20} color={colors.accentMuted} />
           </View>
 
           <View style={{ flex: 1, gap: 3 }}>

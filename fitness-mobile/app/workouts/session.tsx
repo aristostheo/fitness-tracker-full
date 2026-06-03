@@ -41,7 +41,7 @@ import {
   type PrimaryMuscleKey,
 } from "@/services/workoutMuscles";
 
-import { addWorkout, type Workout } from "@/services/workouts";
+import { addWorkout, getRecentWorkouts, type Workout } from "@/services/workouts";
 import {
   subscribeWorkoutPresets,
   addWorkoutPreset,
@@ -76,6 +76,7 @@ import type {
   BadgeUnlockState,
 } from "@/services/badges/types";
 import { BADGES } from "@/services/badges/registry";
+import { notifyBadgeEarned, notifyNewPR } from "@/services/notificationTriggers";
 
 if (
   Platform.OS === "android" &&
@@ -646,14 +647,37 @@ function makeStyles(p: Palette, isDark: boolean) {
       padding: 18,
       justifyContent: "center",
     },
+    modalKeyboardWrap: {
+      width: "100%",
+      justifyContent: "center",
+    },
+    modalKeyboardDismiss: {
+      alignSelf: "flex-end",
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      marginBottom: 8,
+      borderRadius: 999,
+      backgroundColor: withAlpha(p.text, isDark ? 0.08 : 0.06),
+      borderWidth: hair,
+      borderColor: withAlpha(p.text, isDark ? 0.12 : 0.1),
+    },
+    modalKeyboardDismissText: {
+      color: withAlpha(p.text, 0.72),
+      fontWeight: "700",
+      fontSize: 11,
+    },
     modalCard: {
+      maxHeight: "78%",
       borderRadius: 18,
-      padding: 14,
       backgroundColor: isDark
         ? withAlpha("#0B0F1A", 0.98)
         : withAlpha("#FFFFFF", 0.96),
       borderWidth: hair,
       borderColor: withAlpha(p.text, isDark ? 0.14 : 0.12),
+    },
+    modalScrollContent: {
+      padding: 14,
+      paddingBottom: 18,
     },
     modalTitle: {
       color: withAlpha(p.text, 0.94),
@@ -1492,6 +1516,24 @@ export default function WorkoutSessionScreen() {
               const ordered = [...items].sort(
                 (a, b) => a.createdAt - b.createdAt
               );
+              const historicalRows = await getRecentWorkouts(uidUser, 500).catch(
+                () => []
+              );
+              const previousBestByExercise = new Map<string, number>();
+              historicalRows.forEach((row) => {
+                const key = String(row.exercise || "").trim().toLowerCase();
+                if (!key) return;
+                previousBestByExercise.set(
+                  key,
+                  Math.max(
+                    previousBestByExercise.get(key) || 0,
+                    Number(row.weight || 0)
+                  )
+                );
+              });
+              let detectedPr:
+                | { exercise: string; weightKg: number }
+                | null = null;
 
               for (const it of ordered) {
                 const entry: Partial<Workout> & any = {
@@ -1517,6 +1559,20 @@ export default function WorkoutSessionScreen() {
                   ...entry,
                   createdAt: undefined, // match workouts.tsx behavior
                 } as any);
+
+                const exKey = String(it.exercise || "").trim().toLowerCase();
+                const weightKg = Number(it.weightKg || 0);
+                if (
+                  !detectedPr &&
+                  exKey &&
+                  weightKg > 0 &&
+                  weightKg > Number(previousBestByExercise.get(exKey) || 0)
+                ) {
+                  detectedPr = {
+                    exercise: String(it.exercise || "Exercise"),
+                    weightKg,
+                  };
+                }
               }
 
               await clearSessionDraft(uidUser);
@@ -1557,6 +1613,13 @@ export default function WorkoutSessionScreen() {
                 if (newIds.length) {
                   const newestId = newIds[0];
                   const def = BADGES.find((b) => b.id === newestId);
+                  newIds.forEach((id) => {
+                    const badge = BADGES.find((b) => b.id === id);
+                    if (badge?.title) {
+                      // NOTIFICATION TRIGGER
+                      notifyBadgeEarned(badge.title).catch(() => {});
+                    }
+                  });
                   setSavedToast(
                     def ? `Unlocked: ${def.title} ✓` : "Badge unlocked ✓"
                   );
@@ -1573,6 +1636,16 @@ export default function WorkoutSessionScreen() {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(
                 () => {}
               );
+
+              if (detectedPr) {
+                // NOTIFICATION TRIGGER
+                notifyNewPR(
+                  detectedPr.exercise,
+                  `${Math.round(
+                    unit === "lb" ? kgToLb(detectedPr.weightKg) : detectedPr.weightKg
+                  )}${unit}`
+                ).catch(() => {});
+              }
 
               const vol =
                 unit === "lb"
@@ -2247,151 +2320,178 @@ export default function WorkoutSessionScreen() {
         </View>
 
         {/* Edit Set Modal */}
-        <Modal visible={edit.open} animationType="fade" transparent>
-          <Pressable
-            onPress={() => setEdit((s) => ({ ...s, open: false }))}
-            style={styles.modalBackdrop}
-          >
-            <Pressable onPress={() => {}} style={styles.modalCard}>
-              <Text style={styles.modalTitle} numberOfLines={1}>
-                {edit.exercise}
-              </Text>
-              <Text style={styles.modalSub}>Edit this set</Text>
+        <Modal
+          visible={edit.open}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setEdit((s) => ({ ...s, open: false }))}
+        >
+          <View style={styles.modalBackdrop}>
+            <Pressable
+              onPress={() => setEdit((s) => ({ ...s, open: false }))}
+              style={StyleSheet.absoluteFill}
+            />
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : undefined}
+              style={styles.modalKeyboardWrap}
+            >
+              <Pressable onPress={Keyboard.dismiss} style={styles.modalKeyboardDismiss}>
+                <Text style={styles.modalKeyboardDismissText}>Hide keyboard</Text>
+              </Pressable>
+              <View style={styles.modalCard}>
+                <ScrollView
+                  contentContainerStyle={styles.modalScrollContent}
+                  keyboardShouldPersistTaps="handled"
+                  keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+                  showsVerticalScrollIndicator={false}
+                >
+                  <Text style={styles.modalTitle} numberOfLines={1}>
+                    {edit.exercise}
+                  </Text>
+                  <Text style={styles.modalSub}>Edit this set</Text>
 
-              <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Reps</Text>
-                  <TextInput
-                    value={edit.reps}
-                    onChangeText={(t) => setEdit((s) => ({ ...s, reps: t }))}
-                    keyboardType="number-pad"
-                    placeholder="10"
-                    placeholderTextColor={withAlpha(p.text, 0.35)}
-                    style={styles.input}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>{`Weight (${unit})`}</Text>
-                  <TextInput
-                    value={edit.weight}
-                    onChangeText={(t) => setEdit((s) => ({ ...s, weight: t }))}
-                    keyboardType="decimal-pad"
-                    placeholder="—"
-                    placeholderTextColor={withAlpha(p.text, 0.35)}
-                    style={styles.input}
-                  />
-                </View>
-              </View>
+                  <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.inputLabel}>Reps</Text>
+                      <TextInput
+                        value={edit.reps}
+                        onChangeText={(t) => setEdit((s) => ({ ...s, reps: t }))}
+                        keyboardType="number-pad"
+                        placeholder="10"
+                        placeholderTextColor={withAlpha(p.text, 0.35)}
+                        style={styles.input}
+                        returnKeyType="done"
+                        onSubmitEditing={Keyboard.dismiss}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.inputLabel}>{`Weight (${unit})`}</Text>
+                      <TextInput
+                        value={edit.weight}
+                        onChangeText={(t) => setEdit((s) => ({ ...s, weight: t }))}
+                        keyboardType="decimal-pad"
+                        placeholder="—"
+                        placeholderTextColor={withAlpha(p.text, 0.35)}
+                        style={styles.input}
+                        returnKeyType="done"
+                        onSubmitEditing={Keyboard.dismiss}
+                      />
+                    </View>
+                  </View>
 
-              <View style={{ marginTop: 10 }}>
-                <Text style={styles.inputLabel}>Primary muscle</Text>
-                <View style={styles.muscleChipWrap}>
+                  <View style={{ marginTop: 10 }}>
+                    <Text style={styles.inputLabel}>Primary muscle</Text>
+                    <View style={styles.muscleChipWrap}>
+                      <Pressable
+                        onPress={() => setEdit((s) => ({ ...s, primaryMuscle: "" }))}
+                        style={({ pressed }) => [
+                          styles.muscleChip,
+                          !edit.primaryMuscle && styles.muscleChipActive,
+                          pressed && { opacity: 0.9 },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.muscleChipText,
+                            !edit.primaryMuscle && styles.muscleChipTextActive,
+                          ]}
+                        >
+                          Auto
+                        </Text>
+                      </Pressable>
+                      {PRIMARY_MUSCLE_OPTIONS.map((option) => (
+                        <Pressable
+                          key={option.key}
+                          onPress={() =>
+                            setEdit((s) => ({ ...s, primaryMuscle: option.key }))
+                          }
+                          style={({ pressed }) => [
+                            styles.muscleChip,
+                            edit.primaryMuscle === option.key &&
+                              styles.muscleChipActive,
+                            pressed && { opacity: 0.9 },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.muscleChipText,
+                              edit.primaryMuscle === option.key &&
+                                styles.muscleChipTextActive,
+                            ]}
+                          >
+                            {option.label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={{ marginTop: 10 }}>
+                    <Text style={styles.inputLabel}>Note</Text>
+                    <TextInput
+                      value={edit.note}
+                      onChangeText={(t) => setEdit((s) => ({ ...s, note: t }))}
+                      placeholder="Optional (form cues, RPE, PR, etc.)"
+                      placeholderTextColor={withAlpha(p.text, 0.35)}
+                      style={[styles.input, { minHeight: 44 }]}
+                      returnKeyType="done"
+                      onSubmitEditing={Keyboard.dismiss}
+                    />
+                  </View>
+
                   <Pressable
-                    onPress={() => setEdit((s) => ({ ...s, primaryMuscle: "" }))}
+                    onPress={() => setEdit((s) => ({ ...s, done: !s.done }))}
                     style={({ pressed }) => [
-                      styles.muscleChip,
-                      !edit.primaryMuscle && styles.muscleChipActive,
+                      styles.doneToggle,
                       pressed && { opacity: 0.9 },
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.muscleChipText,
-                        !edit.primaryMuscle && styles.muscleChipTextActive,
-                      ]}
-                    >
-                      Auto
+                    <Ionicons
+                      name={edit.done ? "checkmark-circle" : "ellipse-outline"}
+                      size={18}
+                      color={
+                        edit.done
+                          ? withAlpha(p.success, 0.95)
+                          : withAlpha(p.text, 0.55)
+                      }
+                    />
+                    <Text style={styles.doneToggleText}>
+                      {edit.done ? "Marked done" : "Mark as done"}
                     </Text>
                   </Pressable>
-                  {PRIMARY_MUSCLE_OPTIONS.map((option) => (
+
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "flex-end",
+                      gap: 10,
+                      marginTop: 14,
+                    }}
+                  >
                     <Pressable
-                      key={option.key}
-                      onPress={() =>
-                        setEdit((s) => ({ ...s, primaryMuscle: option.key }))
-                      }
+                      onPress={() => setEdit((s) => ({ ...s, open: false }))}
                       style={({ pressed }) => [
-                        styles.muscleChip,
-                        edit.primaryMuscle === option.key &&
-                          styles.muscleChipActive,
+                        styles.modalSecondary,
                         pressed && { opacity: 0.9 },
                       ]}
                     >
-                      <Text
-                        style={[
-                          styles.muscleChipText,
-                          edit.primaryMuscle === option.key &&
-                            styles.muscleChipTextActive,
-                        ]}
-                      >
-                        {option.label}
-                      </Text>
+                      <Text style={styles.modalSecondaryText}>Cancel</Text>
                     </Pressable>
-                  ))}
-                </View>
+
+                    <Pressable
+                      onPress={applyEdit}
+                      style={({ pressed }) => [
+                        styles.modalPrimary,
+                        pressed && { opacity: 0.92 },
+                      ]}
+                    >
+                      <Text style={styles.modalPrimaryText}>Save</Text>
+                    </Pressable>
+                  </View>
+                </ScrollView>
               </View>
-
-              <View style={{ marginTop: 10 }}>
-                <Text style={styles.inputLabel}>Note</Text>
-                <TextInput
-                  value={edit.note}
-                  onChangeText={(t) => setEdit((s) => ({ ...s, note: t }))}
-                  placeholder="Optional (form cues, RPE, PR, etc.)"
-                  placeholderTextColor={withAlpha(p.text, 0.35)}
-                  style={[styles.input, { minHeight: 44 }]}
-                />
-              </View>
-
-              <Pressable
-                onPress={() => setEdit((s) => ({ ...s, done: !s.done }))}
-                style={({ pressed }) => [
-                  styles.doneToggle,
-                  pressed && { opacity: 0.9 },
-                ]}
-              >
-                <Ionicons
-                  name={edit.done ? "checkmark-circle" : "ellipse-outline"}
-                  size={18}
-                  color={
-                    edit.done
-                      ? withAlpha(p.success, 0.95)
-                      : withAlpha(p.text, 0.55)
-                  }
-                />
-                <Text style={styles.doneToggleText}>
-                  {edit.done ? "Marked done" : "Mark as done"}
-                </Text>
-              </Pressable>
-
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "flex-end",
-                  gap: 10,
-                  marginTop: 14,
-                }}
-              >
-                <Pressable
-                  onPress={() => setEdit((s) => ({ ...s, open: false }))}
-                  style={({ pressed }) => [
-                    styles.modalSecondary,
-                    pressed && { opacity: 0.9 },
-                  ]}
-                >
-                  <Text style={styles.modalSecondaryText}>Cancel</Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={applyEdit}
-                  style={({ pressed }) => [
-                    styles.modalPrimary,
-                    pressed && { opacity: 0.92 },
-                  ]}
-                >
-                  <Text style={styles.modalPrimaryText}>Save</Text>
-                </Pressable>
-              </View>
-            </Pressable>
-          </Pressable>
+            </KeyboardAvoidingView>
+          </View>
         </Modal>
 
         {/* Title Modal */}

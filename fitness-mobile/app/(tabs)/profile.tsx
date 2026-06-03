@@ -41,13 +41,14 @@ import ThemeToggle from "@/components/ThemeToggle";
 import { PremiumProfileHeader } from "@/components/profile/premium/PremiumProfileHeader";
 import { MetricsCard } from "@/components/profile/premium/MetricsCard";
 import { LongTermProgressCard } from "@/components/profile/premium/TrendsCard";
-import { BodyTwinEvolveCard } from "@/components/profile/premium/BodyTwinEvolveCard";
 import { BadgesPreviewCard } from "@/components/profile/premium/BadgesPreviewReviewCard";
 import { FriendsPreviewCard } from "@/components/profile/premium/FriendsPreviewCard";
 import { GlassCard } from "@/components/profile/premium/GlassCard";
 import { EmptyState } from "@/components/profile/premium/EmptyState";
 import { withAlpha } from "@/components/profile/premium/ui";
 import MacroGoalsCard from "@/components/profile/MacroGoalsCard";
+import ProgressPhotosCard from "@/components/profile/ProgressPhotos";
+import WeeklyCheckinCard from "@/components/profile/WeeklyCheckin";
 
 import { AppearanceCard } from "@/components/profile/premium/AppearenceCard";
 import { loadUnlocksLocal, loadFeaturedLocal } from "@/services/badges/store";
@@ -65,6 +66,8 @@ import {
   type IntegrationSnapshot,
 } from "@/services/integrations";
 import { buildGoalInputsFromProfile } from "@/services/macroCalculator";
+import { getPhotos, type ProgressPhoto } from "@/services/progressPhotos";
+import { getThisWeeksCheckin, type WeeklyCheckin } from "@/services/weeklyCheckin";
 
 export type GoalUILabel = "maintain" | "cut" | "lean_bulk" | "bulk";
 export type ActivityLevel =
@@ -131,6 +134,8 @@ export default function ProfileScreen() {
   const [friendsPings, setFriendsPings] = useState(0);
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [integrations, setIntegrations] = useState<IntegrationSnapshot | null>(null);
+  const [progressPhotos, setProgressPhotos] = useState<ProgressPhoto[]>([]);
+  const [weeklyCheckin, setWeeklyCheckin] = useState<WeeklyCheckin | null>(null);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -157,10 +162,17 @@ export default function ProfileScreen() {
     refreshBadgesPreview().catch(() => {});
   }, [refreshBadgesPreview]);
 
+  const refreshProfileExtras = useCallback(async () => {
+    const [photos, checkin] = await Promise.all([getPhotos(), getThisWeeksCheckin()]);
+    setProgressPhotos(photos);
+    setWeeklyCheckin(checkin);
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       refreshBadgesPreview().catch(() => {});
-    }, [refreshBadgesPreview])
+      refreshProfileExtras().catch(() => {});
+    }, [refreshBadgesPreview, refreshProfileExtras])
   );
 
   useEffect(() => subscribeIntegrations(setIntegrations), []);
@@ -362,7 +374,7 @@ export default function ProfileScreen() {
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.82,
@@ -619,63 +631,50 @@ export default function ProfileScreen() {
           onFriends={() => router.push("/friends")}
         /> */}
 
-        <View style={{ flexDirection: "row", gap: 12 }}>
-          <View style={{ flex: 1 }}>
-            <MetricsCard
-              unit={weightUnit}
-              weightKg={Number(weightKg || 0)}
-              targetWeightKg={Number(targetWeightKg || 0)}
-              heightCm={Number(heightCm || 0)}
-              bodyFatPct={(profile as any)?.bodyFatPct}
-              lastUpdatedVia={(profile as any)?.healthLastUpdatedVia}
-              lastUpdatedAt={(profile as any)?.healthLastUpdatedAt}
-              onPressAdd={() => {
-                Haptics.selectionAsync();
+        <MetricsCard
+          unit={weightUnit}
+          weightKg={Number(weightKg || 0)}
+          targetWeightKg={Number(targetWeightKg || 0)}
+          heightCm={Number(heightCm || 0)}
+          bodyFatPct={(profile as any)?.bodyFatPct}
+          lastUpdatedVia={(profile as any)?.healthLastUpdatedVia}
+          lastUpdatedAt={(profile as any)?.healthLastUpdatedAt}
+          onPressAdd={() => {
+            Haptics.selectionAsync();
 
-                router.push({
-                  pathname: "/(modals)/body-metrics",
-                  params: {
-                    unit: weightUnit, // "lb" | "kg"
-                    weightKg: String(weightKg ?? ""),
-                    targetWeightKg: String(targetWeightKg ?? ""),
-                    heightCm: String(heightCm ?? ""),
-                    bodyFatPct: String((profile as any)?.bodyFatPct ?? ""),
-                    waistCm: String((profile as any)?.waistCm ?? ""),
-                  },
-                });
-              }}
-            />
-          </View>
+            router.push({
+              pathname: "/(modals)/body-metrics",
+              params: {
+                unit: weightUnit,
+                weightKg: String(weightKg ?? ""),
+                targetWeightKg: String(targetWeightKg ?? ""),
+                heightCm: String(heightCm ?? ""),
+                bodyFatPct: String((profile as any)?.bodyFatPct ?? ""),
+                waistCm: String((profile as any)?.waistCm ?? ""),
+              },
+            });
+          }}
+        />
 
-          <View style={{ flex: 1 }}>
-            <BodyTwinEvolveCard
-              isDark={isDark}
-              weightKg={Number(weightKg || 0)}
-              targetWeightKg={Number(targetWeightKg || 0)}
-              unit={weightUnit}
-              heightCm={Number(heightCm || 0)}
-              goalType={goalType}
-              trendHint={
-                trendSeries.length
-                  ? trendSeries[trendSeries.length - 1] - trendSeries[0]
-                  : 0
-              }
-              onPressCustomize={() => {
-                Haptics.selectionAsync();
-                router.push({
-                  pathname: "/(modals)/bodyTwin",
-                  params: {
-                    weightKg: String(weightKg ?? ""),
-                    heightCm: String(heightCm ?? ""),
-                    // optional extras if you have them:
-                    bodyFatPct: String((profile as any)?.bodyFatPct ?? ""),
-                    waistCm: String((profile as any)?.waistCm ?? ""),
-                  },
-                });
-              }}
-            />
-          </View>
-        </View>
+        <ProgressPhotosCard
+          photos={progressPhotos}
+          onOpen={() => {
+            Haptics.selectionAsync();
+            router.push("/(modals)/progress-photos");
+          }}
+          onAdd={() => {
+            Haptics.selectionAsync();
+            router.push("/(modals)/progress-photos");
+          }}
+        />
+
+        <WeeklyCheckinCard
+          checkin={weeklyCheckin}
+          onOpen={() => {
+            Haptics.selectionAsync();
+            router.push("/(modals)/weekly-checkin");
+          }}
+        />
 
         <LongTermProgressCard
           unit={weightUnit} // "lb" | "kg"
@@ -999,15 +998,15 @@ function InsightsEntryCard({
       <LinearGradient
         colors={[
           withAlpha(colors.primary, isDark ? 0.28 : 0.16),
-          withAlpha(colors.accent, isDark ? 0.18 : 0.1),
-          withAlpha(colors.accent, isDark ? 0.08 : 0.06),
+          withAlpha(colors.accentMuted, isDark ? 0.18 : 0.1),
+          withAlpha(colors.accentDim, isDark ? 0.5 : 0.72),
         ]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{
           borderRadius: 22,
           borderWidth: 1,
-          borderColor: withAlpha(colors.primary, 0.38),
+          borderColor: colors.accentSubtle,
           padding: 16,
           flexDirection: "row",
           alignItems: "center",
@@ -1038,12 +1037,12 @@ function InsightsEntryCard({
                 backgroundColor:
                   idx === safeValues.length - 1
                     ? colors.accent
-                    : withAlpha(colors.accent, 0.55),
+                    : colors.accentMuted,
               }}
             />
           ))}
         </View>
-        <Text style={{ color: colors.text, fontWeight: "900" }}>View →</Text>
+        <Text style={{ color: colors.accentMuted, fontWeight: "500" }}>View →</Text>
       </LinearGradient>
     </Pressable>
   );
@@ -1197,7 +1196,7 @@ function StepsHistoryEntryCard({
               borderColor: colors.border,
             }}
           >
-            <Ionicons name="footsteps-outline" size={22} color={colors.accent} />
+            <Ionicons name="footsteps-outline" size={22} color={colors.accentMuted} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}>
@@ -1215,7 +1214,7 @@ function StepsHistoryEntryCard({
             colors={colors}
             label="Today"
             value={todaySteps.toLocaleString()}
-            tint={colors.accent}
+            tint={colors.accentMuted}
           />
           <MiniStatCard
             colors={colors}
@@ -1243,9 +1242,7 @@ function StepsHistoryEntryCard({
                     maxWidth: 26,
                     height: h,
                     borderRadius: 999,
-                    backgroundColor: hit
-                      ? colors.accent
-                      : colors.surface3,
+                    backgroundColor: hit ? colors.accentMuted : colors.surface3,
                   }}
                 />
                 <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800" }}>

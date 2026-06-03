@@ -34,6 +34,7 @@ import {
   appendBodyMetricsHistory,
   loadBodyMetrics,
   loadBodyMetricsHistory,
+  saveBodyMetrics,
   type BodyMetricPoint,
 } from "@/services/profile/bodyMetrics";
 
@@ -141,6 +142,45 @@ type Draft = {
   sex?: SexType;
 };
 
+function draftFromProfile(profile: Profile | null): Draft {
+  if (!profile) return {};
+  return {
+    weightLb:
+      profile.weightKg != null && Number.isFinite(profile.weightKg)
+        ? kgToLb(profile.weightKg)
+        : undefined,
+    targetWeightLb:
+      profile.targetWeightKg != null && Number.isFinite(profile.targetWeightKg)
+        ? kgToLb(profile.targetWeightKg)
+        : undefined,
+    heightCm:
+      profile.heightCm != null && Number.isFinite(profile.heightCm)
+        ? profile.heightCm
+        : undefined,
+    bodyFatPct:
+      profile.bodyFatPct != null &&
+      Number.isFinite(profile.bodyFatPct) &&
+      profile.bodyFatPct > 0
+        ? profile.bodyFatPct
+        : undefined,
+    waistCm:
+      profile.waistCm != null && Number.isFinite(profile.waistCm)
+        ? profile.waistCm
+        : undefined,
+    neckCm:
+      profile.neckCm != null && Number.isFinite(profile.neckCm)
+        ? profile.neckCm
+        : undefined,
+    hipCm:
+      profile.hipCm != null && Number.isFinite(profile.hipCm)
+        ? profile.hipCm
+        : undefined,
+    age:
+      profile.age != null && Number.isFinite(profile.age) ? profile.age : undefined,
+    sex: profile.sex ? (profile.sex as SexType) : undefined,
+  };
+}
+
 // ─── main screen ─────────────────────────────────────────────────────────────
 
 export default function BodyMetricsEditorScreen() {
@@ -243,19 +283,6 @@ export default function BodyMetricsEditorScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Populate age/sex/neck/hip from profile when it first arrives
-  useEffect(() => {
-    if (!profile || !original) return;
-    const extra: Partial<Draft> = {};
-    if (profile.age != null) extra.age = profile.age;
-    if (profile.sex) extra.sex = profile.sex as SexType;
-    if (profile.neckCm != null) extra.neckCm = profile.neckCm;
-    if (profile.hipCm != null) extra.hipCm = profile.hipCm;
-    setDraft((d) => ({ ...extra, ...d }));
-    setOriginal((o) => (o ? { ...extra, ...o } : o));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [!!profile]);
-
   // ── computed ──────────────────────────────────────────────────────────────
 
   const dirty = useMemo(() => {
@@ -266,6 +293,33 @@ export default function BodyMetricsEditorScreen() {
     ];
     return keys.some((k) => (original[k] ?? null) !== (draft[k] ?? null));
   }, [original, draft]);
+
+  // Sync canonical values from the remote profile once it arrives, but never
+  // overwrite local edits already in progress.
+  useEffect(() => {
+    if (!profile || dirty) return;
+    const next = draftFromProfile(profile);
+    const hasRemoteValues = Object.values(next).some((value) => value != null);
+    if (!hasRemoteValues) return;
+
+    setDraft((current) => {
+      const merged = { ...current, ...next };
+      return JSON.stringify(merged) === JSON.stringify(current) ? current : merged;
+    });
+    setOriginal((current) => {
+      const base = current ?? {};
+      const merged = { ...base, ...next };
+      return JSON.stringify(merged) === JSON.stringify(base) ? current : merged;
+    });
+
+    void saveBodyMetrics({
+      weightLb: next.weightLb,
+      targetWeightLb: next.targetWeightLb,
+      heightCm: next.heightCm,
+      bodyFatPct: next.bodyFatPct,
+      waistCm: next.waistCm,
+    }).catch(() => {});
+  }, [profile, dirty]);
 
   const bmi = useMemo(() => computeBMI(draft.weightLb, draft.heightCm), [draft.weightLb, draft.heightCm]);
 
@@ -385,7 +439,7 @@ export default function BodyMetricsEditorScreen() {
       neckCm: draft.neckCm ?? undefined,
       hipCm: draft.hipCm ?? undefined,
       age: draft.age ?? undefined,
-      sex: draft.sex as any ?? undefined,
+      sex: draft.sex ?? undefined,
       weightUnit: unitMode === "imperial" ? "lb" : "kg",
     };
 
@@ -397,6 +451,15 @@ export default function BodyMetricsEditorScreen() {
       shouldRecalculate(previousWeightKg, nextWeightKg);
 
     await updateProfile(user.uid, patch as any);
+
+    await saveBodyMetrics({
+      weightLb: draft.weightLb,
+      targetWeightLb: draft.targetWeightLb,
+      heightCm: draft.heightCm,
+      bodyFatPct:
+        draft.bodyFatPct != null && draft.bodyFatPct > 0 ? draft.bodyFatPct : undefined,
+      waistCm: draft.waistCm,
+    });
 
     await appendBodyMetricsHistory({
       t: Date.now(),
@@ -415,6 +478,7 @@ export default function BodyMetricsEditorScreen() {
       return [...h, point];
     });
 
+    setProfile((current) => (current ? { ...current, ...patch } : current));
     setOriginal({ ...draft });
     setSavedToast(true);
     setTimeout(() => setSavedToast(false), 2000);
